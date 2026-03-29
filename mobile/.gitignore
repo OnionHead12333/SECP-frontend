@@ -1,0 +1,14 @@
+# Flutter / Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+
+# IDE
+*.iml
+.idea/
+
+# Env (optional local overrides)
+.env
+.env.local

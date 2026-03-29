@@ -19,3 +19,9 @@ yarn-error.log*
 .idea/
 *.iml
 .vscode/
+
+# Flutter（mobile 子工程）
+mobile/.dart_tool/
+mobile/build/
+mobile/.flutter-plugins
+mobile/.flutter-plugins-dependencies
