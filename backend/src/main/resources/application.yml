@@ -1,0 +1,30 @@
+spring:
+  application:
+    name: smart-elderly-care-platform
+  jackson:
+    default-property-inclusion: non_null
+    time-zone: Asia/Shanghai
+
+server:
+  port: 8080
+  servlet:
+    context-path: /api
+
+# 自定义：与前端联调时可在此集中维护
+app:
+  cors:
+    allowed-origins:
+      - http://localhost:5173
+      - http://127.0.0.1:5173
+
+---
+# 开发环境可覆盖（启动：--spring.profiles.active=dev）
+spring:
+  config:
+    activate:
+      on-profile: dev
+
+logging:
+  level:
+    root: INFO
+    com.smartelderly: DEBUG
