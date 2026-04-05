@@ -1,0 +1,1 @@
+ D:\\github\\smartElderlyCarePlatform\\mobile\\.dart_tool\\flutter_build\\7d5af6579c7fd2eb08b79100f8d41bce\\native_assets.json: 

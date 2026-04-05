@@ -1,0 +1,2 @@
+D:/github/smartElderlyCarePlatform/mobile/build/.cxx/debug/b6z352m4/arm64-v8a/CMakeFiles/edit_cache.dir
+D:/github/smartElderlyCarePlatform/mobile/build/.cxx/debug/b6z352m4/arm64-v8a/CMakeFiles/rebuild_cache.dir

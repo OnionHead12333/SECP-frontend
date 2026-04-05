@@ -1,0 +1,23 @@
+# 默认忽略的文件
+/shelf/
+/workspace.xml
+# 基于编辑器的 HTTP 客户端请求
+/httpRequests/
+# 依赖于环境的 Maven 主目录路径
+/mavenHomeManager.xml
+# Datasource local storage ignored files
+/dataSources/
+/dataSources.local.xml
+
+# Flutter 相关
+/build/
+/android/build/
+/ios/build/
+/ios/Pods/
+# 安卓安装包
+*.apk
+# 原生库
+*.so
+# 其他编译临时文件
+*.iml
+.idea/
