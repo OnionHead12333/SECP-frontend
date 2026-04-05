@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../features/auth/presentation/login_page.dart';
 import '../features/home/home_page.dart';
 
 /// 应用根组件：主题、路由入口。
@@ -14,7 +15,11 @@ class SmartElderlyCareApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF1565C0)),
         useMaterial3: true,
       ),
-      home: const HomePage(),
+      initialRoute: '/login',
+      routes: {
+        '/login': (_) => const LoginPage(),
+        '/home': (_) => const HomePage(),
+      },
     );
   }
 }

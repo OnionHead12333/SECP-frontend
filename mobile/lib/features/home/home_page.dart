@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/auth/auth_session.dart';
 import 'data/health_api.dart';
 
 class HomePage extends StatefulWidget {
@@ -24,6 +25,14 @@ class _HomePageState extends State<HomePage> {
             onPressed: _reload,
             icon: const Icon(Icons.refresh),
             tooltip: '重新检测',
+          ),
+          IconButton(
+            onPressed: () {
+              AuthSession.clear();
+              Navigator.of(context).pushNamedAndRemoveUntil('/login', (r) => false);
+            },
+            icon: const Icon(Icons.logout),
+            tooltip: '退出登录',
           ),
         ],
       ),
