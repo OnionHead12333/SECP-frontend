@@ -1,7 +1,0 @@
-com\smartelderly\config\WebMvcConfig.class
-com\smartelderly\config\AppProperties$Cors.class
-com\smartelderly\web\dto\ApiResponse.class
-com\smartelderly\web\HealthController.class
-com\smartelderly\config\AppProperties.class
-com\smartelderly\SmartElderlyCareApplication.class
-META-INF\spring-configuration-metadata.json
