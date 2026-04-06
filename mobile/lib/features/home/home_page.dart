@@ -29,7 +29,7 @@ class _HomePageState extends State<HomePage> {
           IconButton(
             onPressed: () {
               AuthSession.clear();
-              Navigator.of(context).pushNamedAndRemoveUntil('/login', (r) => false);
+              Navigator.of(context).pushNamedAndRemoveUntil('/login', (_) => false);
             },
             icon: const Icon(Icons.logout),
             tooltip: '退出登录',

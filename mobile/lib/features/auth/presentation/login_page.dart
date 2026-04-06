@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/auth/app_role.dart';
 import '../../../core/auth/auth_session.dart';
 import '../data/auth_api.dart';
 import 'auth_shell.dart';
@@ -45,11 +46,24 @@ class _LoginPageState extends State<LoginPage> {
       _error = null;
     });
     try {
+      final username = _userCtrl.text.trim();
+      final password = _pwdCtrl.text;
+
+      // 演示：子女端入口（无需后端）；正式环境接入接口后删除或改为服务端返回角色再跳转。
+      if (username == '123123' && password == '123123') {
+        AuthSession.token = 'demo-child';
+        AuthSession.role = AppRole.child;
+        if (!mounted) return;
+        Navigator.of(context).pushNamedAndRemoveUntil('/child', (r) => false);
+        return;
+      }
+
       final token = await AuthApi.login(
-        username: _userCtrl.text.trim(),
-        password: _pwdCtrl.text,
+        username: username,
+        password: password,
       );
       AuthSession.token = token;
+      AuthSession.role = AppRole.elder;
       if (!mounted) return;
       Navigator.of(context).pushNamedAndRemoveUntil('/home', (r) => false);
     } catch (e) {
