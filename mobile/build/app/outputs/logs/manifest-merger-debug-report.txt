@@ -26,6 +26,7 @@ MERGED from D:\github\smartElderlyCarePlatform\mobile\android\app\src\main\Andro
 INJECTED from D:\github\smartElderlyCarePlatform\mobile\android\app\src\debug\AndroidManifest.xml:1:1-7:12
 INJECTED from D:\github\smartElderlyCarePlatform\mobile\android\app\src\debug\AndroidManifest.xml:1:1-7:12
 INJECTED from D:\github\smartElderlyCarePlatform\mobile\android\app\src\debug\AndroidManifest.xml:1:1-7:12
+MERGED from [:path_provider_android] D:\github\smartElderlyCarePlatform\mobile\build\path_provider_android\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:2:1-7:12
 MERGED from [androidx.fragment:fragment:1.7.1] C:\Users\25182\.gradle\caches\8.14\transforms\20d783aebbd3b3e1ccfa231df42157f0\transformed\fragment-1.7.1\AndroidManifest.xml:2:1-7:12
 MERGED from [androidx.window:window:1.2.0] C:\Users\25182\.gradle\caches\8.14\transforms\ba18b21e180de95697f7173f8fcc30d1\transformed\window-1.2.0\AndroidManifest.xml:17:1-31:12
 MERGED from [androidx.window:window-java:1.2.0] C:\Users\25182\.gradle\caches\8.14\transforms\a34b91bbf57793f407dc994e0e997df7\transformed\window-java-1.2.0\AndroidManifest.xml:17:1-21:12
@@ -43,7 +44,6 @@ MERGED from [androidx.core:core:1.13.1] C:\Users\25182\.gradle\caches\8.14\trans
 MERGED from [androidx.lifecycle:lifecycle-runtime:2.7.0] C:\Users\25182\.gradle\caches\8.14\transforms\39aa7532b22fdec3772c2c1c55f43982\transformed\lifecycle-runtime-2.7.0\AndroidManifest.xml:2:1-7:12
 MERGED from [androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\25182\.gradle\caches\8.14\transforms\7b063733d58b239af3748ae9cbd0fe42\transformed\lifecycle-process-2.7.0\AndroidManifest.xml:17:1-35:12
 MERGED from [androidx.savedstate:savedstate:1.2.1] C:\Users\25182\.gradle\caches\8.14\transforms\f74467976a41ed432f8ef11bc70357e1\transformed\savedstate-1.2.1\AndroidManifest.xml:17:1-22:12
-MERGED from [androidx.annotation:annotation-experimental:1.4.0] C:\Users\25182\.gradle\caches\8.14\transforms\e0bd2d7b14a4e7d4e0043a24b8010eb8\transformed\annotation-experimental-1.4.0\AndroidManifest.xml:2:1-7:12
 MERGED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\25182\.gradle\caches\8.14\transforms\a0eeb90bc61479368d19581873b7ab47\transformed\profileinstaller-1.3.1\AndroidManifest.xml:17:1-55:12
 MERGED from [androidx.startup:startup-runtime:1.1.1] C:\Users\25182\.gradle\caches\8.14\transforms\9425c517869891ae786093a76f77d4d8\transformed\startup-runtime-1.1.1\AndroidManifest.xml:17:1-33:12
 MERGED from [androidx.tracing:tracing:1.2.0] C:\Users\25182\.gradle\caches\8.14\transforms\b03290d5bb65d2df5c0d58aafb50d9aa\transformed\tracing-1.2.0\AndroidManifest.xml:17:1-22:12
@@ -52,6 +52,7 @@ MERGED from [androidx.arch.core:core-runtime:2.2.0] C:\Users\25182\.gradle\cache
 MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.1] C:\Users\25182\.gradle\caches\8.14\transforms\e727d9040a685ab5cfa3dbc562b2e68d\transformed\versionedparcelable-1.1.1\AndroidManifest.xml:17:1-27:12
 MERGED from [androidx.interpolator:interpolator:1.0.0] C:\Users\25182\.gradle\caches\8.14\transforms\b72bf87129050a19f42a0cdffd9e0933\transformed\interpolator-1.0.0\AndroidManifest.xml:17:1-22:12
 MERGED from [androidx.window.extensions.core:core:1.0.0] C:\Users\25182\.gradle\caches\8.14\transforms\d6a6e9a4708e2c59225e7d71f71d8d0e\transformed\core-1.0.0\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.annotation:annotation-experimental:1.4.0] C:\Users\25182\.gradle\caches\8.14\transforms\e0bd2d7b14a4e7d4e0043a24b8010eb8\transformed\annotation-experimental-1.4.0\AndroidManifest.xml:2:1-7:12
 MERGED from [com.getkeepsafe.relinker:relinker:1.4.5] C:\Users\25182\.gradle\caches\8.14\transforms\88e4db718ca9bce8f5e7b1d422d1f54f\transformed\relinker-1.4.5\AndroidManifest.xml:2:1-7:12
 	package
 		INJECTED from D:\github\smartElderlyCarePlatform\mobile\android\app\src\debug\AndroidManifest.xml
@@ -81,6 +82,8 @@ uses-sdk
 INJECTED from D:\github\smartElderlyCarePlatform\mobile\android\app\src\debug\AndroidManifest.xml reason: use-sdk injection requested
 INJECTED from D:\github\smartElderlyCarePlatform\mobile\android\app\src\debug\AndroidManifest.xml
 INJECTED from D:\github\smartElderlyCarePlatform\mobile\android\app\src\debug\AndroidManifest.xml
+MERGED from [:path_provider_android] D:\github\smartElderlyCarePlatform\mobile\build\path_provider_android\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:5:5-44
+MERGED from [:path_provider_android] D:\github\smartElderlyCarePlatform\mobile\build\path_provider_android\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:5:5-44
 MERGED from [androidx.fragment:fragment:1.7.1] C:\Users\25182\.gradle\caches\8.14\transforms\20d783aebbd3b3e1ccfa231df42157f0\transformed\fragment-1.7.1\AndroidManifest.xml:5:5-44
 MERGED from [androidx.fragment:fragment:1.7.1] C:\Users\25182\.gradle\caches\8.14\transforms\20d783aebbd3b3e1ccfa231df42157f0\transformed\fragment-1.7.1\AndroidManifest.xml:5:5-44
 MERGED from [androidx.window:window:1.2.0] C:\Users\25182\.gradle\caches\8.14\transforms\ba18b21e180de95697f7173f8fcc30d1\transformed\window-1.2.0\AndroidManifest.xml:20:5-44
@@ -115,8 +118,6 @@ MERGED from [androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\25182\.gradle\
 MERGED from [androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\25182\.gradle\caches\8.14\transforms\7b063733d58b239af3748ae9cbd0fe42\transformed\lifecycle-process-2.7.0\AndroidManifest.xml:21:5-44
 MERGED from [androidx.savedstate:savedstate:1.2.1] C:\Users\25182\.gradle\caches\8.14\transforms\f74467976a41ed432f8ef11bc70357e1\transformed\savedstate-1.2.1\AndroidManifest.xml:20:5-44
 MERGED from [androidx.savedstate:savedstate:1.2.1] C:\Users\25182\.gradle\caches\8.14\transforms\f74467976a41ed432f8ef11bc70357e1\transformed\savedstate-1.2.1\AndroidManifest.xml:20:5-44
-MERGED from [androidx.annotation:annotation-experimental:1.4.0] C:\Users\25182\.gradle\caches\8.14\transforms\e0bd2d7b14a4e7d4e0043a24b8010eb8\transformed\annotation-experimental-1.4.0\AndroidManifest.xml:5:5-44
-MERGED from [androidx.annotation:annotation-experimental:1.4.0] C:\Users\25182\.gradle\caches\8.14\transforms\e0bd2d7b14a4e7d4e0043a24b8010eb8\transformed\annotation-experimental-1.4.0\AndroidManifest.xml:5:5-44
 MERGED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\25182\.gradle\caches\8.14\transforms\a0eeb90bc61479368d19581873b7ab47\transformed\profileinstaller-1.3.1\AndroidManifest.xml:21:5-44
 MERGED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\25182\.gradle\caches\8.14\transforms\a0eeb90bc61479368d19581873b7ab47\transformed\profileinstaller-1.3.1\AndroidManifest.xml:21:5-44
 MERGED from [androidx.startup:startup-runtime:1.1.1] C:\Users\25182\.gradle\caches\8.14\transforms\9425c517869891ae786093a76f77d4d8\transformed\startup-runtime-1.1.1\AndroidManifest.xml:21:5-23:41
@@ -133,6 +134,8 @@ MERGED from [androidx.interpolator:interpolator:1.0.0] C:\Users\25182\.gradle\ca
 MERGED from [androidx.interpolator:interpolator:1.0.0] C:\Users\25182\.gradle\caches\8.14\transforms\b72bf87129050a19f42a0cdffd9e0933\transformed\interpolator-1.0.0\AndroidManifest.xml:20:5-44
 MERGED from [androidx.window.extensions.core:core:1.0.0] C:\Users\25182\.gradle\caches\8.14\transforms\d6a6e9a4708e2c59225e7d71f71d8d0e\transformed\core-1.0.0\AndroidManifest.xml:5:5-44
 MERGED from [androidx.window.extensions.core:core:1.0.0] C:\Users\25182\.gradle\caches\8.14\transforms\d6a6e9a4708e2c59225e7d71f71d8d0e\transformed\core-1.0.0\AndroidManifest.xml:5:5-44
+MERGED from [androidx.annotation:annotation-experimental:1.4.0] C:\Users\25182\.gradle\caches\8.14\transforms\e0bd2d7b14a4e7d4e0043a24b8010eb8\transformed\annotation-experimental-1.4.0\AndroidManifest.xml:5:5-44
+MERGED from [androidx.annotation:annotation-experimental:1.4.0] C:\Users\25182\.gradle\caches\8.14\transforms\e0bd2d7b14a4e7d4e0043a24b8010eb8\transformed\annotation-experimental-1.4.0\AndroidManifest.xml:5:5-44
 MERGED from [com.getkeepsafe.relinker:relinker:1.4.5] C:\Users\25182\.gradle\caches\8.14\transforms\88e4db718ca9bce8f5e7b1d422d1f54f\transformed\relinker-1.4.5\AndroidManifest.xml:5:5-43
 MERGED from [com.getkeepsafe.relinker:relinker:1.4.5] C:\Users\25182\.gradle\caches\8.14\transforms\88e4db718ca9bce8f5e7b1d422d1f54f\transformed\relinker-1.4.5\AndroidManifest.xml:5:5-43
 	android:targetSdkVersion

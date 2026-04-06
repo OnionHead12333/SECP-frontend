@@ -26,3 +26,4 @@ com.example.smart_elderly_care_mobile.app-resValues-24 D:\github\smartElderlyCar
 com.example.smart_elderly_care_mobile.app-packageDebugResources-25 D:\github\smartElderlyCarePlatform\mobile\build\app\intermediates\incremental\debug\packageDebugResources\merged.dir
 com.example.smart_elderly_care_mobile.app-packageDebugResources-26 D:\github\smartElderlyCarePlatform\mobile\build\app\intermediates\incremental\debug\packageDebugResources\stripped.dir
 com.example.smart_elderly_care_mobile.app-debug-27 D:\github\smartElderlyCarePlatform\mobile\build\app\intermediates\merged_res\debug\mergeDebugResources
+com.example.smart_elderly_care_mobile.app-debug-28 D:\github\smartElderlyCarePlatform\mobile\build\path_provider_android\intermediates\packaged_res\debug\packageDebugResources
