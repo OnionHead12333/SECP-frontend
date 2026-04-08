@@ -29,7 +29,9 @@
     "variantName": "debug",
     "isDebuggableEnabled": true,
     "validAbiList": [
-      "arm64-v8a"
+      "armeabi-v7a",
+      "arm64-v8a",
+      "x86_64"
     ],
     "buildTargetSet": [],
     "implicitBuildTargetSet": [],
@@ -154,7 +156,6 @@
         "rootBuildGradleFolder": "D:\\github\\smartElderlyCarePlatform\\mobile\\android",
         "sdkFolder": "C:\\Users\\25182\\AppData\\Local\\Android\\sdk",
         "isBuildOnlyTargetAbiEnabled": true,
-        "ideBuildTargetAbi": "arm64-v8a,armeabi-v7a,armeabi",
         "isCmakeBuildCohabitationEnabled": false,
         "isPrefabEnabled": false
       },
