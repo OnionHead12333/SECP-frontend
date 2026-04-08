@@ -50,4 +50,5 @@ final class AuthApi {
     );
     if (!api.isSuccess) throw Exception(api.message);
   }
+
 }

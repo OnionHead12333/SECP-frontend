@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../features/auth/presentation/login_page.dart';
 import '../features/child/presentation/child_main_page.dart';
-import '../features/home/home_page.dart';
+import '../features/elder/presentation/elder_home_page.dart';
+import '../features/elder/presentation/elder_login_page.dart';
 
 /// 应用根组件：主题、路由入口。
 class SmartElderlyCareApp extends StatelessWidget {
@@ -16,10 +16,10 @@ class SmartElderlyCareApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF1565C0)),
         useMaterial3: true,
       ),
-      initialRoute: '/login',
+      initialRoute: '/elder/login',
       routes: {
-        '/login': (_) => const LoginPage(),
-        '/home': (_) => const HomePage(),
+        '/elder/login': (_) => const ElderLoginPage(),
+        '/elder/home': (_) => const ElderHomePage(),
         '/child': (_) => const ChildMainPage(),
       },
     );
