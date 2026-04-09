@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../../core/auth/auth_session.dart';
 import '../data/elder_mock_auth_service.dart';
+import '../elder_module_routes.dart';
 import '../models/elder_mock_recognition_result.dart';
 import 'elder_auth_shell.dart';
-import 'elder_home_page.dart';
 
 class ElderClaimPage extends StatefulWidget {
   const ElderClaimPage({super.key, required this.result});
@@ -33,10 +33,7 @@ class _ElderClaimPageState extends State<ElderClaimPage> {
         familyCount: claimed.familyCount,
       );
       if (!mounted) return;
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute<void>(builder: (_) => const ElderHomePage()),
-        (route) => false,
-      );
+      Navigator.of(context).pushNamedAndRemoveUntil(ElderModuleRoutes.elderHome, (route) => false);
     } catch (e) {
       setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
     } finally {
@@ -48,7 +45,7 @@ class _ElderClaimPageState extends State<ElderClaimPage> {
   Widget build(BuildContext context) {
     return ElderAuthShell(
       title: '确认认领资料',
-      subtitle: '系统检测到家人已为您创建资料，请确认后再进入老人端。',
+      subtitle: '系统检测到该手机号已有关联老人资料，请确认身份后继续进入。',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/auth/auth_session.dart';
-import 'elder_binding_status_page.dart';
+import '../elder_module_routes.dart';
 import 'elder_login_page.dart';
 
 class ElderHomePage extends StatelessWidget {
@@ -68,23 +68,19 @@ class ElderHomePage extends StatelessWidget {
             icon: Icons.family_restroom_outlined,
             title: '家属绑定状态',
             content: familyCount > 0 ? '当前已绑定 $familyCount 位家属，点击查看绑定详情。' : '当前还没有绑定家属，点击查看绑定说明。',
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute<void>(builder: (_) => const ElderBindingStatusPage()),
-              );
-            },
+            onTap: () => Navigator.of(context).pushNamed(ElderModuleRoutes.elderBinding),
           ),
           const SizedBox(height: 14),
           const _InfoCard(
             icon: Icons.assignment_turned_in_outlined,
-            title: '当前阶段',
-            content: '注册、认领、首页与绑定详情界面已打通，后续可以继续接真实接口与更多老人端功能。',
+            title: '健康与家庭状态',
+            content: '已完成账号进入、资料识别与家属信息承接，后续可继续接入真实服务数据与更多养老功能。',
           ),
           const SizedBox(height: 14),
           const _InfoCard(
             icon: Icons.badge_outlined,
-            title: '老人端当前已完成界面',
-            content: '登录页、注册页、认领确认页、首页、绑定详情页都已经具备可演示界面。',
+            title: '账号信息',
+            content: '当前页面展示老人账号基础信息、家属绑定状态与后续服务入口，可作为统一登录后进入老人端的首页承接。',
           ),
         ],
       ),

@@ -3,9 +3,8 @@ import 'package:flutter/material.dart';
 import '../../../core/auth/app_role.dart';
 import '../../../core/auth/auth_session.dart';
 import '../data/elder_mock_auth_service.dart';
+import '../elder_module_routes.dart';
 import 'elder_auth_shell.dart';
-import 'elder_home_page.dart';
-import 'elder_register_page.dart';
 
 class ElderLoginPage extends StatefulWidget {
   const ElderLoginPage({super.key});
@@ -60,9 +59,7 @@ class _ElderLoginPageState extends State<ElderLoginPage> {
         familyCount: ElderMockAuthService.mockFamilyCountForLogin(phone),
       );
       if (!mounted) return;
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute<void>(builder: (_) => const ElderHomePage()),
-      );
+      Navigator.of(context).pushNamedAndRemoveUntil(ElderModuleRoutes.elderHome, (route) => false);
     } catch (e) {
       setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
     } finally {
@@ -141,13 +138,7 @@ class _ElderLoginPageState extends State<ElderLoginPage> {
         children: [
           const Text('还没有账号？', style: TextStyle(color: Color(0xFF6B7280))),
           TextButton(
-            onPressed: _submitting
-                ? null
-                : () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute<void>(builder: (_) => const ElderRegisterPage()),
-                    );
-                  },
+            onPressed: _submitting ? null : () => Navigator.of(context).pushNamed(ElderModuleRoutes.elderRegister),
             child: const Text('去注册老人账号'),
           ),
         ],

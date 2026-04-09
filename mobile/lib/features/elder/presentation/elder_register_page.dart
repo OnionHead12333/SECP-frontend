@@ -3,9 +3,9 @@ import 'package:flutter/material.dart';
 import '../../../core/auth/app_role.dart';
 import '../../../core/auth/auth_session.dart';
 import '../data/elder_mock_auth_service.dart';
+import '../elder_module_routes.dart';
 import 'elder_auth_shell.dart';
 import 'elder_claim_page.dart';
-import 'elder_home_page.dart';
 
 class ElderRegisterPage extends StatefulWidget {
   const ElderRegisterPage({super.key});
@@ -74,9 +74,7 @@ class _ElderRegisterPageState extends State<ElderRegisterPage> {
         familyCount: created.familyCount,
       );
       if (!mounted) return;
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute<void>(builder: (_) => const ElderHomePage()),
-      );
+      Navigator.of(context).pushNamedAndRemoveUntil(ElderModuleRoutes.elderHome, (route) => false);
     } catch (e) {
       setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
     } finally {
@@ -88,7 +86,7 @@ class _ElderRegisterPageState extends State<ElderRegisterPage> {
   Widget build(BuildContext context) {
     return ElderAuthShell(
       title: '老人注册',
-      subtitle: '先注册老人账号，系统会自动判断是否已有家人为您创建资料。',
+      subtitle: '填写手机号并设置密码后，系统会继续为您完成资料识别与进入流程。',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -115,7 +113,7 @@ class _ElderRegisterPageState extends State<ElderRegisterPage> {
             decoration: InputDecoration(
               labelText: '密码',
               hintText: '至少 6 位',
-              helperText: '当前演示环境建议密码：123456',
+              helperText: '密码至少 6 位，请妥善保管',
               prefixIcon: const Icon(Icons.lock_outline),
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
               suffixIcon: IconButton(
@@ -169,8 +167,8 @@ class _ElderRegisterPageState extends State<ElderRegisterPage> {
         ],
       ),
       footer: TextButton(
-        onPressed: _submitting ? null : () => Navigator.of(context).pop(),
-        child: const Text('已有账号？返回登录'),
+        onPressed: _submitting ? null : () => Navigator.of(context).maybePop(),
+        child: const Text('返回上一步'),
       ),
     );
   }
