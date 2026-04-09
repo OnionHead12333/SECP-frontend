@@ -23,6 +23,7 @@
             <option value="$PROJECT_DIR$/../../../../flutter/flutter/packages/flutter_tools/gradle" />
             <option value="$PROJECT_DIR$" />
             <option value="$PROJECT_DIR$/app" />
+            <option value="$PROJECT_DIR$/../../../../pub-cache/hosted/pub.flutter-io.cn/path_provider_android-2.2.23/android" />
           </set>
         </option>
       </GradleProjectSettings>
