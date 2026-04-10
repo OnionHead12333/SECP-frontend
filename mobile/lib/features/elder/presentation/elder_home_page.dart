@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../../../core/auth/auth_session.dart';
 import '../elder_module_routes.dart';
-import 'elder_login_page.dart';
 
 class ElderHomePage extends StatelessWidget {
   const ElderHomePage({super.key});
@@ -21,10 +20,7 @@ class ElderHomePage extends StatelessWidget {
           IconButton(
             onPressed: () {
               AuthSession.clear();
-              Navigator.of(context).pushAndRemoveUntil(
-                MaterialPageRoute<void>(builder: (_) => const ElderLoginPage()),
-                (route) => false,
-              );
+              Navigator.of(context).pushNamedAndRemoveUntil('/login', (_) => false);
             },
             tooltip: '退出登录',
             icon: const Icon(Icons.logout),

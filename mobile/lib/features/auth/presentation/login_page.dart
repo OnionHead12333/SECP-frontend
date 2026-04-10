@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/auth/app_role.dart';
 import '../../../core/auth/auth_session.dart';
+import '../../elder/elder_module_routes.dart';
 import '../data/auth_api.dart';
 import 'auth_shell.dart';
 import 'register_page.dart';
@@ -55,6 +56,51 @@ class _LoginPageState extends State<LoginPage> {
         AuthSession.role = AppRole.child;
         if (!mounted) return;
         Navigator.of(context).pushNamedAndRemoveUntil('/child', (r) => false);
+        return;
+      }
+
+      // 老人端测试账号：为了从统一登录页直接验证老人端界面而临时增加。
+      if (username == '13800138001' && password == '123456') {
+        AuthSession.token = 'demo-elder-13800138001';
+        AuthSession.role = AppRole.elder;
+        AuthSession.saveElderState(
+          name: '张建国',
+          phone: '13800138001',
+          claimed: true,
+          familyCount: 1,
+        );
+        if (!mounted) return;
+        Navigator.of(context).pushNamedAndRemoveUntil(ElderModuleRoutes.elderHome, (r) => false);
+        return;
+      }
+
+      // 老人端测试账号：已认领，绑定 2 位家属。
+      if (username == '13800138002' && password == '123456') {
+        AuthSession.token = 'demo-elder-13800138002';
+        AuthSession.role = AppRole.elder;
+        AuthSession.saveElderState(
+          name: '李秀英',
+          phone: '13800138002',
+          claimed: true,
+          familyCount: 2,
+        );
+        if (!mounted) return;
+        Navigator.of(context).pushNamedAndRemoveUntil(ElderModuleRoutes.elderHome, (r) => false);
+        return;
+      }
+
+      // 老人端测试账号：新老人 / 无绑定，用于测试空状态界面。
+      if (username == '13800138111' && password == '123456') {
+        AuthSession.token = 'demo-elder-13800138111';
+        AuthSession.role = AppRole.elder;
+        AuthSession.saveElderState(
+          name: '赵美兰',
+          phone: '13800138111',
+          claimed: false,
+          familyCount: 0,
+        );
+        if (!mounted) return;
+        Navigator.of(context).pushNamedAndRemoveUntil(ElderModuleRoutes.elderHome, (r) => false);
         return;
       }
 

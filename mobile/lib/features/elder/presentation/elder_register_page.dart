@@ -15,6 +15,7 @@ class ElderRegisterPage extends StatefulWidget {
 }
 
 class _ElderRegisterPageState extends State<ElderRegisterPage> {
+  final _nameCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
   final _pwdCtrl = TextEditingController();
   final _pwd2Ctrl = TextEditingController();
@@ -25,6 +26,7 @@ class _ElderRegisterPageState extends State<ElderRegisterPage> {
 
   @override
   void dispose() {
+    _nameCtrl.dispose();
     _phoneCtrl.dispose();
     _pwdCtrl.dispose();
     _pwd2Ctrl.dispose();
@@ -32,7 +34,9 @@ class _ElderRegisterPageState extends State<ElderRegisterPage> {
   }
 
   String? _validate() {
+    final name = _nameCtrl.text.trim();
     final phone = _phoneCtrl.text.trim();
+    if (name.isEmpty) return '请输入姓名';
     if (phone.isEmpty) return '请输入手机号';
     if (phone.length != 11) return '请输入 11 位手机号';
     if (_pwdCtrl.text.isEmpty) return '请输入密码';
@@ -52,6 +56,7 @@ class _ElderRegisterPageState extends State<ElderRegisterPage> {
     });
 
     try {
+      final name = _nameCtrl.text.trim();
       final phone = _phoneCtrl.text.trim();
       final password = _pwdCtrl.text;
       await ElderMockAuthService.register(phone: phone, password: password);
@@ -66,14 +71,12 @@ class _ElderRegisterPageState extends State<ElderRegisterPage> {
         );
         return;
       }
-      final created = await ElderMockAuthService.createIndependentProfile(phone);
       AuthSession.saveElderState(
-        name: created.elderName,
-        phone: created.phone,
+        name: name,
+        phone: phone,
         claimed: true,
-        familyCount: created.familyCount,
+        familyCount: 0,
       );
-      if (!mounted) return;
       Navigator.of(context).pushNamedAndRemoveUntil(ElderModuleRoutes.elderHome, (route) => false);
     } catch (e) {
       setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
@@ -86,10 +89,23 @@ class _ElderRegisterPageState extends State<ElderRegisterPage> {
   Widget build(BuildContext context) {
     return ElderAuthShell(
       title: '老人注册',
-      subtitle: '填写手机号并设置密码后，系统会继续为您完成资料识别与进入流程。',
+      subtitle: '填写手机号、姓名并设置密码。昵称默认使用姓名，后续可在个人资料里修改。',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          TextField(
+            controller: _nameCtrl,
+            textInputAction: TextInputAction.next,
+            enabled: !_submitting,
+            style: const TextStyle(fontSize: 18),
+            decoration: InputDecoration(
+              labelText: '姓名',
+              hintText: '请输入真实姓名',
+              prefixIcon: const Icon(Icons.badge_outlined),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+            ),
+          ),
+          const SizedBox(height: 16),
           TextField(
             controller: _phoneCtrl,
             keyboardType: TextInputType.phone,
@@ -113,7 +129,7 @@ class _ElderRegisterPageState extends State<ElderRegisterPage> {
             decoration: InputDecoration(
               labelText: '密码',
               hintText: '至少 6 位',
-              helperText: '密码至少 6 位，请妥善保管',
+              helperText: '昵称默认等于姓名，注册后可再修改',
               prefixIcon: const Icon(Icons.lock_outline),
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
               suffixIcon: IconButton(
