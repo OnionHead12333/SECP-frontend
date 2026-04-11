@@ -16,7 +16,7 @@ final class ElderHelpMockService {
       alertId: _nextAlertId++,
       status: 'pending_revoke',
       triggerTime: now,
-      revokeDeadline: now.add(const Duration(seconds: 5)),
+      revokeDeadline: now.add(const Duration(seconds: 10)),
       serverTime: now,
     );
     return _current!;

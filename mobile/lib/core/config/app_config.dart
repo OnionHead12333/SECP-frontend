@@ -9,10 +9,27 @@ class AppConfig {
     defaultValue: 'http://10.0.2.2:8080/api',
   );
 
+  static const String amapAndroidKey = String.fromEnvironment(
+    'AMAP_ANDROID_KEY',
+    defaultValue: 'YOUR_AMAP_ANDROID_KEY',
+  );
+
+  static const String amapIosKey = String.fromEnvironment(
+    'AMAP_IOS_KEY',
+    defaultValue: 'YOUR_AMAP_IOS_KEY',
+  );
+
   /// 当前 SOS 功能默认保留前端本地联调能力；
   /// 后端准备好后可通过 dart-define 切到真实接口。
   static const bool useMockSos = bool.fromEnvironment(
     'USE_MOCK_SOS',
     defaultValue: true,
+  );
+
+  /// 定位功能默认走真实权限与自动上传链路；
+  /// 如需继续本地演示，可通过 dart-define 切到 mock。
+  static const bool useMockLocation = bool.fromEnvironment(
+    'USE_MOCK_LOCATION',
+    defaultValue: false,
   );
 }

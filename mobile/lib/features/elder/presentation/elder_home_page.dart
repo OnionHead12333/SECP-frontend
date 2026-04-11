@@ -1,11 +1,16 @@
+import 'dart:developer' as developer;
+
 import 'package:flutter/material.dart';
+import 'package:flutter_tts/flutter_tts.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:speech_to_text/speech_to_text.dart';
 import '../../../core/auth/auth_session.dart';
 import '../data/elder_help_service.dart';
 import '../elder_module_routes.dart';
 import '../models/elder_help_request.dart';
 
 enum _HelpRequestState { idle, pending, sent, revoked }
-enum _HelpSheetResult { revoke, sendNow, timeout }
+enum _HelpSheetResult { revokeByButton, revokeByVoice, sendNow, timeout }
 
 class ElderHomePage extends StatefulWidget {
   const ElderHomePage({super.key});
@@ -15,7 +20,7 @@ class ElderHomePage extends StatefulWidget {
 }
 
 class _ElderHomePageState extends State<ElderHomePage> {
-  static const int _fallbackRevokeSeconds = 5;
+  static const int _fallbackRevokeSeconds = 10;
 
   int _index = 0;
   int? _currentAlertId;
@@ -46,6 +51,8 @@ class _ElderHomePageState extends State<ElderHomePage> {
         claimed: claimed,
         familyCount: familyCount,
         onBindingTap: () => Navigator.of(context).pushNamed(ElderModuleRoutes.elderBinding),
+        onEmergencyContactsTap: () => Navigator.of(context).pushNamed(ElderModuleRoutes.elderEmergencyContacts),
+        onLocationTap: () => Navigator.of(context).pushNamed(ElderModuleRoutes.elderLocationStatus),
         onLogout: () {
           AuthSession.clear();
           Navigator.of(context).pushNamedAndRemoveUntil('/login', (_) => false);
@@ -84,11 +91,17 @@ class _ElderHomePageState extends State<ElderHomePage> {
       );
       if (!mounted || _currentAlertId == null) return;
       switch (result) {
-        case _HelpSheetResult.revoke:
+        case _HelpSheetResult.revokeByButton:
           final revoked = await ElderHelpService.revokeHelpRequest(alertId: _currentAlertId!, cancelMode: 'button');
           if (!mounted) return;
           _applyRequestState(revoked);
           _showMessage('老人已确认撤回，本次求助已取消');
+          break;
+        case _HelpSheetResult.revokeByVoice:
+          final revoked = await ElderHelpService.revokeHelpRequest(alertId: _currentAlertId!, cancelMode: 'voice');
+          if (!mounted) return;
+          _applyRequestState(revoked);
+          _showMessage('已识别语音撤回，本次求助已取消');
           break;
         case _HelpSheetResult.sendNow:
           final sent = await ElderHelpService.sendNow(alertId: _currentAlertId!);
@@ -167,7 +180,18 @@ class _HomeTab extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
       children: [
-        _ResponsiveHeroCard(name: name, phone: phone, statusText: statusText, statusColor: statusColor, onSosTap: onSosTap),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Expanded(
+              child: Text('首页', style: TextStyle(fontSize: 32, fontWeight: FontWeight.w800)),
+            ),
+            const SizedBox(width: 12),
+            _SosCircleButton(onTap: onSosTap, compact: false),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _ResponsiveHeroCard(name: name, phone: phone, statusText: statusText, statusColor: statusColor),
         if (helpState != _HelpRequestState.idle) ...[
           const SizedBox(height: 12),
           _HelpStatusBanner(state: helpState),
@@ -188,13 +212,12 @@ class _HomeTab extends StatelessWidget {
 }
 
 class _ResponsiveHeroCard extends StatelessWidget {
-  const _ResponsiveHeroCard({required this.name, required this.phone, required this.statusText, required this.statusColor, required this.onSosTap});
+  const _ResponsiveHeroCard({required this.name, required this.phone, required this.statusText, required this.statusColor});
 
   final String name;
   final String phone;
   final String statusText;
   final Color statusColor;
-  final VoidCallback? onSosTap;
 
   @override
   Widget build(BuildContext context) {
@@ -202,21 +225,11 @@ class _ResponsiveHeroCard extends StatelessWidget {
     return _Panel(
       background: const LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFFFFF7ED), Color(0xFFEFF6FF)]),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('首页', style: TextStyle(fontSize: compact ? 28 : 32, fontWeight: FontWeight.w800)),
-              const SizedBox(height: 14),
-              Text(_greet(), style: const TextStyle(fontSize: 16, color: Color(0xFF475569), fontWeight: FontWeight.w600)),
-              const SizedBox(height: 8),
-              Text('您好，$name', style: TextStyle(fontSize: compact ? 24 : 28, fontWeight: FontWeight.w800, height: 1.15)),
-              const SizedBox(height: 10),
-              Text('手机号：$phone', style: const TextStyle(fontSize: 16, color: Color(0xFF334155))),
-            ]),
-          ),
-          const SizedBox(width: 12),
-          _SosCircleButton(onTap: onSosTap, compact: compact),
-        ]),
+        Text(_greet(), style: const TextStyle(fontSize: 16, color: Color(0xFF475569), fontWeight: FontWeight.w600)),
+        const SizedBox(height: 8),
+        Text('您好，$name', style: TextStyle(fontSize: compact ? 24 : 28, fontWeight: FontWeight.w800, height: 1.15)),
+        const SizedBox(height: 10),
+        Text('手机号：$phone', style: const TextStyle(fontSize: 16, color: Color(0xFF334155))),
         const SizedBox(height: 16),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -243,13 +256,125 @@ class _HelpCountdownSheet extends StatefulWidget {
 }
 
 class _HelpCountdownSheetState extends State<_HelpCountdownSheet> {
-  late int _secondsLeft;
+  static const String _voicePrompt = '误触请说撤回';
 
-  @override
+  final SpeechToText _speech = SpeechToText();
+  final FlutterTts _tts = FlutterTts();
+  late int _secondsLeft;
+  bool _speechReady = false;
+  bool _isListening = false;
+  bool _voiceHandled = false;
+  bool _promptSpeaking = false;
+  String _heardText = '等待语音指令';
+
   void initState() {
     super.initState();
     _secondsLeft = widget.seconds;
     _tick();
+    _prepareVoiceFlow();
+  }
+
+  Future<bool> _ensureMicPermission() async {
+    final status = await Permission.microphone.request();
+    developer.log('SOS mic permission: $status', name: 'speech_debug');
+    if (!mounted) return false;
+    if (status.isGranted) return true;
+    setState(() => _heardText = '麦克风权限未开启，请先允许录音');
+    return false;
+  }
+
+  Future<void> _prepareVoiceFlow() async {
+    await _configureTts();
+    final granted = await _ensureMicPermission();
+    if (!granted) return;
+    await _initVoice();
+    if (mounted && !_voiceHandled && _secondsLeft > 0 && _speechReady) {
+      await _speakVoicePrompt();
+      await Future<void>.delayed(const Duration(milliseconds: 250));
+      await _startListening();
+    }
+  }
+
+  Future<void> _configureTts() async {
+    await _tts.setLanguage('zh-CN');
+    await _tts.setSpeechRate(0.42);
+    await _tts.setPitch(1.0);
+    await _tts.awaitSpeakCompletion(true);
+  }
+
+  Future<void> _speakVoicePrompt() async {
+    if (!mounted || _voiceHandled || _secondsLeft <= 0) return;
+    setState(() {
+      _promptSpeaking = true;
+      _heardText = '正在语音提示，请稍候...';
+    });
+    await _tts.stop();
+    await _tts.speak(_voicePrompt);
+    if (mounted) {
+      setState(() => _promptSpeaking = false);
+    }
+  }
+
+  Future<void> _initVoice() async {
+    final ready = await _speech.initialize(
+      onStatus: (status) async {
+        if (!mounted) return;
+        setState(() => _isListening = status == 'listening');
+        if (!_voiceHandled && _speechReady && _secondsLeft > 0 && (status == 'done' || status == 'notListening')) {
+          await Future<void>.delayed(const Duration(milliseconds: 250));
+          await _startListening();
+        }
+      },
+      onError: (error) async {
+        if (!mounted) return;
+        setState(() => _isListening = false);
+        if (!_voiceHandled && _speechReady && _secondsLeft > 0) {
+          await Future<void>.delayed(const Duration(milliseconds: 400));
+          await _startListening();
+        } else {
+          setState(() => _heardText = '语音初始化失败：${error.errorMsg}');
+        }
+      },
+    );
+    if (!mounted) return;
+    setState(() => _speechReady = ready);
+    if (!ready) {
+      setState(() => _heardText = '当前设备暂不支持语音撤回');
+    }
+  }
+
+  Future<void> _startListening() async {
+    if (!_speechReady || _isListening || _voiceHandled || !mounted || _secondsLeft <= 0) return;
+    setState(() => _heardText = '请现在说：撤回');
+    try {
+      await _speech.listen(
+        localeId: 'zh_CN',
+        partialResults: true,
+        listenFor: const Duration(seconds: 4),
+        pauseFor: const Duration(seconds: 1),
+        onResult: (result) {
+          if (!mounted || _voiceHandled) return;
+          final words = result.recognizedWords.trim();
+          if (words.isNotEmpty) {
+            setState(() => _heardText = words);
+          }
+          if (_shouldTriggerVoiceRevoke(words)) {
+            _voiceHandled = true;
+            _speech.stop();
+            _tts.stop();
+            Navigator.of(context).pop(_HelpSheetResult.revokeByVoice);
+          }
+        },
+      );
+      if (mounted) setState(() => _isListening = true);
+    } catch (e) {
+      if (mounted) setState(() => _heardText = '监听启动失败：$e');
+    }
+  }
+
+  bool _shouldTriggerVoiceRevoke(String text) {
+    final normalized = text.replaceAll(' ', '');
+    return normalized.contains('撤回撤回') || normalized.contains('撤回') || normalized.contains('车会车会') || normalized.contains('策回策回') || normalized.contains('取消求助') || normalized.contains('不要发送');
   }
 
   Future<void> _tick() async {
@@ -258,12 +383,29 @@ class _HelpCountdownSheetState extends State<_HelpCountdownSheet> {
       if (!mounted) return;
       setState(() => _secondsLeft -= 1);
     }
-    if (mounted) Navigator.of(context).pop(_HelpSheetResult.timeout);
+    if (mounted) {
+      await _speech.stop();
+      Navigator.of(context).pop(_HelpSheetResult.timeout);
+    }
+  }
+
+  @override
+  void dispose() {
+    _speech.stop();
+    _tts.stop();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
+    final listeningText = !_speechReady
+        ? '语音撤回不可用'
+        : _promptSpeaking
+            ? '正在播报提示，请稍后说“撤回”...'
+            : _isListening
+                ? '正在监听“撤回”指令...'
+                : '正在准备语音监听...';
     return SafeArea(
       child: AnimatedPadding(
         duration: const Duration(milliseconds: 160),
@@ -278,7 +420,7 @@ class _HelpCountdownSheetState extends State<_HelpCountdownSheet> {
               children: [
                 Text('求助已发起，$_secondsLeft 秒内可撤回', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
                 const SizedBox(height: 10),
-                const Text('倒计时结束后，系统将自动发送给子女端。\n也可以语音提示：\n“如果你要撤回，请大声说出撤回、撤回，我们将撤回。”', style: TextStyle(fontSize: 15, color: Color(0xFF475569), height: 1.65)),
+                const Text('倒计时结束后，系统将自动发送给子女端。\n系统会先短播提示：\n“误触请说撤回。”\n播报结束后会立即开始语音识别。', style: TextStyle(fontSize: 15, color: Color(0xFF475569), height: 1.65)),
                 const SizedBox(height: 16),
                 LinearProgressIndicator(
                   value: _secondsLeft / widget.seconds,
@@ -292,15 +434,23 @@ class _HelpCountdownSheetState extends State<_HelpCountdownSheet> {
                   width: double.infinity,
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(18)),
-                  child: const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text('语音播报提示', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-                    SizedBox(height: 8),
-                    Text('如果你要撤回，请大声说出撤回、撤回，我们将撤回。', style: TextStyle(color: Color(0xFF475569), height: 1.5)),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    const Text('语音撤回', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                    const SizedBox(height: 8),
+                    const Text('播报内容：误触请说撤回。', style: TextStyle(color: Color(0xFF475569), height: 1.5)),
+                    const SizedBox(height: 8),
+                    Row(children: [
+                      Icon(_isListening ? Icons.mic : Icons.mic_none, color: _isListening ? const Color(0xFFDC2626) : const Color(0xFF64748B)),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text(listeningText, style: const TextStyle(color: Color(0xFF475569), height: 1.5))),
+                    ]),
+                    const SizedBox(height: 8),
+                    Text('识别结果：$_heardText', style: const TextStyle(color: Color(0xFF64748B), height: 1.5)),
                   ]),
                 ),
                 const SizedBox(height: 18),
                 Row(children: [
-                  Expanded(child: OutlinedButton(onPressed: () => Navigator.of(context).pop(_HelpSheetResult.revoke), child: const Text('确认撤回'))),
+                  Expanded(child: OutlinedButton(onPressed: () => Navigator.of(context).pop(_HelpSheetResult.revokeByButton), child: const Text('确认撤回'))),
                   const SizedBox(width: 12),
                   Expanded(child: FilledButton(onPressed: () => Navigator.of(context).pop(_HelpSheetResult.sendNow), child: const Text('立即发送'))),
                 ]),
@@ -387,12 +537,14 @@ class _ReminderMedicalTab extends StatelessWidget {
 }
 
 class _MyTab extends StatelessWidget {
-  const _MyTab({required this.name, required this.phone, required this.claimed, required this.familyCount, required this.onBindingTap, required this.onLogout});
+  const _MyTab({required this.name, required this.phone, required this.claimed, required this.familyCount, required this.onBindingTap, required this.onEmergencyContactsTap, required this.onLocationTap, required this.onLogout});
   final String name;
   final String phone;
   final bool claimed;
   final int familyCount;
   final VoidCallback onBindingTap;
+  final VoidCallback onEmergencyContactsTap;
+  final VoidCallback onLocationTap;
   final VoidCallback onLogout;
   @override
   Widget build(BuildContext context) => ListView(
@@ -410,7 +562,9 @@ class _MyTab extends StatelessWidget {
           const SizedBox(height: 12),
           _ItemCard(title: '家属绑定状态', subtitle: '查看绑定详情与当前说明', onTap: onBindingTap),
           const SizedBox(height: 10),
-          const _ItemCard(title: '紧急联系人', subtitle: '后续可在这里展示联系人信息'),
+          _ItemCard(title: '紧急联系人', subtitle: '只支持新增联系人，已有信息统一维护', onTap: onEmergencyContactsTap),
+          const SizedBox(height: 10),
+          _ItemCard(title: '定位与轨迹上传', subtitle: '查看当前位置状态与上传演示轨迹', onTap: onLocationTap),
           const SizedBox(height: 10),
           _ItemCard(title: '退出登录', subtitle: '退出当前老人账号，返回统一登录页', onTap: onLogout),
         ],

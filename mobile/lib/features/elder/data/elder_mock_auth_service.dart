@@ -1,3 +1,4 @@
+import '../models/elder_mock_emergency_contact.dart';
 import '../models/elder_mock_family_member.dart';
 import '../models/elder_mock_recognition_result.dart';
 
@@ -10,6 +11,45 @@ final class ElderMockAuthService {
   ElderMockAuthService._();
 
   static const String mockPassword = '123456';
+  static final Map<String, List<ElderMockEmergencyContact>> _contactStore = {
+    '13800138001': [
+      const ElderMockEmergencyContact(
+        id: 'contact-001',
+        name: '张丽',
+        relation: '女儿',
+        phone: '13911112222',
+        isPrimary: true,
+        note: '白天电话联系最快',
+      ),
+      const ElderMockEmergencyContact(
+        id: 'contact-002',
+        name: '王医生',
+        relation: '社区医生',
+        phone: '13777778888',
+        isPrimary: false,
+        note: '社区卫生站值班电话',
+      ),
+    ],
+    '13800138002': [
+      const ElderMockEmergencyContact(
+        id: 'contact-003',
+        name: '王强',
+        relation: '儿子',
+        phone: '13933334444',
+        isPrimary: true,
+        note: '工作时间可先发消息',
+      ),
+      const ElderMockEmergencyContact(
+        id: 'contact-004',
+        name: '陈敏',
+        relation: '女儿',
+        phone: '13955556666',
+        isPrimary: false,
+        note: '晚上 8 点后更方便接听',
+      ),
+    ],
+  };
+  static int _nextContactId = 100;
 
   static Future<String> login({
     required String phone,
@@ -131,5 +171,71 @@ final class ElderMockAuthService {
       default:
         return const [];
     }
+  }
+
+  static Future<List<ElderMockEmergencyContact>> emergencyContactsForPhone(String phone) async {
+    await Future<void>.delayed(const Duration(milliseconds: 180));
+    final normalized = phone.trim();
+    final contacts = _contactStore[normalized] ?? const <ElderMockEmergencyContact>[];
+    return _sortedContacts(contacts.map((contact) => contact.copyWith()).toList());
+  }
+
+  static Future<List<ElderMockEmergencyContact>> addEmergencyContact({
+    required String phone,
+    required String name,
+    required String relation,
+    required String contactPhone,
+    required String note,
+    bool makePrimary = false,
+  }) async {
+    await Future<void>.delayed(const Duration(milliseconds: 220));
+    final normalizedPhone = phone.trim();
+    final current = [...(_contactStore[normalizedPhone] ?? const <ElderMockEmergencyContact>[])];
+    final normalizedContacts = current
+        .map((item) => makePrimary ? item.copyWith(isPrimary: false) : item.copyWith())
+        .toList();
+    normalizedContacts.add(
+      ElderMockEmergencyContact(
+        id: 'contact-${_nextContactId++}',
+        name: name.trim(),
+        relation: relation.trim(),
+        phone: contactPhone.trim(),
+        note: note.trim(),
+        isPrimary: makePrimary || normalizedContacts.isEmpty,
+      ),
+    );
+    _contactStore[normalizedPhone] = _sortedContacts(_ensurePrimary(normalizedContacts));
+    return emergencyContactsForPhone(normalizedPhone);
+  }
+
+  static Future<List<ElderMockEmergencyContact>> deleteEmergencyContact({
+    required String phone,
+    required String contactId,
+  }) async {
+    await Future<void>.delayed(const Duration(milliseconds: 180));
+    final normalizedPhone = phone.trim();
+    final current = [...(_contactStore[normalizedPhone] ?? const <ElderMockEmergencyContact>[])];
+    current.removeWhere((item) => item.id == contactId);
+    _contactStore[normalizedPhone] = _sortedContacts(_ensurePrimary(current));
+    return emergencyContactsForPhone(normalizedPhone);
+  }
+
+  static List<ElderMockEmergencyContact> _ensurePrimary(List<ElderMockEmergencyContact> contacts) {
+    if (contacts.isEmpty) return contacts;
+    final hasPrimary = contacts.any((item) => item.isPrimary);
+    if (hasPrimary) return contacts;
+    final first = contacts.first;
+    return [
+      first.copyWith(isPrimary: true),
+      ...contacts.skip(1),
+    ];
+  }
+
+  static List<ElderMockEmergencyContact> _sortedContacts(List<ElderMockEmergencyContact> contacts) {
+    contacts.sort((a, b) {
+      if (a.isPrimary == b.isPrimary) return 0;
+      return a.isPrimary ? -1 : 1;
+    });
+    return contacts;
   }
 }
