@@ -32,7 +32,13 @@ class _ChildMainPageState extends State<ChildMainPage> {
       BoundElder(id: 'e1', displayName: '张奶奶', accountHint: '138****0001'),
     ];
     _contacts = [
-      EmergencyContact(id: 'c1', name: '李强', phone: '13900001111', relation: '本人'),
+      EmergencyContact(
+        id: 'c1',
+        elderId: 'e1',
+        name: '李强',
+        phone: '13900001111',
+        relation: '本人',
+      ),
     ];
     _helpRecords = [
       HelpRequestRecord(
@@ -70,7 +76,10 @@ class _ChildMainPageState extends State<ChildMainPage> {
 
   void _addElder(BoundElder e) => setState(() => _elders.add(e));
 
-  void _removeElder(String id) => setState(() => _elders.removeWhere((x) => x.id == id));
+  void _removeElder(String id) => setState(() {
+        _elders.removeWhere((x) => x.id == id);
+        _contacts.removeWhere((c) => c.elderId == id);
+      });
 
   void _addContact(EmergencyContact c) => setState(() => _contacts.add(c));
 

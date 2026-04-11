@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../models/child_local_models.dart';
 
-/// ④ 设置：绑定/解绑老人、紧急联系人管理（其余开关类可后续补）。
+/// ④ 设置：绑定/解绑老人；每位老人独立「紧急联系人」入口，在底部弹层中查看与管理（其余开关类可后续补）。
 class ChildSettingsTab extends StatefulWidget {
   const ChildSettingsTab({
     super.key,
@@ -121,7 +121,14 @@ class _ChildSettingsTabState extends State<ChildSettingsTab> {
     }
   }
 
-  Future<void> _showContactEditor({EmergencyContact? existing}) async {
+  int _contactCountFor(String elderId) =>
+      widget.contacts.where((c) => c.elderId == elderId).length;
+
+  Future<void> _showContactEditor({
+    required String elderId,
+    EmergencyContact? existing,
+    VoidCallback? onChanged,
+  }) async {
     final nameCtrl = TextEditingController(text: existing?.name ?? '');
     final phoneCtrl = TextEditingController(text: existing?.phone ?? '');
     final relCtrl = TextEditingController(text: existing?.relation ?? '');
@@ -186,6 +193,7 @@ class _ChildSettingsTabState extends State<ChildSettingsTab> {
       widget.onAddContact(
         EmergencyContact(
           id: 'c_${DateTime.now().millisecondsSinceEpoch}',
+          elderId: elderId,
           name: name,
           phone: phone,
           relation: rel.isEmpty ? null : rel,
@@ -195,16 +203,20 @@ class _ChildSettingsTabState extends State<ChildSettingsTab> {
       widget.onUpdateContact(
         EmergencyContact(
           id: existing.id,
+          elderId: existing.elderId,
           name: name,
           phone: phone,
           relation: rel.isEmpty ? null : rel,
         ),
       );
     }
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('已保存联系人')));
+    onChanged?.call();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('已保存联系人')));
+    }
   }
 
-  Future<void> _confirmRemoveContact(EmergencyContact c) async {
+  Future<void> _confirmRemoveContact(EmergencyContact c, {VoidCallback? onChanged}) async {
     final yes = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -216,7 +228,121 @@ class _ChildSettingsTabState extends State<ChildSettingsTab> {
         ],
       ),
     );
-    if (yes == true && mounted) widget.onRemoveContact(c.id);
+    if (yes == true && mounted) {
+      widget.onRemoveContact(c.id);
+      onChanged?.call();
+    }
+  }
+
+  void _openEmergencyContactsSheet(BoundElder e) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        final maxH = MediaQuery.sizeOf(sheetContext).height * 0.72;
+        return Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(sheetContext).bottom),
+          child: SizedBox(
+            height: maxH,
+            child: StatefulBuilder(
+              builder: (context, setModalState) {
+                final list = widget.contacts.where((c) => c.elderId == e.id).toList();
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                      child: Row(
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.close),
+                            onPressed: () => Navigator.pop(sheetContext),
+                            tooltip: '关闭',
+                          ),
+                          Expanded(
+                            child: Text(
+                              '${e.displayName} · 紧急联系人',
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                          ),
+                          FilledButton.tonal(
+                            onPressed: () async {
+                              await _showContactEditor(
+                                elderId: e.id,
+                                onChanged: () => setModalState(() {}),
+                              );
+                            },
+                            child: const Text('添加'),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Divider(height: 1),
+                    Expanded(
+                      child: list.isEmpty
+                          ? Center(
+                              child: Text(
+                                '暂无紧急联系人\n点击「添加」由子女维护',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                              ),
+                            )
+                          : ListView.separated(
+                              padding: const EdgeInsets.fromLTRB(8, 8, 8, 24),
+                              itemCount: list.length,
+                              separatorBuilder: (_, __) => const SizedBox(height: 4),
+                              itemBuilder: (context, i) {
+                                final c = list[i];
+                                return Card(
+                                  margin: EdgeInsets.zero,
+                                  child: ListTile(
+                                    leading: const Icon(Icons.contact_phone_outlined),
+                                    title: Text(c.name),
+                                    subtitle: Text(
+                                      '${c.phone}${c.relation != null ? ' · ${c.relation}' : ''}',
+                                    ),
+                                    trailing: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        IconButton(
+                                          icon: const Icon(Icons.edit_outlined),
+                                          tooltip: '编辑',
+                                          onPressed: () async {
+                                            await _showContactEditor(
+                                              elderId: e.id,
+                                              existing: c,
+                                              onChanged: () => setModalState(() {}),
+                                            );
+                                          },
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(Icons.delete_outline),
+                                          tooltip: '删除',
+                                          onPressed: () async {
+                                            await _confirmRemoveContact(
+                                              c,
+                                              onChanged: () => setModalState(() {}),
+                                            );
+                                          },
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -229,19 +355,36 @@ class _ChildSettingsTabState extends State<ChildSettingsTab> {
         Text('老人账号', style: Theme.of(context).textTheme.titleSmall?.copyWith(color: scheme.onSurfaceVariant)),
         const SizedBox(height: 8),
         ...widget.elders.map(
-          (e) => Card(
-            margin: const EdgeInsets.only(bottom: 8),
-            child: ListTile(
-              leading: const CircleAvatar(child: Icon(Icons.elderly)),
-              title: Text(e.displayName),
-              subtitle: Text(e.accountHint ?? '账号：${e.id}'),
-              trailing: IconButton(
-                icon: const Icon(Icons.link_off_outlined),
-                tooltip: '解绑',
-                onPressed: () => _confirmUnbind(e),
+          (e) {
+            final n = _contactCountFor(e.id);
+            return Card(
+              margin: const EdgeInsets.only(bottom: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  ListTile(
+                    contentPadding: const EdgeInsets.fromLTRB(12, 8, 4, 4),
+                    leading: const CircleAvatar(child: Icon(Icons.elderly)),
+                    title: Text(e.displayName),
+                    subtitle: Text(e.accountHint ?? '账号：${e.id}'),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.link_off_outlined),
+                      tooltip: '解绑',
+                      onPressed: () => _confirmUnbind(e),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                    child: OutlinedButton.icon(
+                      onPressed: () => _openEmergencyContactsSheet(e),
+                      icon: const Icon(Icons.contact_phone_outlined),
+                      label: Text(n > 0 ? '紧急联系人（$n）' : '紧急联系人'),
+                    ),
+                  ),
+                ],
               ),
-            ),
-          ),
+            );
+          },
         ),
         Align(
           alignment: Alignment.centerLeft,
@@ -251,52 +394,6 @@ class _ChildSettingsTabState extends State<ChildSettingsTab> {
             label: const Text('绑定老人账号'),
           ),
         ),
-        const SizedBox(height: 24),
-        Row(
-          children: [
-            Text('紧急联系人', style: Theme.of(context).textTheme.titleSmall?.copyWith(color: scheme.onSurfaceVariant)),
-            const Spacer(),
-            TextButton.icon(
-              onPressed: () => _showContactEditor(),
-              icon: const Icon(Icons.add, size: 20),
-              label: const Text('添加'),
-            ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        if (widget.contacts.isEmpty)
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Text('暂无紧急联系人', style: TextStyle(color: scheme.onSurfaceVariant)),
-            ),
-          )
-        else
-          ...widget.contacts.map(
-            (c) => Card(
-              margin: const EdgeInsets.only(bottom: 8),
-              child: ListTile(
-                leading: const Icon(Icons.contact_phone_outlined),
-                title: Text(c.name),
-                subtitle: Text('${c.phone}${c.relation != null ? ' · ${c.relation}' : ''}'),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.edit_outlined),
-                      tooltip: '编辑',
-                      onPressed: () => _showContactEditor(existing: c),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.delete_outline),
-                      tooltip: '删除',
-                      onPressed: () => _confirmRemoveContact(c),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
         const SizedBox(height: 24),
         Text('其他', style: Theme.of(context).textTheme.titleSmall?.copyWith(color: scheme.onSurfaceVariant)),
         const SizedBox(height: 8),
