@@ -50,7 +50,6 @@ class _LoginPageState extends State<LoginPage> {
       final username = _userCtrl.text.trim();
       final password = _pwdCtrl.text;
 
-      // 演示：子女端入口（无需后端）；正式环境接入接口后删除或改为服务端返回角色再跳转。
       if (username == '123123' && password == '123123') {
         AuthSession.token = 'demo-child';
         AuthSession.role = AppRole.child;
@@ -59,59 +58,50 @@ class _LoginPageState extends State<LoginPage> {
         return;
       }
 
-      // 老人端测试账号：为了从统一登录页直接验证老人端界面而临时增加。
       if (username == '13800138001' && password == '123456') {
         AuthSession.token = 'demo-elder-13800138001';
         AuthSession.role = AppRole.elder;
-        AuthSession.saveElderState(
-          name: '张建国',
-          phone: '13800138001',
-          claimed: true,
-          familyCount: 1,
-        );
+        AuthSession.saveElderState(name: '张建国', phone: '13800138001', claimed: true, familyCount: 1);
         if (!mounted) return;
         Navigator.of(context).pushNamedAndRemoveUntil(ElderModuleRoutes.elderHome, (r) => false);
         return;
       }
 
-      // 老人端测试账号：已认领，绑定 2 位家属。
       if (username == '13800138002' && password == '123456') {
         AuthSession.token = 'demo-elder-13800138002';
         AuthSession.role = AppRole.elder;
-        AuthSession.saveElderState(
-          name: '李秀英',
-          phone: '13800138002',
-          claimed: true,
-          familyCount: 2,
-        );
+        AuthSession.saveElderState(name: '李秀英', phone: '13800138002', claimed: true, familyCount: 2);
         if (!mounted) return;
         Navigator.of(context).pushNamedAndRemoveUntil(ElderModuleRoutes.elderHome, (r) => false);
         return;
       }
 
-      // 老人端测试账号：新老人 / 无绑定，用于测试空状态界面。
       if (username == '13800138111' && password == '123456') {
         AuthSession.token = 'demo-elder-13800138111';
         AuthSession.role = AppRole.elder;
-        AuthSession.saveElderState(
-          name: '赵美兰',
-          phone: '13800138111',
-          claimed: false,
-          familyCount: 0,
-        );
+        AuthSession.saveElderState(name: '赵美兰', phone: '13800138111', claimed: false, familyCount: 0);
         if (!mounted) return;
         Navigator.of(context).pushNamedAndRemoveUntil(ElderModuleRoutes.elderHome, (r) => false);
         return;
       }
 
-      final token = await AuthApi.login(
-        username: username,
-        password: password,
-      );
-      AuthSession.token = token;
+      final result = await AuthApi.login(username: username, password: password);
+      AuthSession.token = result.token;
+      if (result.role == 'child') {
+        AuthSession.role = AppRole.child;
+        if (!mounted) return;
+        Navigator.of(context).pushNamedAndRemoveUntil('/child', (r) => false);
+        return;
+      }
       AuthSession.role = AppRole.elder;
+      AuthSession.saveElderState(
+        name: result.name ?? username,
+        phone: result.phone ?? username,
+        claimed: result.claimed ?? false,
+        familyCount: result.familyCount ?? 0,
+      );
       if (!mounted) return;
-      Navigator.of(context).pushNamedAndRemoveUntil('/home', (r) => false);
+      Navigator.of(context).pushNamedAndRemoveUntil(ElderModuleRoutes.elderHome, (r) => false);
     } catch (e) {
       setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
     } finally {
@@ -158,10 +148,7 @@ class _LoginPageState extends State<LoginPage> {
           ),
           if (_error != null) ...[
             const SizedBox(height: 12),
-            Text(
-              _error!,
-              style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 14),
-            ),
+            Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 14)),
           ],
           const SizedBox(height: 20),
           FilledButton(
@@ -171,11 +158,7 @@ class _LoginPageState extends State<LoginPage> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
             child: _submitting
-                ? const SizedBox(
-                    height: 22,
-                    width: 22,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                  )
+                ? const SizedBox(height: 22, width: 22, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                 : const Text('登录'),
           ),
         ],
@@ -186,13 +169,9 @@ class _LoginPageState extends State<LoginPage> {
         children: [
           const Text('还没有账号？'),
           TextButton(
-            onPressed: _submitting
-                ? null
-                : () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute<void>(builder: (_) => const RegisterPage()),
-                    );
-                  },
+            onPressed: _submitting ? null : () {
+              Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const RegisterPage()));
+            },
             child: const Text('去注册'),
           ),
         ],

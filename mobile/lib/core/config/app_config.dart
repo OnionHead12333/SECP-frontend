@@ -8,4 +8,11 @@ class AppConfig {
     'API_BASE',
     defaultValue: 'http://10.0.2.2:8080/api',
   );
+
+  /// 当前 SOS 功能默认保留前端本地联调能力；
+  /// 后端准备好后可通过 dart-define 切到真实接口。
+  static const bool useMockSos = bool.fromEnvironment(
+    'USE_MOCK_SOS',
+    defaultValue: true,
+  );
 }

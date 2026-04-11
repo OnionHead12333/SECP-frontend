@@ -1,11 +1,31 @@
 import '../../../core/models/api_response.dart';
 import '../../../core/network/api_client.dart';
 
+final class LoginResult {
+  const LoginResult({
+    required this.token,
+    required this.role,
+    this.name,
+    this.phone,
+    this.nickname,
+    this.claimed,
+    this.familyCount,
+  });
+
+  final String token;
+  final String role;
+  final String? name;
+  final String? phone;
+  final String? nickname;
+  final bool? claimed;
+  final int? familyCount;
+}
+
 /// 与计划中的后端约定：POST /api/v1/auth/login、/register
 final class AuthApi {
   AuthApi._();
 
-  static Future<String> login({
+  static Future<LoginResult> login({
     required String username,
     required String password,
   }) async {
@@ -19,12 +39,25 @@ final class AuthApi {
       body,
       (raw) => raw is Map<String, dynamic> ? raw : null,
     );
-    if (!api.isSuccess) throw Exception(api.message);
-    final token = api.data?['token'] as String?;
+    if (!api.isSuccess || api.data == null) throw Exception(api.message);
+    final data = api.data!;
+    final token = data['token'] as String?;
     if (token == null || token.isEmpty) {
       throw Exception('登录成功但未返回 token');
     }
-    return token;
+    final role = data['role'] as String?;
+    if (role == null || role.isEmpty) {
+      throw Exception('登录成功但未返回 role');
+    }
+    return LoginResult(
+      token: token,
+      role: role,
+      name: data['name'] as String?,
+      phone: data['phone'] as String?,
+      nickname: data['nickname'] as String?,
+      claimed: data['claimed'] as bool?,
+      familyCount: data['familyCount'] as int?,
+    );
   }
 
   static Future<void> register({
@@ -56,13 +89,6 @@ final class AuthApi {
   }
 
   /// 子女注册并一次创建/绑定多个老人主体（按 `注册绑定流程设计.md` 首版设计）。
-  ///
-  /// 约定接口（待后端实现）：POST /api/v1/auth/register-child-with-elders
-  /// 请求体：
-  /// {
-  ///   "child": { "name": "...", "phone": "...", "password": "..." },
-  ///   "elders": [ { "name": "...", "phone": "...", "relation": "..." } ]
-  /// }
   static Future<void> registerChildWithElders({
     required String childName,
     required String childPhone,
@@ -90,5 +116,4 @@ final class AuthApi {
     );
     if (!api.isSuccess) throw Exception(api.message);
   }
-
 }
