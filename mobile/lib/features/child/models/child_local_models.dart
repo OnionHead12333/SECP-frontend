@@ -14,12 +14,15 @@ class BoundElder {
 class EmergencyContact {
   EmergencyContact({
     required this.id,
+    required this.elderId,
     required this.name,
     required this.phone,
     this.relation,
   });
 
   final String id;
+  /// 所属老人（绑定老人 `BoundElder.id`）
+  final String elderId;
   final String name;
   final String phone;
   final String? relation;
