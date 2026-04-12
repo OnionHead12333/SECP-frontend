@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/auth/auth_session.dart';
-import '../data/elder_mock_auth_service.dart';
-import '../models/elder_mock_emergency_contact.dart';
+import '../data/elder_emergency_contacts_service.dart';
+import '../models/elder_emergency_contact.dart';
 
 class ElderEmergencyContactsPage extends StatefulWidget {
   const ElderEmergencyContactsPage({super.key});
@@ -14,7 +14,7 @@ class ElderEmergencyContactsPage extends StatefulWidget {
 class _ElderEmergencyContactsPageState extends State<ElderEmergencyContactsPage> {
   bool _loading = true;
   bool _busy = false;
-  List<ElderMockEmergencyContact> _contacts = const [];
+  List<ElderEmergencyContact> _contacts = const [];
 
   @override
   void initState() {
@@ -23,7 +23,7 @@ class _ElderEmergencyContactsPageState extends State<ElderEmergencyContactsPage>
   }
 
   Future<void> _loadContacts() async {
-    final contacts = await ElderMockAuthService.emergencyContactsForPhone(AuthSession.elderPhone ?? '');
+    final contacts = await ElderEmergencyContactsService.fetchContacts(elderPhone: AuthSession.elderPhone ?? '');
     if (!mounted) return;
     setState(() {
       _contacts = contacts;
@@ -39,8 +39,8 @@ class _ElderEmergencyContactsPageState extends State<ElderEmergencyContactsPage>
     );
     if (draft == null) return;
     setState(() => _busy = true);
-    final contacts = await ElderMockAuthService.addEmergencyContact(
-      phone: AuthSession.elderPhone ?? '',
+    final contacts = await ElderEmergencyContactsService.addContact(
+      elderPhone: AuthSession.elderPhone ?? '',
       name: draft.name,
       relation: draft.relation,
       contactPhone: draft.phone,
@@ -111,7 +111,7 @@ class _Header extends StatelessWidget {
         const SizedBox(height: 10),
         Text('老人手机号：$phone'),
         const SizedBox(height: 8),
-        Text('已登记 $count 位联系人，后续可用于 SOS 联调。', style: const TextStyle(color: Color(0xFF475569), height: 1.5)),
+        Text('已登记 $count 位联系人，对应数据库表 emergency_contacts，可用于 SOS 联调。', style: const TextStyle(color: Color(0xFF475569), height: 1.5)),
       ]),
     );
   }
@@ -126,7 +126,7 @@ class _TipCard extends StatelessWidget {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(color: const Color(0xFFFAFAF9), borderRadius: BorderRadius.circular(20), border: Border.all(color: const Color(0xFFE7E5E4))),
       child: const Text(
-        '当前老人端只保留“新增联系人”的能力，不开放编辑和删除。已有联系人信息默认由子女端或后端统一维护。',
+        '当前老人端保留“新增联系人”的能力，并已预留真实接口：查询 /v1/elder/emergency-contacts，新增 POST /v1/elder/emergency-contacts。数据库最终落点为 emergency_contacts。',
         style: TextStyle(fontSize: 16, height: 1.6, color: Color(0xFF44403C)),
       ),
     );
@@ -146,7 +146,7 @@ class _EmptyCard extends StatelessWidget {
         SizedBox(height: 12),
         Text('还没有紧急联系人', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
         SizedBox(height: 8),
-        Text('可以先新增联系人，后续再由统一端维护。', textAlign: TextAlign.center, style: TextStyle(height: 1.6, color: Color(0xFF475569))),
+        Text('可以先新增联系人；真实接口打通后会直接写入 emergency_contacts。', textAlign: TextAlign.center, style: TextStyle(height: 1.6, color: Color(0xFF475569))),
       ]),
     );
   }
@@ -155,7 +155,7 @@ class _EmptyCard extends StatelessWidget {
 class _ContactCard extends StatelessWidget {
   const _ContactCard({required this.contact});
 
-  final ElderMockEmergencyContact contact;
+  final ElderEmergencyContact contact;
 
   @override
   Widget build(BuildContext context) {
@@ -179,7 +179,7 @@ class _ContactCard extends StatelessWidget {
         const SizedBox(height: 6),
         Text('备注：${contact.note.isEmpty ? '暂无备注' : contact.note}', style: const TextStyle(color: Color(0xFF64748B), height: 1.5)),
         const SizedBox(height: 14),
-        const Text('老人端仅支持新增联系人，不支持编辑或删除已有联系人。', style: TextStyle(color: Color(0xFF64748B), height: 1.5)),
+        const Text('老人端仅支持新增联系人，不支持编辑或删除已有联系人；真实接口落库到 emergency_contacts。', style: TextStyle(color: Color(0xFF64748B), height: 1.5)),
       ]),
     );
   }

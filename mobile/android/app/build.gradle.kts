@@ -5,8 +5,24 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+import java.util.Properties
+
+val localProperties = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) {
+        file.inputStream().use { load(it) }
+    }
+}
+
+fun resolveAmapKey(): String {
+    return (project.findProperty("AMAP_ANDROID_KEY") as String?)
+        ?: System.getenv("AMAP_ANDROID_KEY")
+        ?: localProperties.getProperty("AMAP_ANDROID_KEY")
+        ?: "84f7b71fbfea73f06252e2b06685934c"
+}
+
 android {
-    namespace = "com.example.smart_elderly_care_mobile"
+    namespace = "com.laoleme.smartcare.mobile"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -20,10 +36,8 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.example.smart_elderly_care_mobile"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
+        applicationId = "com.laoleme.smartcare.mobile"
+        manifestPlaceholders["AMAP_ANDROID_KEY"] = resolveAmapKey()
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -32,8 +46,6 @@ android {
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
         }
     }

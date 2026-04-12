@@ -16,8 +16,12 @@ dependencies:
   speech_to_text: ^7.0.0
   flutter_tts: ^4.0.2
   permission_handler: ^11.3.1
-  amap_flutter_base: ^3.0.0
-  amap_flutter_location: ^3.0.0
+  amap_flutter_base:
+    path: packages/amap_flutter_base
+  amap_flutter_location:
+    path: packages/amap_flutter_location
+  amap_flutter_map:
+    path: packages/amap_flutter_map
 
 dev_dependencies:
   flutter_test:
