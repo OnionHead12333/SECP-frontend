@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../models/child_local_models.dart';
+import '../widgets/child_location_map.dart';
 
 /// ① 首页总览：老人状态、服药、提醒、定位/活动、异常摘要（演示数据）。
 class ChildOverviewTab extends StatelessWidget {
@@ -98,7 +99,15 @@ class ChildOverviewTab extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('当前定位 / 活动状态', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
-                const SizedBox(height: 8),
+                const SizedBox(height: 10),
+                ChildLocationMap(
+                  key: ValueKey(
+                    '${location.latitude}_${location.longitude}_${location.updatedAt.millisecondsSinceEpoch}',
+                  ),
+                  latitude: location.latitude,
+                  longitude: location.longitude,
+                ),
+                const SizedBox(height: 10),
                 Text(location.address, style: Theme.of(context).textTheme.bodyMedium),
                 Text(
                   '坐标 ${location.latitude.toStringAsFixed(4)}, ${location.longitude.toStringAsFixed(4)} · 更新 ${_fmtTime(location.updatedAt)}',
