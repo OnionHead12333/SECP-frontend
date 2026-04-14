@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:dio/dio.dart';
 
 import '../../../core/auth/app_role.dart';
 import '../../../core/auth/auth_session.dart';
@@ -20,6 +22,22 @@ class _LoginPageState extends State<LoginPage> {
   bool _obscure = true;
   bool _submitting = false;
   String? _error;
+
+  String _friendlyError(Object e) {
+    // 需求：不要在前端展示后端/网络的原始报错细节。
+    if (e is DioException) {
+      return '网络异常，请检查网络后重试';
+    }
+    final msg = e.toString().replaceFirst('Exception: ', '').trim();
+    if (msg.contains('token') || msg.contains('role')) {
+      return '登录失败，请稍后重试';
+    }
+    // 常见「账号密码错误」走统一文案（避免直接透传后端 message）
+    if (msg.contains('密码') || msg.contains('账号') || msg.contains('用户名')) {
+      return '用户名或密码错误';
+    }
+    return '登录失败，请稍后重试';
+  }
 
   @override
   void dispose() {
@@ -102,8 +120,12 @@ class _LoginPageState extends State<LoginPage> {
       );
       if (!mounted) return;
       Navigator.of(context).pushNamedAndRemoveUntil(ElderModuleRoutes.elderHome, (r) => false);
-    } catch (e) {
-      setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
+    } catch (e, st) {
+      if (kDebugMode) {
+        debugPrint('Login failed: $e');
+        debugPrintStack(stackTrace: st);
+      }
+      setState(() => _error = _friendlyError(e));
     } finally {
       if (mounted) setState(() => _submitting = false);
     }

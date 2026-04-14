@@ -23,7 +23,12 @@
             <option value="$PROJECT_DIR$/../../../../flutter/flutter/packages/flutter_tools/gradle" />
             <option value="$PROJECT_DIR$" />
             <option value="$PROJECT_DIR$/app" />
-            <option value="$PROJECT_DIR$/../../../../pub-cache/hosted/pub.flutter-io.cn/path_provider_android-2.2.23/android" />
+            <option value="$PROJECT_DIR$/../packages/amap_flutter_location/android" />
+            <option value="$PROJECT_DIR$/../packages/amap_flutter_map/android" />
+            <option value="$PROJECT_DIR$/../../../../pub-cache/hosted/pub.flutter-io.cn/flutter_plugin_android_lifecycle-2.0.34/android" />
+            <option value="$PROJECT_DIR$/../../../../pub-cache/hosted/pub.flutter-io.cn/flutter_tts-4.2.5/android" />
+            <option value="$PROJECT_DIR$/../../../../pub-cache/hosted/pub.flutter-io.cn/permission_handler_android-12.1.0/android" />
+            <option value="$PROJECT_DIR$/../../../../pub-cache/hosted/pub.flutter-io.cn/speech_to_text-7.3.0/android" />
           </set>
         </option>
       </GradleProjectSettings>
