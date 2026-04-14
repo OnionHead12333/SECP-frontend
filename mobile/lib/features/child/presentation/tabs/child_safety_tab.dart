@@ -36,122 +36,184 @@ class ChildSafetyTab extends StatelessWidget {
     final mapTrack = track.map((e) => (latitude: e.latitude, longitude: e.longitude)).toList();
     final mapRoute = route.points.map((e) => (latitude: e.latitude, longitude: e.longitude)).toList();
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+    // 单页连续滚动，避免「上半一块、下半一块」的双滚动区割裂感
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
       children: [
-        Flexible(
-          flex: 6,
+        _SafetySectionTitle(
+          title: '老人位置',
+          trailing: IconButton.filledTonal(
+            onPressed: onRefreshLocation,
+            icon: const Icon(Icons.my_location, size: 20),
+            tooltip: '刷新定位',
+            style: IconButton.styleFrom(
+              visualDensity: VisualDensity.compact,
+              padding: const EdgeInsets.all(8),
+            ),
+          ),
+        ),
+        Card(
+          clipBehavior: Clip.antiAlias,
+          elevation: 0,
+          color: scheme.surfaceContainerLow,
           child: Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 14),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text('老人定位与导航', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
-                    ),
-                    IconButton.filledTonal(
-                      onPressed: onRefreshLocation,
-                      icon: const Icon(Icons.my_location),
-                      tooltip: '刷新定位',
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
                 ChildLocationMap(
-                  key: ValueKey('${location.latitude}_${location.longitude}_${location.updatedAt.millisecondsSinceEpoch}'),
+                  key: ValueKey(
+                    '${location.latitude}_${location.longitude}_${location.updatedAt.millisecondsSinceEpoch}',
+                  ),
                   latitude: location.latitude,
                   longitude: location.longitude,
                   track: mapTrack,
                   route: mapRoute,
+                  height: 232,
                 ),
                 const SizedBox(height: 12),
                 Text(location.address, style: Theme.of(context).textTheme.bodyLarge),
-                const SizedBox(height: 4),
-                Text('老人当前位置：纬度 ${location.latitude.toStringAsFixed(5)}  经度 ${location.longitude.toStringAsFixed(5)}', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant)),
-                Text('上次更新：${_fmt(location.updatedAt)}', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant)),
-                const SizedBox(height: 14),
-                _RouteSummary(route: route),
-                const SizedBox(height: 12),
-                Text('最近轨迹（前端演示）', style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700)),
-                const SizedBox(height: 8),
-                if (track.isEmpty)
-                  Text('暂无轨迹点', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.outline))
-                else
-                  ...track.take(5).map(
-                    (item) => Padding(
-                      padding: const EdgeInsets.only(bottom: 6),
-                      child: Text('• ${item.label} · ${_fmt(item.recordedAt)}', style: Theme.of(context).textTheme.bodySmall),
-                    ),
-                  ),
-                const SizedBox(height: 4),
-                Text('蓝线=老人历史轨迹，橙线=推荐回家路线。真实高德模式下还能直接看到周边饭店、药店、超市等 POI 标注。', style: Theme.of(context).textTheme.labelSmall?.copyWith(color: scheme.outline)),
+                const SizedBox(height: 6),
+                Text(
+                  '经纬度 ${location.latitude.toStringAsFixed(5)}，${location.longitude.toStringAsFixed(5)}',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+                ),
+                Text(
+                  '上次更新 ${_fmt(location.updatedAt)}',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+                ),
               ],
             ),
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 16),
+        _SafetySectionTitle(title: '路线与轨迹'),
         Card(
+          elevation: 0,
+          color: scheme.surfaceContainerLow,
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _RouteSummary(route: route),
+                const SizedBox(height: 14),
+                Text(
+                  '最近轨迹',
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 8),
+                if (track.isEmpty)
+                  Text(
+                    '暂无轨迹点',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.outline),
+                  )
+                else
+                  ...track.take(5).map(
+                        (item) => Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: Text(
+                            '• ${item.label} · ${_fmt(item.recordedAt)}',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ),
+                      ),
+                const SizedBox(height: 6),
+                Text(
+                  '蓝线：历史轨迹　橙线：推荐回家路线',
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(color: scheme.outline),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 20),
+        _SafetySectionTitle(title: '活动状态'),
+        Card(
+          elevation: 0,
+          color: scheme.surfaceContainerLow,
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('活动状态', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
-                const SizedBox(height: 12),
                 Row(
                   children: [
                     Expanded(
-                      child: _StatChip(icon: Icons.directions_walk, label: '今日步数', value: '${activity.stepsToday}'),
+                      child: _StatChip(
+                        icon: Icons.directions_walk,
+                        label: '今日步数',
+                        value: '${activity.stepsToday}',
+                      ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: _StatChip(icon: Icons.accessibility_new, label: '状态', value: activity.stateLabel),
+                      child: _StatChip(
+                        icon: Icons.accessibility_new,
+                        label: '状态',
+                        value: activity.stateLabel,
+                      ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 8),
-                Text('数据更新时间：${_fmt(activity.updatedAt)}', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant)),
+                const SizedBox(height: 10),
+                Text(
+                  '数据更新 ${_fmt(activity.updatedAt)}',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+                ),
               ],
             ),
           ),
         ),
-        const SizedBox(height: 12),
-        Text('其他', style: Theme.of(context).textTheme.labelLarge?.copyWith(color: scheme.onSurfaceVariant)),
-        const SizedBox(height: 8),
+        const SizedBox(height: 20),
+        _SafetySectionTitle(title: '快捷入口'),
         _PlaceholderRow(title: '历史轨迹', subtitle: '按日查看轨迹回放（下一步接真实接口）'),
         _PlaceholderRow(title: '地理围栏状态', subtitle: '围栏开关与越界记录（待开发）'),
         _PlaceholderRow(title: '预警消息列表', subtitle: '合并推送与设备告警（待开发）'),
-        const SizedBox(height: 16),
-        Text('求助记录处理', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+        const SizedBox(height: 20),
+        _SafetySectionTitle(title: '求助记录'),
         const SizedBox(height: 8),
         if (helpRecords.isEmpty)
           Card(
+            elevation: 0,
+            color: scheme.surfaceContainerLow,
             child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Center(child: Text('暂无求助记录', style: TextStyle(color: scheme.onSurfaceVariant))),
+              padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 16),
+              child: Center(
+                child: Text(
+                  '暂无求助记录',
+                  style: TextStyle(color: scheme.onSurfaceVariant),
+                ),
+              ),
             ),
           )
         else
           ...helpRecords.map((r) {
             final pending = r.status == HelpRequestStatus.pending;
             return Card(
-              margin: const EdgeInsets.only(bottom: 8),
+              margin: const EdgeInsets.only(bottom: 10),
+              elevation: 0,
+              color: scheme.surfaceContainerLow,
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
+                padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Expanded(
-                          child: Text('${r.elderName} · ${_fmt(r.createdAt)}', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+                          child: Text(
+                            '${r.elderName} · ${_fmt(r.createdAt)}',
+                            style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+                          ),
                         ),
-                        IconButton.filledTonal(
-                          onPressed: onRefreshLocation,
-                          icon: const Icon(Icons.my_location),
-                          tooltip: '刷新定位',
+                        Chip(
+                          label: Text(pending ? '待处理' : '已处理'),
+                          visualDensity: VisualDensity.compact,
+                          padding: EdgeInsets.zero,
+                          labelPadding: const EdgeInsets.symmetric(horizontal: 8),
+                          backgroundColor: pending ? scheme.errorContainer : scheme.surfaceContainerHighest,
                         ),
                       ],
                     ),
@@ -164,139 +226,58 @@ class ChildSafetyTab extends StatelessWidget {
                         child: FilledButton.tonal(
                           onPressed: () {
                             onResolveHelp(r.id);
-                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('已标记为已处理（本地演示）')));
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('已标记为已处理（本地演示）')),
+                            );
                           },
                           child: const Text('标记已处理'),
                         ),
-                        latitude: location.latitude,
-                        longitude: location.longitude,
-                        expandInParent: true,
-                      ),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(location.address, style: Theme.of(context).textTheme.bodyLarge),
-                        const SizedBox(height: 4),
-                        Text(
-                          '纬度 ${location.latitude.toStringAsFixed(5)}  经度 ${location.longitude.toStringAsFixed(5)}',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
-                        ),
-                        Text(
-                          '上次更新：${_fmt(location.updatedAt)}',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-        Expanded(
-          flex: 5,
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-            children: [
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('活动状态', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _StatChip(icon: Icons.directions_walk, label: '今日步数', value: '${activity.stepsToday}'),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: _StatChip(icon: Icons.accessibility_new, label: '状态', value: activity.stateLabel),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        '数据更新时间：${_fmt(activity.updatedAt)}',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
                       ),
                     ],
-                  ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 12),
-              Text('其他', style: Theme.of(context).textTheme.labelLarge?.copyWith(color: scheme.onSurfaceVariant)),
-              const SizedBox(height: 8),
-              _PlaceholderRow(title: '历史轨迹', subtitle: '按日查看轨迹回放（待开发）'),
-              _PlaceholderRow(title: '地理围栏状态', subtitle: '围栏开关与越界记录（待开发）'),
-              _PlaceholderRow(title: '预警消息列表', subtitle: '合并推送与设备告警（待开发）'),
-              const SizedBox(height: 16),
-              Text('求助记录处理', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
-              const SizedBox(height: 8),
-              if (helpRecords.isEmpty)
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Center(child: Text('暂无求助记录', style: TextStyle(color: scheme.onSurfaceVariant))),
-                  ),
-                )
-              else
-                ...helpRecords.map((r) {
-                  final pending = r.status == HelpRequestStatus.pending;
-                  return Card(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  '${r.elderName} · ${_fmt(r.createdAt)}',
-                                  style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
-                                ),
-                              ),
-                              Chip(
-                                label: Text(pending ? '待处理' : '已处理'),
-                                visualDensity: VisualDensity.compact,
-                                backgroundColor: pending ? scheme.errorContainer : scheme.surfaceContainerHighest,
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Text(r.summary, style: Theme.of(context).textTheme.bodyMedium),
-                          if (pending) ...[
-                            const SizedBox(height: 12),
-                            Align(
-                              alignment: Alignment.centerRight,
-                              child: FilledButton.tonal(
-                                onPressed: () {
-                                  onResolveHelp(r.id);
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text('已标记为已处理（本地演示）')),
-                                  );
-                                },
-                                child: const Text('标记已处理'),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  );
-                }),
-            ],
-          ),
-        ),
+            );
+          }),
       ],
+    );
+  }
+}
+
+class _SafetySectionTitle extends StatelessWidget {
+  const _SafetySectionTitle({required this.title, this.trailing});
+
+  final String title;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10, top: 2),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Container(
+            width: 3,
+            height: 16,
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.primary,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              title,
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.2,
+                  ),
+            ),
+          ),
+          if (trailing != null) trailing!,
+        ],
+      ),
     );
   }
 }

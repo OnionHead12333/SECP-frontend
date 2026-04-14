@@ -11,11 +11,10 @@ dependencies:
     sdk: flutter
   cupertino_icons: ^1.0.8
   dio: ^5.7.0
-  flutter_map: ^8.2.2
-  latlong2: ^0.9.1
   speech_to_text: ^7.0.0
   flutter_tts: ^4.0.2
   permission_handler: ^11.3.1
+  # 须使用仓库内 path 版本：已补全 Android `namespace`，兼容 AGP 8+；pub.dev 上 3.0.0 无 namespace 会导致 :amap_flutter_location 配置失败
   amap_flutter_base:
     path: packages/amap_flutter_base
   amap_flutter_location:
