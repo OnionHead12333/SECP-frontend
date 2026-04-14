@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../features/auth/presentation/login_page.dart';
 import '../features/child/presentation/child_main_page.dart';
-import '../features/home/home_page.dart';
+import '../features/elder/elder_module_routes.dart';
 
 /// 应用根组件：主题、路由入口。
 class SmartElderlyCareApp extends StatelessWidget {
@@ -19,7 +19,7 @@ class SmartElderlyCareApp extends StatelessWidget {
       initialRoute: '/login',
       routes: {
         '/login': (_) => const LoginPage(),
-        '/home': (_) => const HomePage(),
+        ...ElderModuleRoutes.routes(),
         '/child': (_) => const ChildMainPage(),
       },
     );

@@ -46,6 +46,20 @@ class HelpRequestRecord {
   HelpRequestStatus status;
 }
 
+class LocationTrackPoint {
+  LocationTrackPoint({
+    required this.latitude,
+    required this.longitude,
+    required this.recordedAt,
+    required this.label,
+  });
+
+  final double latitude;
+  final double longitude;
+  final DateTime recordedAt;
+  final String label;
+}
+
 class LocationSnapshot {
   LocationSnapshot({
     required this.latitude,
@@ -58,6 +72,36 @@ class LocationSnapshot {
   final double longitude;
   final String address;
   final DateTime updatedAt;
+}
+
+class RoutePoint {
+  RoutePoint({
+    required this.latitude,
+    required this.longitude,
+    required this.label,
+  });
+
+  final double latitude;
+  final double longitude;
+  final String label;
+}
+
+class NavigationRouteSnapshot {
+  NavigationRouteSnapshot({
+    required this.startLabel,
+    required this.endLabel,
+    required this.distanceKm,
+    required this.estimatedMinutes,
+    required this.statusText,
+    required this.points,
+  });
+
+  final String startLabel;
+  final String endLabel;
+  final double distanceKm;
+  final int estimatedMinutes;
+  final String statusText;
+  final List<RoutePoint> points;
 }
 
 class ActivitySnapshot {

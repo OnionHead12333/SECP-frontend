@@ -1,8 +1,9 @@
 import 'package:dio/dio.dart';
 
+import '../auth/auth_session.dart';
 import '../config/app_config.dart';
 
-/// 全局 HTTP 客户端，统一 Base URL 与超时。
+/// 全局 HTTP 客户端，统一 Base URL、超时和 token 注入。
 final class ApiClient {
   ApiClient._();
 
@@ -15,6 +16,13 @@ final class ApiClient {
     ),
   )..interceptors.add(
       InterceptorsWrapper(
+        onRequest: (options, handler) {
+          final token = AuthSession.token;
+          if (token != null && token.isNotEmpty) {
+            options.headers['Authorization'] = 'Bearer $token';
+          }
+          handler.next(options);
+        },
         onError: (e, handler) {
           final msg = _extractMessage(e);
           handler.next(

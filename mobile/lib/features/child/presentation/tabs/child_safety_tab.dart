@@ -8,6 +8,8 @@ class ChildSafetyTab extends StatelessWidget {
   const ChildSafetyTab({
     super.key,
     required this.location,
+    required this.track,
+    required this.route,
     required this.activity,
     required this.helpRecords,
     required this.onRefreshLocation,
@@ -15,6 +17,8 @@ class ChildSafetyTab extends StatelessWidget {
   });
 
   final LocationSnapshot location;
+  final List<LocationTrackPoint> track;
+  final NavigationRouteSnapshot route;
   final ActivitySnapshot activity;
   final List<HelpRequestRecord> helpRecords;
   final VoidCallback onRefreshLocation;
@@ -29,6 +33,8 @@ class ChildSafetyTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final mapTrack = track.map((e) => (latitude: e.latitude, longitude: e.longitude)).toList();
+    final mapRoute = route.points.map((e) => (latitude: e.latitude, longitude: e.longitude)).toList();
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
@@ -42,7 +48,7 @@ class ChildSafetyTab extends StatelessWidget {
                 Row(
                   children: [
                     Expanded(
-                      child: Text('实时定位', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+                      child: Text('老人定位与导航', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
                     ),
                     IconButton.filledTonal(
                       onPressed: onRefreshLocation,
@@ -53,25 +59,33 @@ class ChildSafetyTab extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 ChildLocationMap(
-                  key: ValueKey(
-                    '${location.latitude}_${location.longitude}_${location.updatedAt.millisecondsSinceEpoch}',
-                  ),
+                  key: ValueKey('${location.latitude}_${location.longitude}_${location.updatedAt.millisecondsSinceEpoch}'),
                   latitude: location.latitude,
                   longitude: location.longitude,
+                  track: mapTrack,
+                  route: mapRoute,
                 ),
                 const SizedBox(height: 12),
                 Text(location.address, style: Theme.of(context).textTheme.bodyLarge),
                 const SizedBox(height: 4),
-                Text(
-                  '纬度 ${location.latitude.toStringAsFixed(5)}  经度 ${location.longitude.toStringAsFixed(5)}',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
-                ),
+                Text('老人当前位置：纬度 ${location.latitude.toStringAsFixed(5)}  经度 ${location.longitude.toStringAsFixed(5)}', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant)),
                 Text('上次更新：${_fmt(location.updatedAt)}', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant)),
+                const SizedBox(height: 14),
+                _RouteSummary(route: route),
+                const SizedBox(height: 12),
+                Text('最近轨迹（前端演示）', style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700)),
+                const SizedBox(height: 8),
+                if (track.isEmpty)
+                  Text('暂无轨迹点', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.outline))
+                else
+                  ...track.take(5).map(
+                    (item) => Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Text('• ${item.label} · ${_fmt(item.recordedAt)}', style: Theme.of(context).textTheme.bodySmall),
+                    ),
+                  ),
                 const SizedBox(height: 4),
-                Text(
-                  '国内网络若加载慢，可换高德瓦片或自建 Tile 服务。',
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(color: scheme.outline),
-                ),
+                Text('蓝线=老人历史轨迹，橙线=推荐回家路线。真实高德模式下还能直接看到周边饭店、药店、超市等 POI 标注。', style: Theme.of(context).textTheme.labelSmall?.copyWith(color: scheme.outline)),
               ],
             ),
           ),
@@ -105,7 +119,7 @@ class ChildSafetyTab extends StatelessWidget {
         const SizedBox(height: 12),
         Text('其他', style: Theme.of(context).textTheme.labelLarge?.copyWith(color: scheme.onSurfaceVariant)),
         const SizedBox(height: 8),
-        _PlaceholderRow(title: '历史轨迹', subtitle: '按日查看轨迹回放（待开发）'),
+        _PlaceholderRow(title: '历史轨迹', subtitle: '按日查看轨迹回放（下一步接真实接口）'),
         _PlaceholderRow(title: '地理围栏状态', subtitle: '围栏开关与越界记录（待开发）'),
         _PlaceholderRow(title: '预警消息列表', subtitle: '合并推送与设备告警（待开发）'),
         const SizedBox(height: 16),
@@ -131,10 +145,7 @@ class ChildSafetyTab extends StatelessWidget {
                     Row(
                       children: [
                         Expanded(
-                          child: Text(
-                            '${r.elderName} · ${_fmt(r.createdAt)}',
-                            style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
-                          ),
+                          child: Text('${r.elderName} · ${_fmt(r.createdAt)}', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
                         ),
                         Chip(
                           label: Text(pending ? '待处理' : '已处理'),
@@ -152,9 +163,7 @@ class ChildSafetyTab extends StatelessWidget {
                         child: FilledButton.tonal(
                           onPressed: () {
                             onResolveHelp(r.id);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('已标记为已处理（本地演示）')),
-                            );
+                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('已标记为已处理（本地演示）')));
                           },
                           child: const Text('标记已处理'),
                         ),
@@ -166,6 +175,75 @@ class ChildSafetyTab extends StatelessWidget {
             );
           }),
       ],
+    );
+  }
+}
+
+class _RouteSummary extends StatelessWidget {
+  const _RouteSummary({required this.route});
+
+  final NavigationRouteSnapshot route;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.alt_route, color: Color(0xFFEA580C)),
+              const SizedBox(width: 8),
+              Expanded(child: Text('${route.startLabel} → ${route.endLabel}', style: const TextStyle(fontWeight: FontWeight.w700))),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 12,
+            runSpacing: 10,
+            children: [
+              _RouteMetric(label: '预计距离', value: '${route.distanceKm.toStringAsFixed(2)} km'),
+              _RouteMetric(label: '预计时间', value: '${route.estimatedMinutes} 分钟'),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(route.statusText, style: const TextStyle(color: Color(0xFF475569), height: 1.5)),
+        ],
+      ),
+    );
+  }
+}
+
+class _RouteMetric extends StatelessWidget {
+  const _RouteMetric({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: Theme.of(context).textTheme.labelSmall),
+          const SizedBox(height: 4),
+          Text(value, style: const TextStyle(fontWeight: FontWeight.w700)),
+        ],
+      ),
     );
   }
 }

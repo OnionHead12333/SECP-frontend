@@ -39,6 +39,8 @@ mobile/macos/Flutter/GeneratedPluginRegistrant.swift
 mobile/linux/flutter/ephemeral/
 mobile/windows/flutter/ephemeral/
 mobile/web/flutter_bootstrap.js
+mobile/packages/amap_flutter_map/example/
+mobile/packages/amap_flutter_location/example/
+mobile/packages/amap_flutter_map/doc/
 *.apk
 *.aab
-

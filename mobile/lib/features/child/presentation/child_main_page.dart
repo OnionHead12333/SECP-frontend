@@ -16,12 +16,18 @@ class ChildMainPage extends StatefulWidget {
 }
 
 class _ChildMainPageState extends State<ChildMainPage> {
+  static const double _homeLatitude = 31.23040;
+  static const double _homeLongitude = 121.47370;
+  static const String _homeLabel = '张奶奶家';
+
   int _navIndex = 0;
 
   late List<BoundElder> _elders;
   late List<EmergencyContact> _contacts;
   late List<HelpRequestRecord> _helpRecords;
   late LocationSnapshot _location;
+  late List<LocationTrackPoint> _track;
+  late NavigationRouteSnapshot _route;
   late ActivitySnapshot _activity;
 
   @override
@@ -56,12 +62,19 @@ class _ChildMainPageState extends State<ChildMainPage> {
         status: HelpRequestStatus.resolved,
       ),
     ];
+    _track = [
+      LocationTrackPoint(latitude: 31.23218, longitude: 121.47502, recordedAt: now.subtract(const Duration(minutes: 18)), label: '社区东门'),
+      LocationTrackPoint(latitude: 31.23128, longitude: 121.47440, recordedAt: now.subtract(const Duration(minutes: 12)), label: '家附近路口'),
+      LocationTrackPoint(latitude: 31.23072, longitude: 121.47402, recordedAt: now.subtract(const Duration(minutes: 6)), label: '单元楼下'),
+      LocationTrackPoint(latitude: 31.23040, longitude: 121.47370, recordedAt: now.subtract(const Duration(minutes: 2)), label: '家中'),
+    ];
     _location = LocationSnapshot(
-      latitude: 31.2304,
-      longitude: 121.4737,
-      address: '上海市黄浦区 · 示例小区（演示数据）',
-      updatedAt: now.subtract(const Duration(minutes: 3)),
+      latitude: _track.last.latitude,
+      longitude: _track.last.longitude,
+      address: '上海市黄浦区 · 示例小区（轨迹演示）',
+      updatedAt: _track.last.recordedAt,
     );
+    _route = _buildRoute(_location);
     _activity = ActivitySnapshot(
       stepsToday: 4280,
       stateLabel: '轻度活动 · 室内为主',
@@ -94,14 +107,50 @@ class _ChildMainPageState extends State<ChildMainPage> {
 
   void _refreshLocationMock() {
     setState(() {
-      final jitter = (DateTime.now().millisecond % 100) / 1e5;
-      _location = LocationSnapshot(
-        latitude: 31.2304 + jitter,
-        longitude: 121.4737 + jitter,
-        address: _location.address,
-        updatedAt: DateTime.now(),
+      final last = _track.isEmpty ? const (31.23218, 121.47502) : (_track.last.latitude, _track.last.longitude);
+      final drift = (DateTime.now().millisecond % 40) / 100000;
+      final next = LocationTrackPoint(
+        latitude: last.$1 - 0.00018 + drift,
+        longitude: last.$2 - 0.00016 + drift / 2,
+        recordedAt: DateTime.now(),
+        label: '导航刷新点',
       );
+      _track = [..._track, next].takeLast(12).toList();
+      _location = LocationSnapshot(
+        latitude: next.latitude,
+        longitude: next.longitude,
+        address: '上海市黄浦区 · 老人当前位置（前端导航演示）',
+        updatedAt: next.recordedAt,
+      );
+      _route = _buildRoute(_location);
     });
+  }
+
+  NavigationRouteSnapshot _buildRoute(LocationSnapshot location) {
+    final distanceKm = _calculateDistanceKm(location.latitude, location.longitude, _homeLatitude, _homeLongitude);
+    final minutes = (distanceKm * 12).clamp(3, 35).round();
+    final routePoints = [
+      RoutePoint(latitude: location.latitude, longitude: location.longitude, label: '老人当前位置'),
+      RoutePoint(latitude: (location.latitude + _homeLatitude) / 2 + 0.00035, longitude: (location.longitude + _homeLongitude) / 2 - 0.00022, label: '推荐路口'),
+      RoutePoint(latitude: _homeLatitude, longitude: _homeLongitude, label: _homeLabel),
+    ];
+    final statusText = distanceKm < 0.15 ? '老人已接近家中，可重点查看到家状态' : '当前展示从老人位置返回家中的模拟导航路线';
+    return NavigationRouteSnapshot(
+      startLabel: '老人当前位置',
+      endLabel: _homeLabel,
+      distanceKm: distanceKm,
+      estimatedMinutes: minutes,
+      statusText: statusText,
+      points: routePoints,
+    );
+  }
+
+  double _calculateDistanceKm(double startLat, double startLng, double endLat, double endLng) {
+    const latFactor = 111.0;
+    const lngFactor = 97.0;
+    final lat = (startLat - endLat).abs() * latFactor;
+    final lng = (startLng - endLng).abs() * lngFactor;
+    return double.parse((lat + lng).toStringAsFixed(2));
   }
 
   void _resolveHelp(String id) {
@@ -139,6 +188,8 @@ class _ChildMainPageState extends State<ChildMainPage> {
           const ChildMedicalTab(),
           ChildSafetyTab(
             location: _location,
+            track: _track.reversed.toList(),
+            route: _route,
             activity: _activity,
             helpRecords: _helpRecords,
             onRefreshLocation: _refreshLocationMock,
@@ -166,5 +217,12 @@ class _ChildMainPageState extends State<ChildMainPage> {
         ],
       ),
     );
+  }
+}
+
+extension on List<LocationTrackPoint> {
+  List<LocationTrackPoint> takeLast(int count) {
+    if (length <= count) return this;
+    return sublist(length - count);
   }
 }
