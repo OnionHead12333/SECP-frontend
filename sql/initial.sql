@@ -9,7 +9,10 @@ SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
 
 TRUNCATE TABLE ai_chat_logs;
-TRUNCATE TABLE reminders;
+TRUNCATE TABLE medical_reminders;
+TRUNCATE TABLE exercise_reminders;
+TRUNCATE TABLE water_reminders;
+TRUNCATE TABLE medicine_reminders;
 TRUNCATE TABLE medical_events;
 TRUNCATE TABLE medical_records;
 TRUNCATE TABLE health_metrics;
@@ -78,14 +81,40 @@ INSERT INTO medical_events (id, elder_profile_id, record_id, title, event_type, 
 (6, 3, 6, '服用降压药', 'medicine', '2024-04-06 08:30:00', 'daily', 'pending', 'ocr', NOW(), NOW()),
 (7, 3, NULL, '骨密度复查', 'examination', '2024-08-01 09:00:00', 'none', 'pending', 'child', NOW(), NOW());
 
-INSERT INTO reminders (id, elder_profile_id, title, reminder_type, source_type, related_event_id, remind_time, repeat_rule, status, created_by, created_at, updated_at) VALUES
-(1, 1, '服用降压药', 'medicine', 'ocr', 1, '2024-04-06 08:00:00', 'daily', 'pending', 'elder', NOW(), NOW()),
-(2, 1, '测量血压', 'examination', 'child_remote', 3, '2024-04-07 19:00:00', 'weekly', 'pending', 'child', NOW(), NOW()),
-(3, 1, '复诊提醒', 'review', 'child_remote', 2, '2024-04-15 08:30:00', 'none', 'pending', 'child', NOW(), NOW()),
-(4, 2, '测量血糖', 'examination', 'elder_manual', 4, '2024-04-06 07:30:00', 'daily', 'pending', 'elder', NOW(), NOW()),
-(5, 2, '内分泌复诊', 'review', 'child_remote', 5, '2024-04-10 13:30:00', 'none', 'pending', 'child', NOW(), NOW()),
-(6, 3, '服用降压药', 'medicine', 'ocr', 6, '2024-04-06 08:30:00', 'daily', 'pending', 'elder', NOW(), NOW()),
-(7, 3, '骨密度复查', 'examination', 'child_remote', 7, '2024-08-01 08:30:00', 'none', 'pending', 'child', NOW(), NOW());
+-- 提醒数据（按 4 张提醒表写入）
+INSERT INTO medicine_reminders (
+  id, elder_profile_id, title, medicine_name, dosage, frequency_rule,
+  source_type, related_event_id, remind_time, repeat_rule, status, created_by, created_at, updated_at
+) VALUES
+(1, 1, '服用降压药', '降压药', '1片', 'daily', 'ocr', 1, '2024-04-06 08:00:00', 'daily', 'pending', 'elder', NOW(), NOW()),
+(2, 3, '服用降压药', '硝苯地平缓释片', '30mg', 'daily', 'ocr', 6, '2024-04-06 08:30:00', 'daily', 'pending', 'elder', NOW(), NOW());
+
+INSERT INTO medical_reminders (
+  id, elder_profile_id, title, medical_type, related_event_id,
+  source_type, remind_time, repeat_rule, status, created_by, created_at, updated_at
+) VALUES
+(1, 1, '测量血压', 'examination', 3, 'child_remote', '2024-04-07 19:00:00', 'weekly', 'pending', 'child', NOW(), NOW()),
+(2, 1, '复诊提醒', 'review', 2, 'child_remote', '2024-04-15 08:30:00', 'none', 'pending', 'child', NOW(), NOW()),
+(3, 2, '测量血糖', 'examination', 4, 'elder_manual', '2024-04-06 07:30:00', 'daily', 'pending', 'elder', NOW(), NOW()),
+(4, 2, '内分泌复诊', 'review', 5, 'child_remote', '2024-04-10 13:30:00', 'none', 'pending', 'child', NOW(), NOW()),
+(5, 3, '骨密度复查', 'examination', 7, 'child_remote', '2024-08-01 08:30:00', 'none', 'pending', 'child', NOW(), NOW());
+
+-- 生活提醒：喝水 / 锻炼（建议书中提到）
+INSERT INTO water_reminders (
+  id, elder_profile_id, title,
+  daily_target_ml, interval_minutes, per_intake_ml, today_intake_ml, last_intake_time,
+  source_type, remind_time, repeat_rule, status, created_by, created_at, updated_at
+) VALUES
+(1, 1, '喝水提醒', 1600, 60, 200, 400, '2026-04-11 09:30:00', 'elder_manual', '2026-04-11 10:30:00', 'daily', 'pending', 'elder', NOW(), NOW()),
+(2, 2, '喝水提醒', 1500, 90, 200, 200, '2026-04-11 09:00:00', 'child_remote', '2026-04-11 10:30:00', 'daily', 'pending', 'child', NOW(), NOW());
+
+INSERT INTO exercise_reminders (
+  id, elder_profile_id, title,
+  exercise_type, goal_value, goal_unit,
+  source_type, remind_time, repeat_rule, status, created_by, created_at, updated_at
+) VALUES
+(1, 1, '散步锻炼', 'walk', 30, 'minutes', 'child_remote', '2026-04-11 18:00:00', 'daily', 'pending', 'child', NOW(), NOW()),
+(2, 3, '太极锻炼', 'taichi', 1, 'times', 'elder_manual', '2026-04-12 08:00:00', 'weekly', 'pending', 'elder', NOW(), NOW());
 
 INSERT INTO health_metrics (id, elder_profile_id, metric_type, value, unit, source, recorded_at, remark, created_at) VALUES
 (1, 1, 'blood_pressure', '135/85', 'mmHg', 'elder_input', '2024-04-01 08:00:00', '晨起空腹', NOW()),

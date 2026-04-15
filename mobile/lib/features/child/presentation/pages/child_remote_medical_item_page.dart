@@ -20,35 +20,46 @@ class _ChildRemoteMedicalItemPageState extends State<ChildRemoteMedicalItemPage>
   final _formKey = GlobalKey<FormState>();
 
   final _titleCtrl = TextEditingController(text: '吃药提醒');
-  final _repeatRuleCtrl = TextEditingController(text: 'none');
 
-  DateTime _remindAt = DateTime.now().add(const Duration(hours: 1));
-  late int _hour;
-  late int _minute;
+  final List<_MedicineScheduleRow> _rows = [];
+
   String? _selectedElderId;
-  bool _enableMedicineReminder = true;
+  bool _enabled = true;
   bool _submitting = false;
 
   @override
   void initState() {
     super.initState();
-    _hour = _remindAt.hour;
-    _minute = _remindAt.minute;
     if (widget.elders.isNotEmpty) {
       _selectedElderId = widget.elders.first.id;
     }
+    final base = DateTime.now().add(const Duration(hours: 1));
+    _rows.add(
+      _MedicineScheduleRow(
+        medicineNameCtrl: TextEditingController(),
+        dosageCtrl: TextEditingController(text: '1片'),
+        frequencyCtrl: TextEditingController(text: 'daily'),
+        repeatRuleCtrl: TextEditingController(text: 'none'),
+        date: DateTime(base.year, base.month, base.day),
+        hour: base.hour,
+        minute: base.minute,
+      ),
+    );
   }
 
   @override
   void dispose() {
     _titleCtrl.dispose();
-    _repeatRuleCtrl.dispose();
+    for (final r in _rows) {
+      r.dispose();
+    }
     super.dispose();
   }
 
-  Future<void> _pickRemindDate() async {
+  Future<void> _pickRowDate(int index) async {
     final now = DateTime.now();
-    final initialDate = DateTime(_remindAt.year, _remindAt.month, _remindAt.day);
+    final row = _rows[index];
+    final initialDate = DateTime(row.date.year, row.date.month, row.date.day);
     final pickedDate = await showDatePicker(
       context: context,
       firstDate: DateTime(now.year - 1),
@@ -56,15 +67,7 @@ class _ChildRemoteMedicalItemPageState extends State<ChildRemoteMedicalItemPage>
       initialDate: initialDate,
     );
     if (pickedDate == null) return;
-    setState(() {
-      _remindAt = DateTime(
-        pickedDate.year,
-        pickedDate.month,
-        pickedDate.day,
-        _hour,
-        _minute,
-      );
-    });
+    setState(() => _rows[index].date = DateTime(pickedDate.year, pickedDate.month, pickedDate.day));
   }
 
   String _fmtDateTime(DateTime t) {
@@ -76,9 +79,34 @@ class _ChildRemoteMedicalItemPageState extends State<ChildRemoteMedicalItemPage>
     return '$y-$m-$d $hh:$mm';
   }
 
+  void _addMedicineRow() {
+    setState(() {
+      final base = DateTime.now().add(const Duration(hours: 1));
+      _rows.add(
+        _MedicineScheduleRow(
+          medicineNameCtrl: TextEditingController(),
+          dosageCtrl: TextEditingController(text: '1片'),
+          frequencyCtrl: TextEditingController(text: 'daily'),
+          repeatRuleCtrl: TextEditingController(text: 'none'),
+          date: DateTime(base.year, base.month, base.day),
+          hour: base.hour,
+          minute: base.minute,
+        ),
+      );
+    });
+  }
+
+  void _removeMedicineRowAt(int index) {
+    setState(() {
+      if (_rows.length <= 1) return;
+      _rows[index].dispose();
+      _rows.removeAt(index);
+    });
+  }
+
   Future<void> _submit() async {
-    if (!_enableMedicineReminder) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('请先开启“辅助吃药提醒”')));
+    if (!_enabled) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('请先开启吃药提醒')));
       return;
     }
     if (!(_formKey.currentState?.validate() ?? false)) return;
@@ -96,27 +124,48 @@ class _ChildRemoteMedicalItemPageState extends State<ChildRemoteMedicalItemPage>
 
     setState(() => _submitting = true);
     try {
-      final res = await ApiClient.dio.post<Map<String, dynamic>>(
-        '/v1/child/reminders',
-        data: {
-          'elderProfileId': elderProfileId,
-          'title': _titleCtrl.text.trim(),
-          'reminderType': 'medicine',
-          'sourceType': 'child_remote',
-          'relatedEventId': null,
-          'remindTime': _remindAt.toUtc().toIso8601String(),
-          'repeatRule': _repeatRuleCtrl.text.trim().isEmpty ? 'none' : _repeatRuleCtrl.text.trim(),
-          'status': 'pending',
-          'createdBy': 'child',
-        },
-      );
-      final body = res.data;
-      if (body == null) throw Exception('空响应');
-      final api = ApiResponse.fromJson(body, (raw) => raw);
-      if (!api.isSuccess) throw Exception(api.message);
+      var ok = 0;
+      Object? firstErr;
+
+      for (final row in _rows) {
+        final med = row.medicineNameCtrl.text.trim();
+        final dosage = row.dosageCtrl.text.trim().isEmpty ? null : row.dosageCtrl.text.trim();
+        final frequencyRule = row.frequencyCtrl.text.trim().isEmpty ? 'none' : row.frequencyCtrl.text.trim();
+        final repeatRule = row.repeatRuleCtrl.text.trim().isEmpty ? 'none' : row.repeatRuleCtrl.text.trim();
+        final remindAt = DateTime(row.date.year, row.date.month, row.date.day, row.hour, row.minute);
+        try {
+          final res = await ApiClient.dio.post<Map<String, dynamic>>(
+            '/v1/child/medicine-reminders',
+            data: {
+              'elderProfileId': elderProfileId,
+              'title': _titleCtrl.text.trim(),
+              'sourceType': 'child_remote',
+              'relatedEventId': null,
+              'remindTime': remindAt.toUtc().toIso8601String(),
+              'medicineName': med,
+              'dosage': dosage,
+              'frequencyRule': frequencyRule,
+              'repeatRule': repeatRule,
+              'status': 'pending',
+              'createdBy': 'child',
+            },
+          );
+          final body = res.data;
+          if (body == null) throw Exception('空响应');
+          final api = ApiResponse.fromJson(body, (raw) => raw);
+          if (!api.isSuccess) throw Exception(api.message);
+          ok++;
+        } catch (e) {
+          firstErr ??= e;
+        }
+      }
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('已创建吃药提醒')));
+      if (ok == 0) {
+        throw firstErr ?? Exception('创建失败');
+      }
+      final suffix = firstErr == null ? '' : '（部分失败，请检查网络或后端接口）';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('已创建 $ok 条吃药提醒$suffix')));
       Navigator.of(context).pop();
     } catch (e) {
       if (!mounted) return;
@@ -144,10 +193,10 @@ class _ChildRemoteMedicalItemPageState extends State<ChildRemoteMedicalItemPage>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('辅助吃药提醒', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+                  Text('吃药提醒', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
                   const SizedBox(height: 6),
                   Text(
-                    '为老人设置按时吃药的提醒（子女端远程添加）。',
+                    '为老人设置按时吃药提醒（医疗界面）。',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
                   ),
                   const SizedBox(height: 12),
@@ -164,9 +213,7 @@ class _ChildRemoteMedicalItemPageState extends State<ChildRemoteMedicalItemPage>
                       labelText: '选择老人',
                       prefixIcon: Icon(Icons.person_outline),
                     ),
-                    onChanged: _submitting || !_enableMedicineReminder || elders.isEmpty
-                        ? null
-                        : (v) => setState(() => _selectedElderId = v),
+                    onChanged: _submitting || !_enabled || elders.isEmpty ? null : (v) => setState(() => _selectedElderId = v),
                     validator: (_) {
                       if (elders.isEmpty) return '请先到「设置」绑定老人';
                       if (_selectedElderId == null || _selectedElderId!.isEmpty) return '必选';
@@ -177,9 +224,9 @@ class _ChildRemoteMedicalItemPageState extends State<ChildRemoteMedicalItemPage>
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
                     title: const Text('开启吃药提醒'),
-                    subtitle: Text(_enableMedicineReminder ? '将创建一条待执行提醒' : '关闭后不创建提醒'),
-                    value: _enableMedicineReminder,
-                    onChanged: (v) => setState(() => _enableMedicineReminder = v),
+                    subtitle: Text(_enabled ? '每种药可设置不同提醒时间（批量创建）' : '关闭后不创建提醒'),
+                    value: _enabled,
+                    onChanged: (v) => setState(() => _enabled = v),
                   ),
                 ],
               ),
@@ -202,106 +249,189 @@ class _ChildRemoteMedicalItemPageState extends State<ChildRemoteMedicalItemPage>
                       ),
                       maxLength: 100,
                       validator: (v) => (v == null || v.trim().isEmpty) ? '必填' : null,
-                      enabled: !_submitting && _enableMedicineReminder && elders.isNotEmpty,
+                      enabled: !_submitting && _enabled && elders.isNotEmpty,
                     ),
-                    const SizedBox(height: 4),
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: const Icon(Icons.schedule_outlined),
-                      title: const Text('提醒时间'),
-                      subtitle: Text(_fmtDateTime(_remindAt)),
-                      trailing: TextButton(
-                        onPressed: _submitting || !_enableMedicineReminder || elders.isEmpty ? null : _pickRemindDate,
-                        child: const Text('选日期'),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 12),
                     Row(
                       children: [
                         Expanded(
-                          child: DropdownButtonFormField<int>(
-                            value: _hour,
-                            items: [
-                              for (final h in hours)
-                                DropdownMenuItem(
-                                  value: h,
-                                  child: Text(h.toString().padLeft(2, '0')),
-                                ),
-                            ],
-                            decoration: const InputDecoration(
-                              labelText: '小时',
-                              prefixIcon: Icon(Icons.access_time),
-                            ),
-                            onChanged: _submitting || !_enableMedicineReminder || elders.isEmpty
-                                ? null
-                                : (v) {
-                                    if (v == null) return;
-                                    setState(() {
-                                      _hour = v;
-                                      _remindAt = DateTime(
-                                        _remindAt.year,
-                                        _remindAt.month,
-                                        _remindAt.day,
-                                        _hour,
-                                        _minute,
-                                      );
-                                    });
-                                  },
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text('药品与提醒时间（每种药一行）', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
                           ),
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: DropdownButtonFormField<int>(
-                            value: _minute,
-                            items: [
-                              for (final m in minutes)
-                                DropdownMenuItem(
-                                  value: m,
-                                  child: Text(m.toString().padLeft(2, '0')),
-                                ),
-                            ],
-                            decoration: const InputDecoration(
-                              labelText: '分钟',
-                              prefixIcon: Icon(Icons.more_time),
-                            ),
-                            onChanged: _submitting || !_enableMedicineReminder || elders.isEmpty
-                                ? null
-                                : (v) {
-                                    if (v == null) return;
-                                    setState(() {
-                                      _minute = v;
-                                      _remindAt = DateTime(
-                                        _remindAt.year,
-                                        _remindAt.month,
-                                        _remindAt.day,
-                                        _hour,
-                                        _minute,
-                                      );
-                                    });
-                                  },
-                          ),
+                        TextButton.icon(
+                          onPressed: _submitting || !_enabled || elders.isEmpty ? null : _addMedicineRow,
+                          icon: const Icon(Icons.add),
+                          label: const Text('添加药品'),
                         ),
                       ],
                     ),
-                    const Divider(height: 20),
-                    DropdownButtonFormField<String>(
-                      value: _repeatRuleCtrl.text.trim().isEmpty ? 'none' : _repeatRuleCtrl.text.trim(),
-                      items: const [
-                        DropdownMenuItem(value: 'none', child: Text('不重复')),
-                        DropdownMenuItem(value: 'daily', child: Text('每天')),
-                        DropdownMenuItem(value: 'weekly', child: Text('每周')),
-                      ],
-                      decoration: const InputDecoration(
-                        labelText: '重复规则',
-                        prefixIcon: Icon(Icons.repeat),
+                    const SizedBox(height: 8),
+                    for (var i = 0; i < _rows.length; i++) ...[
+                      Padding(
+                        padding: EdgeInsets.only(bottom: i == _rows.length - 1 ? 0 : 16),
+                        child: Card(
+                          elevation: 0,
+                          color: scheme.surfaceContainerHighest.withValues(alpha: 0.35),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(14, 12, 10, 14),
+                            child: Column(
+                              children: [
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        '药品 ${i + 1}',
+                                        style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+                                      ),
+                                    ),
+                                    IconButton(
+                                      tooltip: '删除该药品',
+                                      onPressed: _submitting || !_enabled || elders.isEmpty || _rows.length <= 1 ? null : () => _removeMedicineRowAt(i),
+                                      icon: const Icon(Icons.delete_outline),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                TextFormField(
+                                  controller: _rows[i].medicineNameCtrl,
+                                  decoration: const InputDecoration(
+                                    labelText: '药品名称',
+                                    hintText: '请手动输入药品名称',
+                                    prefixIcon: Icon(Icons.medication_outlined),
+                                  ),
+                                  maxLength: 100,
+                                  validator: (v) => (v == null || v.trim().isEmpty) ? '必填' : null,
+                                  enabled: !_submitting && _enabled && elders.isNotEmpty,
+                                ),
+                                const SizedBox(height: 12),
+                                TextFormField(
+                                  controller: _rows[i].dosageCtrl,
+                                  decoration: const InputDecoration(
+                                    labelText: '剂量（可选）',
+                                    hintText: '如：1片 / 5ml',
+                                    prefixIcon: Icon(Icons.science_outlined),
+                                  ),
+                                  maxLength: 50,
+                                  enabled: !_submitting && _enabled && elders.isNotEmpty,
+                                ),
+                                const SizedBox(height: 8),
+                                ListTile(
+                                  contentPadding: EdgeInsets.zero,
+                                  leading: const Icon(Icons.calendar_today_outlined),
+                                  title: const Text('提醒日期'),
+                                  subtitle: Text(
+                                    '${_rows[i].date.year.toString().padLeft(4, '0')}-${_rows[i].date.month.toString().padLeft(2, '0')}-${_rows[i].date.day.toString().padLeft(2, '0')}',
+                                  ),
+                                  trailing: TextButton(
+                                    onPressed: _submitting || !_enabled || elders.isEmpty ? null : () => _pickRowDate(i),
+                                    child: const Text('选择'),
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: DropdownButtonFormField<int>(
+                                        value: _rows[i].hour,
+                                        items: [
+                                          for (final h in hours)
+                                            DropdownMenuItem(
+                                              value: h,
+                                              child: Text(h.toString().padLeft(2, '0')),
+                                            ),
+                                        ],
+                                        decoration: const InputDecoration(
+                                          labelText: '小时',
+                                          prefixIcon: Icon(Icons.access_time),
+                                        ),
+                                        onChanged: _submitting || !_enabled || elders.isEmpty
+                                            ? null
+                                            : (v) {
+                                                if (v == null) return;
+                                                setState(() => _rows[i].hour = v);
+                                              },
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: DropdownButtonFormField<int>(
+                                        value: _rows[i].minute,
+                                        items: [
+                                          for (final m in minutes)
+                                            DropdownMenuItem(
+                                              value: m,
+                                              child: Text(m.toString().padLeft(2, '0')),
+                                            ),
+                                        ],
+                                        decoration: const InputDecoration(
+                                          labelText: '分钟',
+                                          prefixIcon: Icon(Icons.more_time),
+                                        ),
+                                        onChanged: _submitting || !_enabled || elders.isEmpty
+                                            ? null
+                                            : (v) {
+                                                if (v == null) return;
+                                                setState(() => _rows[i].minute = v);
+                                              },
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 6),
+                                  child: Text(
+                                    '预览：${_fmtDateTime(DateTime(_rows[i].date.year, _rows[i].date.month, _rows[i].date.day, _rows[i].hour, _rows[i].minute))}',
+                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                DropdownButtonFormField<String>(
+                                  value: _rows[i].frequencyCtrl.text.trim().isEmpty ? 'daily' : _rows[i].frequencyCtrl.text.trim(),
+                                  items: const [
+                                    DropdownMenuItem(value: 'daily', child: Text('每天')),
+                                    DropdownMenuItem(value: 'weekly', child: Text('每周')),
+                                    DropdownMenuItem(value: 'none', child: Text('不重复')),
+                                  ],
+                                  decoration: const InputDecoration(
+                                    labelText: '服用频率',
+                                    prefixIcon: Icon(Icons.event_repeat_outlined),
+                                  ),
+                                  onChanged: _submitting || !_enabled || elders.isEmpty
+                                      ? null
+                                      : (v) {
+                                          if (v == null) return;
+                                          setState(() => _rows[i].frequencyCtrl.text = v);
+                                        },
+                                ),
+                                const SizedBox(height: 12),
+                                DropdownButtonFormField<String>(
+                                  value: _rows[i].repeatRuleCtrl.text.trim().isEmpty ? 'none' : _rows[i].repeatRuleCtrl.text.trim(),
+                                  items: const [
+                                    DropdownMenuItem(value: 'none', child: Text('不重复')),
+                                    DropdownMenuItem(value: 'daily', child: Text('每天')),
+                                    DropdownMenuItem(value: 'weekly', child: Text('每周')),
+                                  ],
+                                  decoration: const InputDecoration(
+                                    labelText: '提醒重复规则',
+                                    prefixIcon: Icon(Icons.repeat),
+                                  ),
+                                  onChanged: _submitting || !_enabled || elders.isEmpty
+                                      ? null
+                                      : (v) {
+                                          if (v == null) return;
+                                          setState(() => _rows[i].repeatRuleCtrl.text = v);
+                                        },
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
                       ),
-                      onChanged: _submitting || !_enableMedicineReminder || elders.isEmpty
-                          ? null
-                          : (v) {
-                              if (v == null) return;
-                              setState(() => _repeatRuleCtrl.text = v);
-                            },
-                    ),
+                    ],
                     const SizedBox(height: 16),
                     SizedBox(
                       width: double.infinity,
@@ -314,7 +444,7 @@ class _ChildRemoteMedicalItemPageState extends State<ChildRemoteMedicalItemPage>
                                 child: CircularProgressIndicator(strokeWidth: 2),
                               )
                             : const Icon(Icons.notifications_active_outlined),
-                        label: Text(_submitting ? '提交中…' : '创建吃药提醒'),
+                        label: Text(_submitting ? '提交中…' : '批量创建吃药提醒'),
                       ),
                     ),
                   ],
@@ -325,6 +455,33 @@ class _ChildRemoteMedicalItemPageState extends State<ChildRemoteMedicalItemPage>
         ],
       ),
     );
+  }
+}
+
+final class _MedicineScheduleRow {
+  _MedicineScheduleRow({
+    required this.medicineNameCtrl,
+    required this.dosageCtrl,
+    required this.frequencyCtrl,
+    required this.repeatRuleCtrl,
+    required this.date,
+    required this.hour,
+    required this.minute,
+  });
+
+  final TextEditingController medicineNameCtrl;
+  final TextEditingController dosageCtrl;
+  final TextEditingController frequencyCtrl;
+  final TextEditingController repeatRuleCtrl;
+  DateTime date;
+  int hour;
+  int minute;
+
+  void dispose() {
+    medicineNameCtrl.dispose();
+    dosageCtrl.dispose();
+    frequencyCtrl.dispose();
+    repeatRuleCtrl.dispose();
   }
 }
 
