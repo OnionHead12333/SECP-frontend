@@ -1,8 +1,16 @@
 import 'package:flutter/material.dart';
 
+import '../../models/child_local_models.dart';
+import '../pages/child_remote_medical_item_page.dart';
+
 /// ② 医疗管理：MVP 结构占位，与产品定义一致，后续接页面与接口。
 class ChildMedicalTab extends StatelessWidget {
-  const ChildMedicalTab({super.key});
+  const ChildMedicalTab({
+    super.key,
+    required this.elders,
+  });
+
+  final List<BoundElder> elders;
 
   @override
   Widget build(BuildContext context) {
@@ -27,9 +35,15 @@ class ChildMedicalTab extends StatelessWidget {
             subtitle: Text(it.$3),
             trailing: const Icon(Icons.chevron_right),
             onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('「${it.$2}」功能开发中')),
-              );
+              if (it.$2 == '远程添加医疗事项') {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => ChildRemoteMedicalItemPage(elders: elders),
+                  ),
+                );
+                return;
+              }
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('「${it.$2}」功能开发中')));
             },
           ),
         );

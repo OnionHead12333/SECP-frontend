@@ -35,12 +35,12 @@ class _ChildMainPageState extends State<ChildMainPage> {
     super.initState();
     final now = DateTime.now();
     _elders = [
-      BoundElder(id: 'e1', displayName: '张奶奶', accountHint: '138****0001'),
+      BoundElder(id: '1', displayName: '张奶奶', accountHint: '138****0001'),
     ];
     _contacts = [
       EmergencyContact(
         id: 'c1',
-        elderId: 'e1',
+        elderId: '1',
         name: '李强',
         phone: '13900001111',
         relation: '本人',
@@ -185,7 +185,7 @@ class _ChildMainPageState extends State<ChildMainPage> {
             activity: _activity,
             helpRecords: _helpRecords,
           ),
-          const ChildMedicalTab(),
+          ChildMedicalTab(elders: _elders),
           ChildSafetyTab(
             location: _location,
             track: _track.reversed.toList(),
