@@ -8,6 +8,7 @@ import '../../../core/auth/auth_session.dart';
 import '../data/elder_help_service.dart';
 import '../elder_module_routes.dart';
 import '../models/elder_help_request.dart';
+import 'elder_reminder_center_tab.dart';
 
 enum _HelpRequestState { idle, pending, sent, revoked }
 enum _HelpSheetResult { revokeByButton, revokeByVoice, sendNow, timeout }
@@ -44,7 +45,9 @@ class _ElderHomePageState extends State<ElderHomePage> {
         onOpenReminders: () => setState(() => _index = 1),
         onSosTap: _busy ? null : _handleHelpTap,
       ),
-      const _ReminderMedicalTab(),
+      ElderReminderCenterTab(
+        onOpenLocationPage: () => Navigator.of(context).pushNamed(ElderModuleRoutes.elderLocationStatus),
+      ),
       _MyTab(
         name: name,
         phone: phone,
@@ -516,7 +519,9 @@ class _HelpStatusBanner extends StatelessWidget {
 }
 
 class _ReminderMedicalTab extends StatelessWidget {
-  const _ReminderMedicalTab();
+  const _ReminderMedicalTab({required this.onOpenLocationPage});
+
+  final VoidCallback onOpenLocationPage;
   @override
   Widget build(BuildContext context) => ListView(
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
