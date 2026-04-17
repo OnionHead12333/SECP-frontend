@@ -13,6 +13,7 @@ SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
 
 DROP TABLE IF EXISTS ai_chat_logs;
+DROP TABLE IF EXISTS reminder_execution_logs;
 DROP TABLE IF EXISTS medical_reminders;
 DROP TABLE IF EXISTS exercise_reminders;
 DROP TABLE IF EXISTS water_reminders;
@@ -133,74 +134,79 @@ CREATE TABLE medical_events (
   KEY idx_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='医疗事件表';
 
--- 7. 提醒（按建议书拆分为 4 张表：吃药/喝水/锻炼/医疗事项）
--- 7.1 吃药提醒（生活提醒核心）
+-- 7. 提醒（V5 思路合入：计划字段 + 执行记录；保留“四表拆分”）
+-- 7.1 吃药提醒
 CREATE TABLE medicine_reminders (
   id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '吃药提醒ID',
   elder_profile_id BIGINT NOT NULL COMMENT '老人档案ID',
   title VARCHAR(100) NOT NULL COMMENT '标题',
-
   medicine_name VARCHAR(100) NOT NULL COMMENT '药品名称',
   dosage VARCHAR(50) DEFAULT NULL COMMENT '剂量（如：1片/5ml/2粒）',
-  frequency_rule VARCHAR(100) DEFAULT 'none' COMMENT '频率规则（可扩展为更细粒度）',
-
+  frequency_rule VARCHAR(100) DEFAULT 'none' COMMENT '服用频率（业务语义）',
   source_type ENUM('ocr','elder_manual','child_remote') NOT NULL COMMENT '来源',
   related_event_id BIGINT DEFAULT NULL COMMENT '关联医疗事件ID',
   remind_time DATETIME NOT NULL COMMENT '提醒时间',
-  repeat_rule VARCHAR(100) DEFAULT 'none' COMMENT '重复规则',
+  repeat_rule VARCHAR(100) DEFAULT 'none' COMMENT '提醒重复规则（调度）',
+  enabled TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否启用',
   status ENUM('pending','completed','timeout','cancelled') DEFAULT 'pending' COMMENT '状态',
   created_by ENUM('elder','child') NOT NULL COMMENT '创建人角色',
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   KEY idx_elder_profile_id (elder_profile_id),
   KEY idx_remind_time (remind_time),
-  KEY idx_status (status)
+  KEY idx_status (status),
+  KEY idx_enabled (enabled)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='吃药提醒表';
 
--- 7.2 喝水提醒（目标饮水量 + 间隔 + 进度）
+-- 7.2 喝水提醒（目标饮水量 + 时段 + 间隔）
 CREATE TABLE water_reminders (
   id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '喝水提醒ID',
   elder_profile_id BIGINT NOT NULL COMMENT '老人档案ID',
   title VARCHAR(100) NOT NULL COMMENT '标题',
-
   daily_target_ml INT NOT NULL DEFAULT 1500 COMMENT '每日目标饮水量(ml)',
-  interval_minutes INT NOT NULL DEFAULT 60 COMMENT '提醒间隔(分钟)',
   per_intake_ml INT DEFAULT 200 COMMENT '建议单次饮水量(ml)',
+  interval_minutes INT NOT NULL DEFAULT 60 COMMENT '提醒间隔(分钟)',
+  start_time TIME DEFAULT NULL COMMENT '每日开始时段',
+  end_time TIME DEFAULT NULL COMMENT '每日结束时段',
   today_intake_ml INT NOT NULL DEFAULT 0 COMMENT '今日已喝(ml)（MVP：累计值）',
   last_intake_time DATETIME DEFAULT NULL COMMENT '上次喝水时间',
-
   source_type ENUM('ocr','elder_manual','child_remote') NOT NULL COMMENT '来源',
   remind_time DATETIME NOT NULL COMMENT '下一次提醒时间',
   repeat_rule VARCHAR(100) DEFAULT 'daily' COMMENT '重复规则（喝水一般为每日）',
+  enabled TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否启用',
   status ENUM('pending','completed','timeout','cancelled') DEFAULT 'pending' COMMENT '状态',
   created_by ENUM('elder','child') NOT NULL COMMENT '创建人角色',
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   KEY idx_elder_profile_id (elder_profile_id),
   KEY idx_remind_time (remind_time),
-  KEY idx_status (status)
+  KEY idx_status (status),
+  KEY idx_enabled (enabled)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='喝水提醒表';
 
--- 7.3 锻炼提醒
+-- 7.3 锻炼提醒（状态扩展：手动确认/传感器验证/漏做）
 CREATE TABLE exercise_reminders (
   id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '锻炼提醒ID',
   elder_profile_id BIGINT NOT NULL COMMENT '老人档案ID',
   title VARCHAR(100) NOT NULL COMMENT '标题',
-
   exercise_type VARCHAR(50) NOT NULL COMMENT '锻炼类型（如：walk/taichi/baduanjin）',
   goal_value INT DEFAULT NULL COMMENT '目标数值（如：30）',
   goal_unit ENUM('minutes','steps','times') DEFAULT 'minutes' COMMENT '目标单位',
-
+  interval_minutes INT DEFAULT NULL COMMENT '提醒间隔(分钟)',
+  start_time TIME DEFAULT NULL COMMENT '每日开始时段',
+  end_time TIME DEFAULT NULL COMMENT '每日结束时段',
   source_type ENUM('ocr','elder_manual','child_remote') NOT NULL COMMENT '来源',
   remind_time DATETIME NOT NULL COMMENT '提醒时间',
   repeat_rule VARCHAR(100) DEFAULT 'none' COMMENT '重复规则',
-  status ENUM('pending','completed','timeout','cancelled') DEFAULT 'pending' COMMENT '状态',
+  enabled TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否启用',
+  status ENUM('pending','completed','timeout','cancelled','self_confirmed','sensor_verified','missed') DEFAULT 'pending' COMMENT '状态',
   created_by ENUM('elder','child') NOT NULL COMMENT '创建人角色',
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   KEY idx_elder_profile_id (elder_profile_id),
   KEY idx_remind_time (remind_time),
-  KEY idx_status (status)
+  KEY idx_status (status),
+  KEY idx_enabled (enabled)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='锻炼提醒表';
 
 -- 7.4 医疗事项提醒（复诊/检查）
@@ -208,21 +214,39 @@ CREATE TABLE medical_reminders (
   id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '医疗事项提醒ID',
   elder_profile_id BIGINT NOT NULL COMMENT '老人档案ID',
   title VARCHAR(100) NOT NULL COMMENT '标题',
-
   medical_type ENUM('review','examination') NOT NULL COMMENT '医疗事项类型',
   related_event_id BIGINT DEFAULT NULL COMMENT '关联医疗事件ID',
-
   source_type ENUM('ocr','elder_manual','child_remote') NOT NULL COMMENT '来源',
   remind_time DATETIME NOT NULL COMMENT '提醒时间',
   repeat_rule VARCHAR(100) DEFAULT 'none' COMMENT '重复规则',
+  enabled TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否启用',
   status ENUM('pending','completed','timeout','cancelled') DEFAULT 'pending' COMMENT '状态',
   created_by ENUM('elder','child') NOT NULL COMMENT '创建人角色',
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   KEY idx_elder_profile_id (elder_profile_id),
   KEY idx_remind_time (remind_time),
-  KEY idx_status (status)
+  KEY idx_status (status),
+  KEY idx_enabled (enabled)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='医疗事项提醒表';
+
+-- 7.5 执行记录（跨四表：用 reminder_kind + reminder_id 解决 ID 冲突）
+CREATE TABLE reminder_execution_logs (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '执行记录ID',
+  elder_profile_id BIGINT NOT NULL COMMENT '老人档案ID',
+  reminder_kind ENUM('medicine','water','exercise','medical') NOT NULL COMMENT '提醒类型（对应四表）',
+  reminder_id BIGINT NOT NULL COMMENT '对应提醒表的ID',
+  scheduled_at DATETIME NOT NULL COMMENT '计划触发时间',
+  confirmed_at DATETIME DEFAULT NULL COMMENT '确认完成时间',
+  confirm_source ENUM('manual','sensor','system') DEFAULT NULL COMMENT '确认来源',
+  is_timeout TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否超时',
+  status ENUM('pending','confirmed','missed','timeout','cancelled') NOT NULL DEFAULT 'pending' COMMENT '执行状态',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  KEY idx_elder_profile_id (elder_profile_id),
+  KEY idx_reminder (reminder_kind, reminder_id),
+  KEY idx_scheduled_at (scheduled_at),
+  KEY idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='提醒执行记录表';
 
 -- 8. 健康指标
 CREATE TABLE health_metrics (
