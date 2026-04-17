@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_ringtone_player/flutter_ringtone_player.dart';
+import 'package:vibration/vibration.dart';
 
 import '../../../core/auth/auth_session.dart';
 import '../data/elder_exercise_reminder_service.dart';
@@ -170,37 +173,43 @@ class _ElderReminderCenterTabState extends State<ElderReminderCenterTab> {
     _medicineDialogOpen = true;
     if (mounted) setState(() {});
 
-    final m = _medicine;
-    final title = (m == null || m.medicineName.trim().isEmpty) ? '该吃药啦' : '该吃药啦 · ${m.medicineName}';
-    final dose = (m?.doseDesc == null || m!.doseDesc!.trim().isEmpty) ? '' : '（${m.doseDesc}）';
-    final res = await showDialog<String>(
-      context: context,
-      barrierDismissible: true,
-      builder: (context) {
-        return AlertDialog(
-          title: Text(title),
-          content: Text('按时吃药，身体更安心$dose'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop('snooze'),
-              child: const Text('稍后提醒'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop('miss'),
-              child: const Text('这次不吃'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop('confirm'),
-              child: const Text('已吃药'),
-            ),
-          ],
-        );
-      },
-    );
-
-    _medicineDialogOpen = false;
-    if (!mounted) return;
-    setState(() {});
+    String? res;
+    try {
+      final m = _medicine;
+      final title = (m == null || m.medicineName.trim().isEmpty) ? '该吃药啦' : '该吃药啦 · ${m.medicineName}';
+      final dose = (m?.doseDesc == null || m!.doseDesc!.trim().isEmpty) ? '' : '（${m.doseDesc}）';
+      _playReminderCue();
+      res = await showDialog<String>(
+        context: context,
+        barrierDismissible: true,
+        builder: (context) {
+          return AlertDialog(
+            title: Text(title),
+            content: Text('按时吃药，身体更安心$dose'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop('snooze'),
+                child: const Text('稍后提醒'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop('miss'),
+                child: const Text('这次不吃'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop('confirm'),
+                child: const Text('已吃药'),
+              ),
+            ],
+          );
+        },
+      );
+    } catch (e) {
+      _toast('提醒弹窗异常：${e.toString().replaceFirst('Exception: ', '')}');
+      return;
+    } finally {
+      _medicineDialogOpen = false;
+      if (mounted) setState(() {});
+    }
 
     if (res == 'confirm') {
       await _confirmMedicine();
@@ -232,34 +241,40 @@ class _ElderReminderCenterTabState extends State<ElderReminderCenterTab> {
     _waterDialogOpen = true;
     if (mounted) setState(() {});
 
-    final res = await showDialog<String>(
-      context: context,
-      barrierDismissible: true,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('该喝水啦'),
-          content: const Text('喝一小杯水，身体更舒服。'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop('snooze'),
-              child: const Text('稍后提醒'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop('miss'),
-              child: const Text('这次不喝'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop('confirm'),
-              child: const Text('已喝水'),
-            ),
-          ],
-        );
-      },
-    );
-
-    _waterDialogOpen = false;
-    if (!mounted) return;
-    setState(() {});
+    String? res;
+    try {
+      _playReminderCue();
+      res = await showDialog<String>(
+        context: context,
+        barrierDismissible: true,
+        builder: (context) {
+          return AlertDialog(
+            title: const Text('该喝水啦'),
+            content: const Text('喝一小杯水，身体更舒服。'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop('snooze'),
+                child: const Text('稍后提醒'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop('miss'),
+                child: const Text('这次不喝'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop('confirm'),
+                child: const Text('已喝水'),
+              ),
+            ],
+          );
+        },
+      );
+    } catch (e) {
+      _toast('提醒弹窗异常：${e.toString().replaceFirst('Exception: ', '')}');
+      return;
+    } finally {
+      _waterDialogOpen = false;
+      if (mounted) setState(() {});
+    }
 
     if (res == 'confirm') {
       await _confirmWater();
@@ -287,19 +302,26 @@ class _ElderReminderCenterTabState extends State<ElderReminderCenterTab> {
   Future<void> _simulateExerciseReminder() async {
     final ex = _exercise;
     if (ex == null) return;
-    final res = await showDialog<bool>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('该运动啦'),
-          content: const Text('现在开始运动，完成后点“已完成运动”。'),
-          actions: [
-            TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('稍后')),
-            FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('开始运动')),
-          ],
-        );
-      },
-    );
+    bool? res;
+    try {
+      _playReminderCue();
+      res = await showDialog<bool>(
+        context: context,
+        builder: (context) {
+          return AlertDialog(
+            title: const Text('该运动啦'),
+            content: const Text('现在开始运动，完成后点“已完成运动”。'),
+            actions: [
+              TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('稍后')),
+              FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('开始运动')),
+            ],
+          );
+        },
+      );
+    } catch (e) {
+      _toast('提醒弹窗异常：${e.toString().replaceFirst('Exception: ', '')}');
+      return;
+    }
     if (res != true || !mounted) return;
     await ElderExerciseReminderService.startExercise(elderId: _elderId, reminderId: ex.activeReminderId);
     if (!mounted) return;
@@ -339,44 +361,66 @@ class _ElderReminderCenterTabState extends State<ElderReminderCenterTab> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
+  void _playReminderCue() {
+    // 移动端更稳定：直接触发震动 + 通知提示音（即使 HapticFeedback 不生效也能响/震）。
+    //
+    // 注意：音效仍受系统音量/勿扰策略影响，但相比 SystemSound 通常更稳定。
+    () async {
+      try {
+        final hasVibrator = await Vibration.hasVibrator() == true;
+        if (hasVibrator) {
+          await Vibration.vibrate(duration: 180);
+        } else {
+          HapticFeedback.mediumImpact();
+        }
+      } catch (_) {
+        try {
+          HapticFeedback.mediumImpact();
+        } catch (_) {}
+      }
+
+      try {
+        FlutterRingtonePlayer().playNotification();
+      } catch (_) {
+        try {
+          SystemSound.play(SystemSoundType.alert);
+        } catch (_) {}
+      }
+    }();
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) return const Center(child: CircularProgressIndicator());
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
       children: [
-        const Text('提醒中心', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
-        const SizedBox(height: 8),
-        const Text('越简单越好：先看提醒，再点一下，最后看结果。', style: TextStyle(color: Color(0xFF475569))),
+        const Text('提醒', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900)),
+        const SizedBox(height: 10),
         if (_error != null) ...[
           const SizedBox(height: 8),
           Text(_error!, style: const TextStyle(color: Color(0xFFB91C1C))),
         ],
-        const SizedBox(height: 14),
+        const SizedBox(height: 12),
         _box(
           title: '吃药提醒',
           step: '1. 看提醒  2. 点已吃药  3. 看结果',
           child: _medicine == null
               ? const Text('暂无数据')
               : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('当前：${_medicine!.medicineName}${_medicine!.doseDesc == null ? '' : '（${_medicine!.doseDesc}）'}'),
-                  const SizedBox(height: 6),
-                  Text('计划 ${_medicine!.plannedCount} 次 · 已确认 ${_medicine!.confirmedCount} 次 · 待执行 ${_medicine!.pendingCount} 次 · 未执行 ${_medicine!.missedCount} 次'),
-                  const SizedBox(height: 6),
-                  Text('进度 ${_medicine!.completionPercent.toStringAsFixed(1)}%'),
-                  const SizedBox(height: 6),
-                  Text('上次确认：${_fmtTime(_medicine!.lastConfirmedAt)}'),
-                  const SizedBox(height: 4),
-                  Text('下次提醒：${_fmtTime(_medicine!.nextReminderAt)}'),
-                  const SizedBox(height: 10),
+                  Text(
+                    '剩余 ${_medicine!.pendingCount} 次',
+                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
+                  ),
+                  const SizedBox(height: 12),
                   Wrap(spacing: 10, runSpacing: 10, children: [
                     FilledButton(
                       onPressed: _medicineSubmitting ? null : _confirmMedicine,
-                      child: Text(_medicineSubmitting ? '提交中...' : '已吃药'),
+                      child: Text(_medicineSubmitting ? '提交中...' : '已吃药', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
                     ),
                     OutlinedButton(
                       onPressed: _simulateMedicineReminder,
-                      child: const Text('模拟触发提醒'),
+                      child: const Text('模拟触发提醒', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
                     ),
                   ]),
                 ]),
@@ -388,22 +432,19 @@ class _ElderReminderCenterTabState extends State<ElderReminderCenterTab> {
           child: _water == null
               ? const Text('暂无数据')
               : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('计划 ${_water!.plannedCount} 次 · 已确认 ${_water!.confirmedCount} 次 · 待执行 ${_water!.pendingCount} 次'),
-                  const SizedBox(height: 6),
-                  Text('进度 ${_water!.completionPercent.toStringAsFixed(1)}%'),
-                  const SizedBox(height: 6),
-                  Text('上次确认：${_fmtTime(_water!.lastConfirmedAt)}'),
-                  const SizedBox(height: 4),
-                  Text('下次提醒：${_fmtTime(_water!.nextReminderAt)}'),
-                  const SizedBox(height: 10),
+                  Text(
+                    '剩余 ${_water!.pendingCount} 次',
+                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
+                  ),
+                  const SizedBox(height: 12),
                   Wrap(spacing: 10, runSpacing: 10, children: [
                     FilledButton(
                       onPressed: _waterSubmitting ? null : _confirmWater,
-                      child: Text(_waterSubmitting ? '提交中...' : '已喝水'),
+                      child: Text(_waterSubmitting ? '提交中...' : '已喝水', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
                     ),
                     OutlinedButton(
                       onPressed: _simulateWaterReminder,
-                      child: const Text('模拟触发提醒'),
+                      child: const Text('模拟触发提醒', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
                     ),
                   ]),
                 ]),
@@ -414,24 +455,38 @@ class _ElderReminderCenterTabState extends State<ElderReminderCenterTab> {
           step: '1. 看提醒  2. 点已完成运动  3. 看结果',
           child: _exercise == null
               ? const Text('暂无数据')
-              : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('计划 ${_exercise!.plannedCount} 次 · 完成 ${_exercise!.completedCount} 次 · 未完成 ${_exercise!.missedCount} 次'),
-                  const SizedBox(height: 6),
-                  Text('最近状态：${_statusLabel(_exercise!.lastCompletionStatus)}'),
-                  const SizedBox(height: 4),
-                  Text('最近完成：${_fmtTime(_exercise!.lastCompletedAt)}'),
-                  const SizedBox(height: 10),
-                  Wrap(spacing: 10, runSpacing: 10, children: [
-                    FilledButton(
-                      onPressed: _exerciseSubmitting ? null : _completeExercise,
-                      child: Text(_exerciseSubmitting ? '提交中...' : '已完成运动'),
+              : Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '剩余 ${_exercise!.pendingCount} 次',
+                        style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
+                      ),
                     ),
-                    OutlinedButton(
-                      onPressed: _simulateExerciseReminder,
-                      child: const Text('模拟触发提醒'),
+                    const SizedBox(width: 10),
+                    Flexible(
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            FilledButton(
+                              onPressed: _exerciseSubmitting ? null : _completeExercise,
+                              child: Text(
+                                _exerciseSubmitting ? '提交中...' : '已完成运动',
+                                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            OutlinedButton(
+                              onPressed: _simulateExerciseReminder,
+                              child: const Text('模拟触发提醒', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
-                  ]),
-                ]),
+                  ],
+                ),
         ),
         const SizedBox(height: 12),
         _box(
@@ -464,33 +519,14 @@ class _ElderReminderCenterTabState extends State<ElderReminderCenterTab> {
         border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
-        const SizedBox(height: 6),
-        Text(step, style: const TextStyle(color: Color(0xFF475569))),
+        Text(title, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900)),
         const SizedBox(height: 10),
+        Text(step, style: const TextStyle(color: Color(0xFF475569), fontSize: 16, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 12),
         child,
       ]),
     );
   }
 
-  String _statusLabel(String status) {
-    switch (status) {
-      case 'self_confirmed':
-        return '已完成';
-      case 'sensor_verified':
-        return '已完成';
-      case 'missed':
-        return '未完成';
-      default:
-        return '待完成';
-    }
-  }
-
-  String _fmtTime(DateTime? t) {
-    if (t == null) return '-';
-    final local = t.toLocal();
-    final hh = local.hour.toString().padLeft(2, '0');
-    final mm = local.minute.toString().padLeft(2, '0');
-    return '${local.month.toString().padLeft(2, '0')}-${local.day.toString().padLeft(2, '0')} $hh:$mm';
-  }
+  // 这里不再展示复杂字段，老人端只保留“剩余次数”和“操作步骤”。
 }
