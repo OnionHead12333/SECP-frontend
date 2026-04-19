@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../../models/child_local_models.dart';
-import '../pages/child_remote_medical_item_page.dart';
+import '../pages/child_water_reminder_page.dart';
 
-/// ② 医疗管理：MVP 结构占位，与产品定义一致，后续接页面与接口。
-class ChildMedicalTab extends StatelessWidget {
-  const ChildMedicalTab({
+/// ⑤ 提醒：生活提醒入口（喝水/锻炼等）。
+class ChildReminderTab extends StatelessWidget {
+  const ChildReminderTab({
     super.key,
     required this.elders,
   });
@@ -15,11 +15,9 @@ class ChildMedicalTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final items = [
-      (Icons.add_task_outlined, '远程添加医疗事项', '创建用药、复诊等提醒'),
-      (Icons.calendar_month_outlined, '医疗日历', '按日历查看医疗安排'),
-      (Icons.folder_open_outlined, '医疗档案', '病历与报告摘要'),
-      (Icons.monitor_heart_outlined, '健康数据', '体征趋势与记录'),
-      (Icons.smart_toy_outlined, 'AI 医疗助手', '问答与健康建议（待接入）'),
+      (Icons.water_drop_outlined, '喝水提醒', '设置喝水量与提醒间隔'),
+      (Icons.directions_run_outlined, '锻炼提醒', '开发中'),
+      (Icons.event_note_outlined, '其他提醒', '开发中'),
     ];
 
     return ListView.separated(
@@ -35,10 +33,10 @@ class ChildMedicalTab extends StatelessWidget {
             subtitle: Text(it.$3),
             trailing: const Icon(Icons.chevron_right),
             onTap: () {
-              if (it.$2 == '远程添加医疗事项') {
+              if (it.$2 == '喝水提醒') {
                 Navigator.of(context).push(
                   MaterialPageRoute(
-                    builder: (_) => ChildRemoteMedicalItemPage(elders: elders),
+                    builder: (_) => ChildWaterReminderPage(elders: elders),
                   ),
                 );
                 return;
@@ -51,3 +49,4 @@ class ChildMedicalTab extends StatelessWidget {
     );
   }
 }
+

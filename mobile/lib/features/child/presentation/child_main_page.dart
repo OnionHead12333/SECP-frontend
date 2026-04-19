@@ -4,10 +4,11 @@ import '../../../core/auth/auth_session.dart';
 import '../models/child_local_models.dart';
 import 'tabs/child_medical_tab.dart';
 import 'tabs/child_overview_tab.dart';
+import 'tabs/child_reminder_tab.dart';
 import 'tabs/child_safety_tab.dart';
 import 'tabs/child_settings_tab.dart';
 
-/// 子女端：底部四模块 — 首页总览 / 医疗管理 / 安全监护 / 设置
+/// 子女端：底部五模块 — 首页总览 / 医疗管理 / 提醒 / 安全监护 / 设置
 class ChildMainPage extends StatefulWidget {
   const ChildMainPage({super.key});
 
@@ -35,12 +36,12 @@ class _ChildMainPageState extends State<ChildMainPage> {
     super.initState();
     final now = DateTime.now();
     _elders = [
-      BoundElder(id: 'e1', displayName: '张奶奶', accountHint: '138****0001'),
+      BoundElder(id: '1', displayName: '张奶奶', accountHint: '138****0001'),
     ];
     _contacts = [
       EmergencyContact(
         id: 'c1',
-        elderId: 'e1',
+        elderId: '1',
         name: '李强',
         phone: '13900001111',
         relation: '本人',
@@ -161,7 +162,7 @@ class _ChildMainPageState extends State<ChildMainPage> {
     });
   }
 
-  static const _titles = ['首页总览', '医疗管理', '安全监护', '设置'];
+  static const _titles = ['首页总览', '医疗管理', '提醒', '安全监护', '设置'];
 
   @override
   Widget build(BuildContext context) {
@@ -185,7 +186,8 @@ class _ChildMainPageState extends State<ChildMainPage> {
             activity: _activity,
             helpRecords: _helpRecords,
           ),
-          const ChildMedicalTab(),
+          ChildMedicalTab(elders: _elders),
+          ChildReminderTab(elders: _elders),
           ChildSafetyTab(
             location: _location,
             track: _track.reversed.toList(),
@@ -212,6 +214,7 @@ class _ChildMainPageState extends State<ChildMainPage> {
         destinations: const [
           NavigationDestination(icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard), label: '首页'),
           NavigationDestination(icon: Icon(Icons.medical_services_outlined), selectedIcon: Icon(Icons.medical_services), label: '医疗'),
+          NavigationDestination(icon: Icon(Icons.notifications_outlined), selectedIcon: Icon(Icons.notifications), label: '提醒'),
           NavigationDestination(icon: Icon(Icons.shield_outlined), selectedIcon: Icon(Icons.shield), label: '安全'),
           NavigationDestination(icon: Icon(Icons.settings_outlined), selectedIcon: Icon(Icons.settings), label: '设置'),
         ],
