@@ -21,6 +21,28 @@ final class ElderWaterReminderService {
     nextReminderAt: DateTime.now().add(const Duration(minutes: 40)),
   );
 
+  static Future<ElderWaterProgress> postponeOnceMock({Duration after = const Duration(minutes: 1)}) async {
+    await Future<void>.delayed(const Duration(milliseconds: 120));
+    _mockProgress = _mockProgress.copyWith(nextReminderAt: DateTime.now().add(after));
+    return _mockProgress;
+  }
+
+  static Future<ElderWaterProgress> markMissedMock() async {
+    await Future<void>.delayed(const Duration(milliseconds: 180));
+    final missed = min(_mockProgress.missedCount + 1, _mockProgress.plannedCount);
+    final confirmed = min(_mockProgress.confirmedCount, _mockProgress.plannedCount - missed);
+    final pending = max(_mockProgress.plannedCount - confirmed - missed, 0);
+    final percent = _mockProgress.plannedCount == 0 ? 0.0 : (confirmed / _mockProgress.plannedCount * 100);
+    _mockProgress = _mockProgress.copyWith(
+      missedCount: missed,
+      confirmedCount: confirmed,
+      pendingCount: pending,
+      completionPercent: percent,
+      nextReminderAt: DateTime.now().add(const Duration(hours: 2)),
+    );
+    return _mockProgress;
+  }
+
   static Future<ElderWaterProgress> fetchTodayProgress({required int elderId}) async {
     if (AppConfig.useMockLocation) {
       await Future<void>.delayed(const Duration(milliseconds: 180));

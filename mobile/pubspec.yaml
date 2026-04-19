@@ -21,6 +21,8 @@ dependencies:
     path: packages/amap_flutter_location
   amap_flutter_map:
     path: packages/amap_flutter_map
+  vibration: ^3.1.8
+  flutter_ringtone_player: ^4.0.0+4
 
 dev_dependencies:
   flutter_test:
