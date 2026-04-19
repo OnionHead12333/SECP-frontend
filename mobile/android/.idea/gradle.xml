@@ -25,10 +25,15 @@
             <option value="$PROJECT_DIR$/app" />
             <option value="$PROJECT_DIR$/../packages/amap_flutter_location/android" />
             <option value="$PROJECT_DIR$/../packages/amap_flutter_map/android" />
+            <option value="$PROJECT_DIR$/../../../../pub-cache/hosted/pub.flutter-io.cn/device_info_plus-13.0.0/android" />
             <option value="$PROJECT_DIR$/../../../../pub-cache/hosted/pub.flutter-io.cn/flutter_plugin_android_lifecycle-2.0.34/android" />
+            <option value="$PROJECT_DIR$/../../../../pub-cache/hosted/pub.flutter-io.cn/flutter_ringtone_player-4.0.0+4/android" />
             <option value="$PROJECT_DIR$/../../../../pub-cache/hosted/pub.flutter-io.cn/flutter_tts-4.2.5/android" />
+            <option value="$PROJECT_DIR$/../../../../pub-cache/hosted/pub.flutter-io.cn/jni-1.0.0/android" />
+            <option value="$PROJECT_DIR$/../../../../pub-cache/hosted/pub.flutter-io.cn/jni_flutter-1.0.1/android" />
             <option value="$PROJECT_DIR$/../../../../pub-cache/hosted/pub.flutter-io.cn/permission_handler_android-12.1.0/android" />
             <option value="$PROJECT_DIR$/../../../../pub-cache/hosted/pub.flutter-io.cn/speech_to_text-7.3.0/android" />
+            <option value="$PROJECT_DIR$/../../../../pub-cache/hosted/pub.flutter-io.cn/vibration-3.1.8/android" />
           </set>
         </option>
       </GradleProjectSettings>
