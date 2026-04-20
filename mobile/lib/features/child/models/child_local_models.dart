@@ -17,6 +17,7 @@ class EmergencyContact {
     required this.elderId,
     required this.name,
     required this.phone,
+    required this.priority,
     this.relation,
   });
 
@@ -25,6 +26,8 @@ class EmergencyContact {
   final String elderId;
   final String name;
   final String phone;
+  /// 对应库表 `emergency_contacts.priority`。
+  final int priority;
   final String? relation;
 }
 

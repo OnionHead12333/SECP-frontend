@@ -44,6 +44,7 @@ class _ChildMainPageState extends State<ChildMainPage> {
         elderId: '1',
         name: '李强',
         phone: '13900001111',
+        priority: 1,
         relation: '本人',
       ),
     ];

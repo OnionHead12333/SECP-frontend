@@ -199,15 +199,41 @@
 
 子女仅可操作**已绑定老人**下的联系人。
 
+**数据与语义（与 `sql/table_v7.sql` 一致）：** 表 `emergency_contacts` 含 `priority INT`，注释为 **数字越小越优先**（最先联络）。**不使用 `isPrimary` 字段**；联络顺序完全由 `priority` 表达。客户端展示列表时建议按 `priority` **升序**排列（自上而下：先联络 → 后联络）。
+
 ### 3.1 列表
 
 - **方法 / 路径：** `GET /api/v1/children/elders/{elderId}/emergency-contacts`
 - **查询参数（可选）：** `sort=priority`（按 `priority` 升序，数字越小越优先）
 - **响应字段：** `id`、`elderId`、`name`、`phone`、`relation`、`priority`、`createdAt`、`updatedAt`
 
-### 3.2 新增
+**成功响应示例：**
 
-- **方法 / 路径：** `POST /api/v1/children/elders/{elderId}/emergency-contacts`
+```json
+{
+  "code": 0,
+  "message": "ok",
+  "data": [
+    {
+      "id": 12,
+      "elderId": 1,
+      "name": "张明",
+      "phone": "13900139001",
+      "relation": "儿子",
+      "priority": 1,
+      "createdAt": "2026-04-11T10:30:05Z",
+      "updatedAt": "2026-04-11T10:30:05Z"
+    }
+  ]
+}
+```
+
+### 3.2 新建（PUT，幂等）
+
+- **方法 / 路径：** `PUT /api/v1/children/elders/{elderId}/emergency-contacts/{contactId}`
+
+- **路径参数：** `elderId`（老人档案 id）；`contactId`（**由客户端生成**，建议 UUID，与资源一一对应，重复请求幂等）
+
 - **请求体：**
 
 ```json
@@ -219,18 +245,68 @@
 }
 ```
 
-- **校验：** `name`、`phone`、`relation` 非空；`priority` 为正整数（或与产品约定范围）。
+| 字段 | 必填 | 说明 |
+|------|------|------|
+| `name` | 是 | 姓名 |
+| `phone` | 是 | 手机号 |
+| `relation` | 是 | 与老人关系 |
+| `priority` | 是 | 优先级，**正整数**；**数字越小越优先**（最先联络） |
 
-### 3.3 修改
+- **语义：** 该 `contactId` 不存在时 **INSERT（新建）**；已存在时以请求体 **覆盖** 为最新内容（幂等重放）。不使用 `isPrimary`；若服务端曾有 `isPrimary` 顺延逻辑，应改为仅依据 **`priority`** 与业务规则处理。
 
-- **方法 / 路径：** `PUT /api/v1/children/elders/{elderId}/emergency-contacts/{contactId}`  
-  或 `PATCH` 仅更新部分字段。
+- **校验：** `name`、`phone`、`relation` 非空；`priority` 为 ≥ 1 的整数。
+
+### 3.3 修改（PATCH，部分更新）
+
+- **方法 / 路径：** `PATCH /api/v1/children/elders/{elderId}/emergency-contacts/{contactId}`
+
+- **路径参数：** `elderId`、`contactId`
+
+- **请求体（示例）：**
+
+```json
+{
+  "priority": 1
+}
+```
+
+可只包含需要更新的字段（至少一项）。字段含义同 3.2 表（`name`、`phone`、`relation`、`priority` 均可按需出现）。
+
+- **成功响应示例：** `200`
+
+```json
+{
+  "code": 0,
+  "message": "ok",
+  "data": {
+    "id": 12,
+    "elderId": 1,
+    "name": "张明",
+    "phone": "13900139001",
+    "relation": "儿子",
+    "priority": 1,
+    "createdAt": "2026-04-11T10:30:05Z",
+    "updatedAt": "2026-04-20T09:12:00Z"
+  }
+}
+```
 
 ### 3.4 删除
 
 - **方法 / 路径：** `DELETE /api/v1/children/elders/{elderId}/emergency-contacts/{contactId}`
+- **路径参数：** `elderId`、`contactId`
+- **请求体：** 无（`DELETE` 不需要 body）。
+- **成功响应示例：** `200`
 
-**与《紧急联系人接口 V1（老人端）》对齐说明：** 老人端 V1 **暂不开放**编辑、删除、调序；库表无 `note` 字段时前端 `note` 可忽略。子女端是否开放 3.3 / 3.4 由产品决定；若与老人端严格一致，子女端也可只保留 **列表 + 新增**，且新增时 **`isPrimary` → `priority`** 的顺延规则应与老人端文档一致。
+```json
+{
+  "code": 0,
+  "message": "ok",
+  "data": null
+}
+```
+
+**与《紧急联系人接口 V1（老人端）》对齐说明：** 老人端 V1 **暂不开放**编辑、删除、调序；库表无 `note` 列时前端不应依赖 `note`。子女端是否开放 3.3 / 3.4 由产品决定；若与老人端严格一致，子女端也可只保留 **列表 + 新增**。
 
 ---
 
@@ -351,8 +427,8 @@
 | 求助列表 | 全局 `GET /child/emergency-alerts` + 按条 `GET /child/emergency-alerts/{id}` | 原仅按老人路径 → **§4.1 已说明可并存** |
 | 求助处理 | `POST .../handle` + `action`：`handled` \| `false_alarm`，且仅 `sent` 可处理 | 原为 `PATCH` + 仅 `remark` → **§4.3 已改为与 V1 一致** |
 | 子女可见状态 | 默认不展示 `pending_revoke`、`cancelled` | 原文未强调 → **§4.1 已注明** |
-| 紧急联系人 | 老人端仅查、增；无 `note` 列 | 本文含改、删 → **§3.4 已注明与产品对齐** |
+| 紧急联系人 | 老人端仅查、增；无 `note` 列；无 `isPrimary`，用 `priority` | 子女端本文含改、删；**仅用 `priority`，不用 `isPrimary`** → **§三** |
 
 ---
 
-*文档版本：依据 `sql/table.sql` / `sql/initial.sql`（融合版）整理；旧库请见 `sql/migrate_legacy_to_v4.sql`。已与《注册绑定流程设计》《紧急联系人接口 V1》《定位与活动状态（流程/接口）V1》《SOS（接口/流程）V1》做过交叉审查，差异见 §八。*
+*文档版本：依据 `sql/table.sql` / `sql/initial.sql`（融合版）整理；**紧急联系人字段以 `sql/table_v7.sql` 为准**。旧库请见 `sql/migrate_legacy_to_v4.sql`。已与《注册绑定流程设计》《紧急联系人接口 V1》《定位与活动状态（流程/接口）V1》《SOS（接口/流程）V1》做过交叉审查，差异见 §八。仅紧急联系人接口的精简版见 `docs/api-child-emergency-contacts.md`。*
