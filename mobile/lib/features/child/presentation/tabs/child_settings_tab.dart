@@ -124,6 +124,19 @@ class _ChildSettingsTabState extends State<ChildSettingsTab> {
   int _contactCountFor(String elderId) =>
       widget.contacts.where((c) => c.elderId == elderId).length;
 
+  /// 按优先级升序展示。
+  List<EmergencyContact> _contactsSortedForElder(String elderId) {
+    final list = widget.contacts.where((c) => c.elderId == elderId).toList()
+      ..sort((a, b) => a.priority.compareTo(b.priority));
+    return list;
+  }
+
+  int _defaultPriorityForNewContact(String elderId) {
+    final priorities = widget.contacts.where((c) => c.elderId == elderId).map((c) => c.priority).toList();
+    if (priorities.isEmpty) return 1;
+    return priorities.reduce((a, b) => a > b ? a : b) + 1;
+  }
+
   Future<void> _showContactEditor({
     required String elderId,
     EmergencyContact? existing,
@@ -132,6 +145,9 @@ class _ChildSettingsTabState extends State<ChildSettingsTab> {
     final nameCtrl = TextEditingController(text: existing?.name ?? '');
     final phoneCtrl = TextEditingController(text: existing?.phone ?? '');
     final relCtrl = TextEditingController(text: existing?.relation ?? '');
+    final priorityCtrl = TextEditingController(
+      text: existing != null ? existing.priority.toString() : _defaultPriorityForNewContact(elderId).toString(),
+    );
 
     final ok = await showDialog<bool>(
       context: context,
@@ -151,6 +167,17 @@ class _ChildSettingsTabState extends State<ChildSettingsTab> {
                 controller: phoneCtrl,
                 keyboardType: TextInputType.phone,
                 decoration: const InputDecoration(labelText: '手机号', border: OutlineInputBorder()),
+                textInputAction: TextInputAction.next,
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: priorityCtrl,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: '优先级',
+                  hintText: '正整数',
+                  border: OutlineInputBorder(),
+                ),
                 textInputAction: TextInputAction.next,
               ),
               const SizedBox(height: 12),
@@ -175,9 +202,11 @@ class _ChildSettingsTabState extends State<ChildSettingsTab> {
     final name = nameCtrl.text.trim();
     final phone = phoneCtrl.text.trim();
     final rel = relCtrl.text.trim();
+    final priorityRaw = priorityCtrl.text.trim();
     nameCtrl.dispose();
     phoneCtrl.dispose();
     relCtrl.dispose();
+    priorityCtrl.dispose();
 
     if (ok != true || !mounted) return;
     if (name.isEmpty || phone.isEmpty) {
@@ -188,6 +217,11 @@ class _ChildSettingsTabState extends State<ChildSettingsTab> {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('请输入有效手机号')));
       return;
     }
+    final priority = int.tryParse(priorityRaw);
+    if (priority == null || priority < 1) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('请输入有效优先级（≥1 的整数）')));
+      return;
+    }
 
     if (existing == null) {
       widget.onAddContact(
@@ -196,6 +230,7 @@ class _ChildSettingsTabState extends State<ChildSettingsTab> {
           elderId: elderId,
           name: name,
           phone: phone,
+          priority: priority,
           relation: rel.isEmpty ? null : rel,
         ),
       );
@@ -206,6 +241,7 @@ class _ChildSettingsTabState extends State<ChildSettingsTab> {
           elderId: existing.elderId,
           name: name,
           phone: phone,
+          priority: priority,
           relation: rel.isEmpty ? null : rel,
         ),
       );
@@ -248,7 +284,7 @@ class _ChildSettingsTabState extends State<ChildSettingsTab> {
             height: maxH,
             child: StatefulBuilder(
               builder: (context, setModalState) {
-                final list = widget.contacts.where((c) => c.elderId == e.id).toList();
+                final list = _contactsSortedForElder(e.id);
 
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -299,7 +335,14 @@ class _ChildSettingsTabState extends State<ChildSettingsTab> {
                                 return Card(
                                   margin: EdgeInsets.zero,
                                   child: ListTile(
-                                    leading: const Icon(Icons.contact_phone_outlined),
+                                    leading: CircleAvatar(
+                                      backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                                      foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
+                                      child: Text(
+                                        '${c.priority}',
+                                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                                      ),
+                                    ),
                                     title: Text(c.name),
                                     subtitle: Text(
                                       '${c.phone}${c.relation != null ? ' · ${c.relation}' : ''}',
