@@ -1,0 +1,30 @@
+智慧养老 — Flutter 子工程说明
+================================
+
+本目录已包含 Dart 源码与 pubspec；平台工程（android / ios 等）需本机安装 Flutter 后生成。
+
+1) 安装 Flutter（Windows）
+   官方文档：https://docs.flutter.dev/get-started/install/windows
+   将 flutter\bin 加入 PATH 后执行：flutter doctor
+
+2) 生成 Android / iOS 等平台目录
+   cd mobile
+   flutter create --platforms=android,ios .
+
+   若 CLI 询问是否覆盖，请保留现有 lib/ 与 pubspec.yaml（勿用空模板覆盖业务代码）。
+
+3) 拉依赖并运行
+   flutter pub get
+   flutter run
+
+4) 后端地址
+   默认 API 根路径：http://10.0.2.2:8080/api（Android 模拟器访问本机 8080）
+   真机调试请改为电脑局域网 IP，例如：
+   flutter run --dart-define=API_BASE=http://192.168.x.x:8080/api
+
+5) Android 明文 HTTP（仅开发环境）
+   若使用 http 而非 https，在 android/app/src/main/AndroidManifest.xml 的 <application> 上增加：
+   android:usesCleartextTraffic="true"
+
+6) 与后端路径对应
+   Spring Boot context-path 为 /api，健康检查：GET /api/v1/health

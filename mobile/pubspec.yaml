@@ -1,0 +1,33 @@
+name: smart_elderly_care_mobile
+description: 智慧养老平台 Flutter 客户端
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.5.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  dio: ^5.7.0
+  speech_to_text: ^7.0.0
+  flutter_tts: ^4.0.2
+  permission_handler: ^11.3.1
+  # 须使用仓库内 path 版本：已补全 Android `namespace`，兼容 AGP 8+；pub.dev 上 3.0.0 无 namespace 会导致 :amap_flutter_location 配置失败
+  amap_flutter_base:
+    path: packages/amap_flutter_base
+  amap_flutter_location:
+    path: packages/amap_flutter_location
+  amap_flutter_map:
+    path: packages/amap_flutter_map
+  vibration: ^3.1.8
+  flutter_ringtone_player: ^4.0.0+4
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
