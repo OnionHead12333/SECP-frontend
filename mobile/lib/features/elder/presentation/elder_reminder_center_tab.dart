@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_ringtone_player/flutter_ringtone_player.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 import 'package:vibration/vibration.dart';
 
 import '../../../core/auth/auth_session.dart';
@@ -24,6 +25,7 @@ class ElderReminderCenterTab extends StatefulWidget {
 }
 
 class _ElderReminderCenterTabState extends State<ElderReminderCenterTab> {
+  final FlutterTts _tts = FlutterTts();
   bool _loading = true;
   bool _waterSubmitting = false;
   bool _exerciseSubmitting = false;
@@ -59,7 +61,23 @@ class _ElderReminderCenterTabState extends State<ElderReminderCenterTab> {
   @override
   void initState() {
     super.initState();
+    _initTts();
     _load();
+  }
+
+  Future<void> _initTts() async {
+    try {
+      await _tts.setLanguage('zh-CN');
+      await _tts.setSpeechRate(0.42);
+      await _tts.setVolume(1.0);
+      await _tts.setPitch(1.0);
+    } catch (_) {}
+  }
+
+  @override
+  void dispose() {
+    _tts.stop();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -176,30 +194,92 @@ class _ElderReminderCenterTabState extends State<ElderReminderCenterTab> {
     String? res;
     try {
       final m = _medicine;
-      final title = (m == null || m.medicineName.trim().isEmpty) ? '该吃药啦' : '该吃药啦 · ${m.medicineName}';
-      final dose = (m?.doseDesc == null || m!.doseDesc!.trim().isEmpty) ? '' : '（${m.doseDesc}）';
-      _playReminderCue();
+      final title = '该吃药啦';
+      final medicineTitle = (m == null || m.medicineName.trim().isEmpty)
+          ? ''
+          : ((m.doseDesc == null || m.doseDesc!.trim().isEmpty)
+              ? '\n${m.medicineName}'
+              : '\n${m.medicineName}（${m.doseDesc}）');
+      final speechMedicineName = (m == null || m.medicineName.trim().isEmpty) ? '今天这次药' : m.medicineName;
+      final speechDose = (m?.doseDesc == null || m!.doseDesc!.trim().isEmpty) ? '' : '，剂量${m.doseDesc}';
+      _playReminderCue('到吃药时间了，请按时服用$speechMedicineName$speechDose');      
       res = await showDialog<String>(
         context: context,
         barrierDismissible: true,
         builder: (context) {
           return AlertDialog(
-            title: Text(title),
-            content: Text('按时吃药，身体更安心$dose'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop('snooze'),
-                child: const Text('稍后提醒'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.of(context).pop('miss'),
-                child: const Text('这次不吃'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(context).pop('confirm'),
-                child: const Text('已吃药'),
-              ),
-            ],
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(24),
+            ),
+            title: Text(
+             '$title$medicineTitle',
+             style: const TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.w800,
+            height: 1.35,
+            ),
+          ),
+            contentPadding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  '请按时吃药',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    height: 1.45,
+                    color: Color(0xFF374151),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.of(context).pop('snooze'),
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size.fromHeight(54),
+                          side: const BorderSide(color: Color(0xFF9CA3AF)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                        child: const Text(
+                          '稍后提醒',
+                          // maxLines: 1,
+                          // overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: () => Navigator.of(context).pop('confirm'),
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size.fromHeight(54),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                        child: const Text(
+                          '已吃药',
+                          maxLines: 1,
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           );
         },
       );
@@ -216,12 +296,7 @@ class _ElderReminderCenterTabState extends State<ElderReminderCenterTab> {
       _medicineSnoozeCount = 0;
       return;
     }
-    if (res == 'miss') {
-      await _missMedicineOnce();
-      _toast('已记录：本次未吃药');
-      _medicineSnoozeCount = 0;
-      return;
-    }
+
 
     _medicineSnoozeCount = (_medicineSnoozeCount + 1).clamp(0, 99);
     await _postponeMedicineOnce();
@@ -361,7 +436,7 @@ class _ElderReminderCenterTabState extends State<ElderReminderCenterTab> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
-  void _playReminderCue() {
+  void _playReminderCue([String? speechText]) {
     // 移动端更稳定：直接触发震动 + 通知提示音（即使 HapticFeedback 不生效也能响/震）。
     //
     // 注意：音效仍受系统音量/勿扰策略影响，但相比 SystemSound 通常更稳定。
@@ -381,6 +456,13 @@ class _ElderReminderCenterTabState extends State<ElderReminderCenterTab> {
 
       try {
         FlutterRingtonePlayer().playNotification();
+        if (true) {
+          final text = (speechText == null || speechText.trim().isEmpty) ? '请查看提醒。' : speechText;
+          try {
+            await _tts.stop();
+            await _tts.speak(text);
+          } catch (_) {}
+        }
       } catch (_) {
         try {
           SystemSound.play(SystemSoundType.alert);
@@ -404,7 +486,7 @@ class _ElderReminderCenterTabState extends State<ElderReminderCenterTab> {
         const SizedBox(height: 12),
         _box(
           title: '吃药提醒',
-          step: '1. 看提醒  2. 点已吃药  3. 看结果',
+          step: '到时间会弹窗提醒并语音播报',
           child: _medicine == null
               ? const Text('暂无数据')
               : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -428,7 +510,7 @@ class _ElderReminderCenterTabState extends State<ElderReminderCenterTab> {
         const SizedBox(height: 12),
         _box(
           title: '喝水提醒',
-          step: '1. 看提醒  2. 点已喝水  3. 看结果',
+          step: '到时间会弹窗提醒并语音播报',
           child: _water == null
               ? const Text('暂无数据')
               : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -452,7 +534,7 @@ class _ElderReminderCenterTabState extends State<ElderReminderCenterTab> {
         const SizedBox(height: 12),
         _box(
           title: '运动提醒',
-          step: '1. 看提醒  2. 点已完成运动  3. 看结果',
+          step: '到时间会弹窗提醒，确认后进入运动过程页',
           child: _exercise == null
               ? const Text('暂无数据')
               : Row(
