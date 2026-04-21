@@ -1,0 +1,46 @@
+# Java / Maven
+backend/target/
+backend/.mvn/wrapper/maven-wrapper.jar
+*.class
+*.jar
+*.war
+*.log
+
+# Node / Vue
+frontend/node_modules/
+frontend/dist/
+frontend/.env.local
+frontend/.env.*.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Flutter（mobile 子工程）
+mobile/.dart_tool/
+mobile/build/
+mobile/.flutter-plugins
+mobile/.flutter-plugins-dependencies
+mobile/.packages
+mobile/pubspec.lock
+mobile/.metadata
+mobile/.idea/
+mobile/android/.gradle/
+mobile/android/local.properties
+mobile/ios/Flutter/ephemeral/
+mobile/ios/Flutter/Generated.xcconfig
+mobile/ios/Flutter/flutter_export_environment.sh
+mobile/macos/Flutter/ephemeral/
+mobile/macos/Flutter/GeneratedPluginRegistrant.swift
+mobile/linux/flutter/ephemeral/
+mobile/windows/flutter/ephemeral/
+mobile/web/flutter_bootstrap.js
+mobile/packages/amap_flutter_map/example/
+mobile/packages/amap_flutter_location/example/
+mobile/packages/amap_flutter_map/doc/
+*.apk
+*.aab
