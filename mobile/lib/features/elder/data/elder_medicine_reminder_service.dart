@@ -66,11 +66,7 @@ final class ElderMedicineReminderService {
       if (body == null) throw Exception('空响应');
       final api = ApiResponse.fromJson(body, (raw) => raw is Map<String, dynamic> ? raw : null);
       if (!api.isSuccess || api.data == null) throw Exception(api.message);
-      _mockProgress = _mockProgress.copyWith(
-        confirmedCount: (api.data!['confirmedCount'] as num?)?.toInt() ?? _mockProgress.confirmedCount,
-        completionPercent: (api.data!['completionPercent'] as num?)?.toDouble() ?? _mockProgress.completionPercent,
-        lastConfirmedAt: DateTime.now(),
-      );
+      _mockProgress = ElderMedicineProgress.fromJson(api.data!);
       return _mockProgress;
     } on DioException {
       return _confirmByMock();

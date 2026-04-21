@@ -15,6 +15,7 @@ import '../models/elder_exercise_progress.dart';
 import '../models/elder_medicine_progress.dart';
 import '../models/elder_outing_status.dart';
 import '../models/elder_water_progress.dart';
+import 'dart:async';
 
 class ElderReminderCenterTab extends StatefulWidget {
   const ElderReminderCenterTab({super.key, required this.onOpenLocationPage});
@@ -24,7 +25,8 @@ class ElderReminderCenterTab extends StatefulWidget {
   State<ElderReminderCenterTab> createState() => _ElderReminderCenterTabState();
 }
 
-class _ElderReminderCenterTabState extends State<ElderReminderCenterTab> {
+class _ElderReminderCenterTabState extends State<ElderReminderCenterTab> 
+ with WidgetsBindingObserver {
   final FlutterTts _tts = FlutterTts();
   bool _loading = true;
   bool _waterSubmitting = false;
@@ -44,6 +46,7 @@ class _ElderReminderCenterTabState extends State<ElderReminderCenterTab> {
   bool _medicineDialogOpen = false;
   DateTime? _medicineLastPromptAt;
   int _medicineSnoozeCount = 0;
+  Timer? _progressRefreshTimer;
 
   int get _elderId {
     switch (AuthSession.elderPhone) {
@@ -60,9 +63,11 @@ class _ElderReminderCenterTabState extends State<ElderReminderCenterTab> {
 
   @override
   void initState() {
-    super.initState();
-    _initTts();
-    _load();
+  super.initState();
+  WidgetsBinding.instance.addObserver(this);
+  _initTts();
+  _load();
+  _startProgressRefreshTimer();
   }
 
   Future<void> _initTts() async {
@@ -76,8 +81,10 @@ class _ElderReminderCenterTabState extends State<ElderReminderCenterTab> {
 
   @override
   void dispose() {
-    _tts.stop();
-    super.dispose();
+  WidgetsBinding.instance.removeObserver(this);
+  _progressRefreshTimer?.cancel();
+  _tts.stop();
+  super.dispose();
   }
 
   Future<void> _load() async {
@@ -107,6 +114,36 @@ class _ElderReminderCenterTabState extends State<ElderReminderCenterTab> {
     }
   }
 
+  Future<void> _refreshReminderProgressSilently() async {
+  if (!mounted || _loading || _waterSubmitting || _medicineSubmitting || _exerciseSubmitting) {
+    return;
+  }
+  try {
+    final water = await ElderWaterReminderService.fetchTodayProgress(elderId: _elderId);
+    final medicine = await ElderMedicineReminderService.fetchTodayProgress(elderId: _elderId);
+    if (!mounted) return;
+    setState(() {
+      _water = water;
+      _medicine = medicine;
+    });
+  } catch (_) {}
+}
+
+void _startProgressRefreshTimer() {
+  _progressRefreshTimer?.cancel();
+  _progressRefreshTimer = Timer.periodic(
+    const Duration(seconds: 30),
+    (_) => _refreshReminderProgressSilently(),
+  );
+}
+
+@override
+void didChangeAppLifecycleState(AppLifecycleState state) {
+  if (state == AppLifecycleState.resumed) {
+    _refreshReminderProgressSilently();
+  }
+}
+
   Future<void> _confirmWater() async {
     final water = _water;
     if (water == null || _waterSubmitting) return;
@@ -127,11 +164,7 @@ class _ElderReminderCenterTabState extends State<ElderReminderCenterTab> {
     setState(() => _water = latest);
   }
 
-  Future<void> _missWaterOnce() async {
-    final latest = await ElderWaterReminderService.markMissedMock();
-    if (!mounted) return;
-    setState(() => _water = latest);
-  }
+
 
   Future<void> _completeExercise() async {
     final ex = _exercise;
@@ -171,11 +204,7 @@ class _ElderReminderCenterTabState extends State<ElderReminderCenterTab> {
     setState(() => _medicine = latest);
   }
 
-  Future<void> _missMedicineOnce() async {
-    final latest = await ElderMedicineReminderService.markMissedMock();
-    if (!mounted) return;
-    setState(() => _medicine = latest);
-  }
+
 
   Future<void> _refreshOutingStatus() async {
     final latest = await ElderOutingReminderService.fetchStatus(elderId: _elderId);
@@ -318,28 +347,81 @@ class _ElderReminderCenterTabState extends State<ElderReminderCenterTab> {
 
     String? res;
     try {
-      _playReminderCue();
+      _playReminderCue('该喝水了，请及时补充水分。');
       res = await showDialog<String>(
         context: context,
         barrierDismissible: true,
         builder: (context) {
           return AlertDialog(
-            title: const Text('该喝水啦'),
-            content: const Text('喝一小杯水，身体更舒服。'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop('snooze'),
-                child: const Text('稍后提醒'),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(24),
+            ),
+            title: const Text(
+              '该喝水啦',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                height: 1.35,
               ),
-              TextButton(
-                onPressed: () => Navigator.of(context).pop('miss'),
-                child: const Text('这次不喝'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(context).pop('confirm'),
-                child: const Text('已喝水'),
-              ),
-            ],
+            ),
+            contentPadding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  '请及时补充水分，身体更舒服。',
+                  style: TextStyle(
+                    fontSize: 16,
+                    height: 1.45,
+                    color: Color(0xFF374151),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.of(context).pop('snooze'),
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size.fromHeight(54),
+                          side: const BorderSide(color: Color(0xFF9CA3AF)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                        child: const Text(
+                          '稍后',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: () => Navigator.of(context).pop('confirm'),
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size.fromHeight(54),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                        child: const Text(
+                          '已喝水',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           );
         },
       );
@@ -353,12 +435,6 @@ class _ElderReminderCenterTabState extends State<ElderReminderCenterTab> {
 
     if (res == 'confirm') {
       await _confirmWater();
-      _waterSnoozeCount = 0;
-      return;
-    }
-    if (res == 'miss') {
-      await _missWaterOnce();
-      _toast('已记录：本次未喝水');
       _waterSnoozeCount = 0;
       return;
     }
