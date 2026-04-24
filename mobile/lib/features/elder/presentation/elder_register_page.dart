@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 
+import 'package:dio/dio.dart';
+
 import '../../../core/auth/app_role.dart';
 import '../../../core/auth/auth_session.dart';
-import '../data/elder_mock_auth_service.dart';
+import '../../auth/data/auth_api.dart';
 import '../elder_module_routes.dart';
 import 'elder_auth_shell.dart';
-import 'elder_claim_page.dart';
 
 class ElderRegisterPage extends StatefulWidget {
   const ElderRegisterPage({super.key});
@@ -59,26 +60,30 @@ class _ElderRegisterPageState extends State<ElderRegisterPage> {
       final name = _nameCtrl.text.trim();
       final phone = _phoneCtrl.text.trim();
       final password = _pwdCtrl.text;
-      await ElderMockAuthService.register(phone: phone, password: password);
-      final token = 'elder-demo-$phone';
-      final result = await ElderMockAuthService.recognizeByPhone(phone);
-      AuthSession.token = token;
-      AuthSession.role = AppRole.elder;
-      if (!mounted) return;
-      if (result.hasExistingProfile) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute<void>(builder: (_) => ElderClaimPage(result: result)),
-        );
-        return;
-      }
-      AuthSession.saveElderState(
-        name: name,
+      // 与后端 POST /v1/auth/register 对齐：账号使用手机号
+      await AuthApi.register(
+        username: phone,
+        password: password,
+        role: 'elder',
         phone: phone,
-        claimed: true,
-        familyCount: 0,
+        name: name,
       );
+      final login = await AuthApi.login(username: phone, password: password);
+      AuthSession.token = login.token;
+      AuthSession.role = AppRole.elder;
+      AuthSession.saveElderState(
+        name: login.name ?? name,
+        phone: login.phone ?? phone,
+        claimed: login.claimed ?? false,
+        familyCount: login.familyCount ?? 0,
+      );
+      if (!mounted) return;
       Navigator.of(context).pushNamedAndRemoveUntil(ElderModuleRoutes.elderHome, (route) => false);
     } catch (e) {
+      if (e is DioException) {
+        setState(() => _error = '网络异常，请检查网络或后端地址后重试');
+        return;
+      }
       setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
     } finally {
       if (mounted) setState(() => _submitting = false);
