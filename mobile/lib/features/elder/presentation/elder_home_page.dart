@@ -52,7 +52,6 @@ class _ElderHomePageState extends State<ElderHomePage> {
         name: name,
         phone: phone,
         claimed: claimed,
-        familyCount: familyCount,
         onBindingTap: () => Navigator.of(context).pushNamed(ElderModuleRoutes.elderBinding),
         onEmergencyContactsTap: () => Navigator.of(context).pushNamed(ElderModuleRoutes.elderEmergencyContacts),
         onLocationTap: () => Navigator.of(context).pushNamed(ElderModuleRoutes.elderLocationStatus),
@@ -542,11 +541,10 @@ class _ReminderMedicalTab extends StatelessWidget {
 }
 
 class _MyTab extends StatelessWidget {
-  const _MyTab({required this.name, required this.phone, required this.claimed, required this.familyCount, required this.onBindingTap, required this.onEmergencyContactsTap, required this.onLocationTap, required this.onLogout});
+  const _MyTab({required this.name, required this.phone, required this.claimed, required this.onBindingTap, required this.onEmergencyContactsTap, required this.onLocationTap, required this.onLogout});
   final String name;
   final String phone;
   final bool claimed;
-  final int familyCount;
   final VoidCallback onBindingTap;
   final VoidCallback onEmergencyContactsTap;
   final VoidCallback onLocationTap;
@@ -561,8 +559,6 @@ class _MyTab extends StatelessWidget {
             Text('手机号：$phone', style: const TextStyle(color: Color(0xFF475569))),
             const SizedBox(height: 8),
             Text(claimed ? '当前状态：已认领老人资料' : '当前状态：未认领老人资料', style: const TextStyle(color: Color(0xFF475569))),
-            const SizedBox(height: 8),
-            Text('已绑定家属：$familyCount 位', style: const TextStyle(color: Color(0xFF475569))),
           ])),
           const SizedBox(height: 12),
           _ItemCard(title: '家属绑定状态', subtitle: '查看绑定详情与当前说明', onTap: onBindingTap),

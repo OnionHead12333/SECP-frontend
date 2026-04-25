@@ -31,8 +31,8 @@ class _LoginPageState extends State<LoginPage> {
     if (msg.contains('token') || msg.contains('role')) {
       return '登录失败，请稍后重试';
     }
-    if (msg.contains('密码') || msg.contains('账号') || msg.contains('用户名')) {
-      return '用户名或密码错误';
+    if (msg.contains('密码') || msg.contains('账号') || msg.contains('用户名') || msg.contains('用户')) {
+      return '手机号或密码错误';
     }
     return '登录失败，请稍后重试';
   }
@@ -44,10 +44,14 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
+  static final RegExp _cnMobile = RegExp(r'^1[3-9]\d{9}$');
+
   String? _validate() {
     final u = _userCtrl.text.trim();
-    if (u.isEmpty) return '请输入用户名';
-    if (u.length < 3) return '用户名至少 3 个字符';
+    if (u.isEmpty) return '请输入手机号码';
+    if (u != '123123' && !_cnMobile.hasMatch(u)) {
+      return '请输入11位中国大陆手机号';
+    }
     if (_pwdCtrl.text.isEmpty) return '请输入密码';
     if (_pwdCtrl.text.length < 6) return '密码至少 6 位';
     return null;
@@ -113,12 +117,13 @@ class _LoginPageState extends State<LoginPage> {
         children: [
           TextField(
             controller: _userCtrl,
+            keyboardType: TextInputType.phone,
             textInputAction: TextInputAction.next,
             autocorrect: false,
             enabled: !_submitting,
             decoration: const InputDecoration(
-              labelText: '用户名',
-              hintText: '请输入用户名',
+              labelText: '手机号码',
+              hintText: '请输入11位手机号码',
               border: OutlineInputBorder(),
             ),
           ),
