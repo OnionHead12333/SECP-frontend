@@ -23,14 +23,14 @@ class AppConfig {
   /// 后端准备好后可通过 dart-define 切到真实接口。
   static const bool useMockSos = bool.fromEnvironment(
     'USE_MOCK_SOS',
-    defaultValue: true,
+    defaultValue: false,
   );
 
   /// 当前紧急联系人功能默认保留前端本地联调能力；
   /// 后端准备好后可通过 dart-define 切到真实接口。
   static const bool useMockEmergencyContacts = bool.fromEnvironment(
     'USE_MOCK_EMERGENCY_CONTACTS',
-    defaultValue: true,
+    defaultValue: false,
   );
 
   /// 当前没有开启后端、也还没接入树莓派蓝牙设备，
@@ -38,6 +38,6 @@ class AppConfig {
   /// 后端联调时再通过 dart-define 切到真实定位链路。
   static const bool useMockLocation = bool.fromEnvironment(
     'USE_MOCK_LOCATION',
-    defaultValue: true,
+    defaultValue: false,
   );
 }

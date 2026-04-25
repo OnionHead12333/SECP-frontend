@@ -60,22 +60,22 @@ class _ElderRegisterPageState extends State<ElderRegisterPage> {
       final name = _nameCtrl.text.trim();
       final phone = _phoneCtrl.text.trim();
       final password = _pwdCtrl.text;
-      // 与后端 POST /v1/auth/register 对齐：账号使用手机号
       await AuthApi.register(
         username: phone,
         password: password,
         role: 'elder',
         phone: phone,
         name: name,
+        nickname: name,
       );
-      final login = await AuthApi.login(username: phone, password: password);
-      AuthSession.token = login.token;
+      final result = await AuthApi.login(username: phone, password: password);
+      AuthSession.token = result.token;
       AuthSession.role = AppRole.elder;
       AuthSession.saveElderState(
-        name: login.name ?? name,
-        phone: login.phone ?? phone,
-        claimed: login.claimed ?? false,
-        familyCount: login.familyCount ?? 0,
+        name: result.name ?? name,
+        phone: result.phone ?? phone,
+        claimed: result.claimed ?? false,
+        familyCount: result.familyCount ?? 0,
       );
       if (!mounted) return;
       Navigator.of(context).pushNamedAndRemoveUntil(ElderModuleRoutes.elderHome, (route) => false);

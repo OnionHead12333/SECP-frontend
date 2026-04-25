@@ -21,6 +21,24 @@ final class LoginResult {
   final int? familyCount;
 }
 
+final class RegisterResult {
+  const RegisterResult({
+    this.userId,
+    this.username,
+    this.role,
+    this.name,
+    this.phone,
+    this.nickname,
+  });
+
+  final int? userId;
+  final String? username;
+  final String? role;
+  final String? name;
+  final String? phone;
+  final String? nickname;
+}
+
 /// 与计划中的后端约定：POST /api/v1/auth/login、/register
 final class AuthApi {
   AuthApi._();

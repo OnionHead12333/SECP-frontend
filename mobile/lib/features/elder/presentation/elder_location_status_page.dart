@@ -114,23 +114,27 @@ class _ElderLocationStatusPageState extends State<ElderLocationStatusPage> {
                   const SizedBox(height: 8),
                   Text(!ready ? '最近状态：待开启守护轨迹' : latest == null ? '最近状态：等待首次定位' : latest.isHome ? '最近状态：家附近' : '最近状态：外出', style: const TextStyle(fontWeight: FontWeight.w700)),
                   const SizedBox(height: 8),
-                  Text('当前先保留后端上传接口，同时按“树莓派蓝牙断开、老人处于户外”这个场景来做页面扩展。', style: const TextStyle(color: Color(0xFF475569), height: 1.6)),
+                  Text('当前先按“树莓派蓝牙断开、老人处于户外”这个场景来跑高德定位，并把定位权限状态与轨迹上传到后端老人端接口。', style: const TextStyle(color: Color(0xFF475569), height: 1.6)),
                   const SizedBox(height: 8),
                   Text(_state.uploadStatusText, style: const TextStyle(color: Color(0xFF0F766E), height: 1.6)),
+                  if (_state.lastError != null) ...[
+                    const SizedBox(height: 8),
+                    Text(_state.lastError!, style: const TextStyle(color: Color(0xFFB91C1C), height: 1.5)),
+                  ],
                 ])),
                 const SizedBox(height: 16),
                 _Card(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   const Text('权限与状态', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
                   const SizedBox(height: 12),
-                  _InfoRow(title: '运行场景', value: '树莓派蓝牙断开 / 户外扩展预留', ok: true),
+                  _InfoRow(title: '运行场景', value: '树莓派蓝牙断开 / 户外高德定位', ok: true),
                   const SizedBox(height: 10),
                   _InfoRow(title: '定位权限', value: _state.permissionGranted ? '已就绪' : '未授权', ok: _state.permissionGranted),
                   const SizedBox(height: 10),
                   _InfoRow(title: '定位服务', value: _state.serviceEnabled ? '已开启' : '未开启', ok: _state.serviceEnabled),
                   const SizedBox(height: 10),
-                  _InfoRow(title: '上传内容', value: '经纬度 + 时间 + 来源（后端保留）', ok: true),
+                  _InfoRow(title: '上传内容', value: '户外经纬度 + 时间 + 来源', ok: true),
                   const SizedBox(height: 10),
-                  _InfoRow(title: '后端接口', value: '已预留 /v1/elder/location-tracks', ok: true),
+                  _InfoRow(title: '后端接口', value: '/v1/elder/location-permissions 与 /location-tracks', ok: true),
                   if (_error != null) ...[const SizedBox(height: 12), Text(_error!, style: const TextStyle(color: Color(0xFFB91C1C)))],
                   const SizedBox(height: 14),
                   FilledButton.icon(onPressed: ready || _requesting ? null : _requestPermission, icon: Icon(ready ? Icons.check_circle : Icons.route), label: Text(_requesting ? '切换中...' : (ready ? '轨迹采集已可用' : '启动守护轨迹测试'))),
@@ -139,7 +143,7 @@ class _ElderLocationStatusPageState extends State<ElderLocationStatusPage> {
                 _Card(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   const Text('点击测试经纬度', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
                   const SizedBox(height: 10),
-                  const Text('点击下面按钮，直接测试当前设备能否获取到真实经纬度，同时保留后端上传链路。', style: TextStyle(color: Color(0xFF475569), height: 1.6)),
+                  const Text('点击下面按钮，直接测试当前设备能否获取到高德经纬度，并按蓝牙断开后的户外场景立即上传到后端。', style: TextStyle(color: Color(0xFF475569), height: 1.6)),
                   const SizedBox(height: 12),
                   FilledButton.icon(onPressed: _capturing ? null : _captureNow, icon: const Icon(Icons.my_location), label: Text(_capturing ? '测试中...' : '点击测试是否能测出经纬度')),
                 ])),
@@ -167,7 +171,7 @@ class _TrackCard extends StatelessWidget {
   const _TrackCard({required this.point});
   final ElderLocationPoint point;
   @override
-  Widget build(BuildContext context) => _Card(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(point.label, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)), const SizedBox(height: 8), Text('时间：${point.recordedAt.month}/${point.recordedAt.day} ${point.recordedAt.hour.toString().padLeft(2, '0')}:${point.recordedAt.minute.toString().padLeft(2, '0')}'), const SizedBox(height: 6), Text('纬度 ${point.latitude.toStringAsFixed(5)}  经度 ${point.longitude.toStringAsFixed(5)}', style: const TextStyle(color: Color(0xFF475569))), const SizedBox(height: 6), Text('来源：${point.source} · ${point.uploaded ? '已上传后端' : '当前前端测试/本机缓存'}', style: const TextStyle(color: Color(0xFF64748B)))]));
+  Widget build(BuildContext context) => _Card(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(point.label, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)), const SizedBox(height: 8), Text('时间：${point.recordedAt.month}/${point.recordedAt.day} ${point.recordedAt.hour.toString().padLeft(2, '0')}:${point.recordedAt.minute.toString().padLeft(2, '0')}'), const SizedBox(height: 6), Text('纬度 ${point.latitude.toStringAsFixed(5)}  经度 ${point.longitude.toStringAsFixed(5)}', style: const TextStyle(color: Color(0xFF475569))), const SizedBox(height: 6), Text('来源：${point.source} · ${point.uploaded ? '已上传后端' : '上传失败/本机缓存'}', style: const TextStyle(color: Color(0xFF64748B)))]));
 }
 
 class _InfoRow extends StatelessWidget {

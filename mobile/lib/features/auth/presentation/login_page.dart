@@ -1,5 +1,5 @@
-import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 
 import '../../../core/auth/app_role.dart';
@@ -24,7 +24,6 @@ class _LoginPageState extends State<LoginPage> {
   String? _error;
 
   String _friendlyError(Object e) {
-    // 需求：不要在前端展示后端/网络的原始报错细节。
     if (e is DioException) {
       return '网络异常，请检查网络后重试';
     }
@@ -32,7 +31,6 @@ class _LoginPageState extends State<LoginPage> {
     if (msg.contains('token') || msg.contains('role')) {
       return '登录失败，请稍后重试';
     }
-    // 常见「账号密码错误」走统一文案（避免直接透传后端 message）
     if (msg.contains('密码') || msg.contains('账号') || msg.contains('用户名')) {
       return '用户名或密码错误';
     }
@@ -76,35 +74,9 @@ class _LoginPageState extends State<LoginPage> {
         return;
       }
 
-      if (username == '13800138001' && password == '123456') {
-        AuthSession.token = 'demo-elder-13800138001';
-        AuthSession.role = AppRole.elder;
-        AuthSession.saveElderState(name: '张建国', phone: '13800138001', claimed: true, familyCount: 1);
-        if (!mounted) return;
-        Navigator.of(context).pushNamedAndRemoveUntil(ElderModuleRoutes.elderHome, (r) => false);
-        return;
-      }
-
-      if (username == '13800138002' && password == '123456') {
-        AuthSession.token = 'demo-elder-13800138002';
-        AuthSession.role = AppRole.elder;
-        AuthSession.saveElderState(name: '李秀英', phone: '13800138002', claimed: true, familyCount: 2);
-        if (!mounted) return;
-        Navigator.of(context).pushNamedAndRemoveUntil(ElderModuleRoutes.elderHome, (r) => false);
-        return;
-      }
-
-      if (username == '13800138111' && password == '123456') {
-        AuthSession.token = 'demo-elder-13800138111';
-        AuthSession.role = AppRole.elder;
-        AuthSession.saveElderState(name: '赵美兰', phone: '13800138111', claimed: false, familyCount: 0);
-        if (!mounted) return;
-        Navigator.of(context).pushNamedAndRemoveUntil(ElderModuleRoutes.elderHome, (r) => false);
-        return;
-      }
-
       final result = await AuthApi.login(username: username, password: password);
       AuthSession.token = result.token;
+
       if (result.role == 'child') {
         AuthSession.role = AppRole.child;
         if (!mounted) return;
@@ -191,9 +163,11 @@ class _LoginPageState extends State<LoginPage> {
         children: [
           const Text('还没有账号？'),
           TextButton(
-            onPressed: _submitting ? null : () {
-              Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const RegisterPage()));
-            },
+            onPressed: _submitting
+                ? null
+                : () {
+                    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const RegisterPage()));
+                  },
             child: const Text('去注册'),
           ),
         ],

@@ -54,7 +54,8 @@ final class ElderLocationService {
     _ensureAmapConfigured();
     final permissionGranted = await _ensurePermission();
     final serviceEnabled = await Permission.location.serviceStatus.isEnabled;
-    final latest = await _readCurrentPoint(saveToTrack: _track.isEmpty);
+    await _syncPermissionSnapshot(permissionGranted: permissionGranted, serviceEnabled: serviceEnabled);
+    final latest = permissionGranted && serviceEnabled ? await _readCurrentPoint(saveToTrack: _track.isEmpty) : null;
     _latest = latest;
     final state = ElderLocationState(
       permissionGranted: permissionGranted,
@@ -141,10 +142,11 @@ final class ElderLocationService {
         _latest = point.copyWith(uploaded: true);
         _replaceLastPoint(_latest!);
         _emit(_currentState.copyWith(isUploading: false, latestPoint: _latest, autoUploadEnabled: true, permissionGranted: true, serviceEnabled: true, uploadStatusText: '定位已获取，上传成功', clearLastError: true));
-      } on DioException catch (_) {
+      } on DioException catch (e) {
         _latest = point.copyWith(uploaded: false);
         _replaceLastPoint(_latest!);
-        _emit(_currentState.copyWith(isUploading: false, latestPoint: _latest, autoUploadEnabled: true, permissionGranted: true, serviceEnabled: true, uploadStatusText: '定位已获取，等待后端接口', lastError: '后端接口暂未联通，轨迹已保存在本机页面供测试查看'));
+        _emit(_currentState.copyWith(isUploading: false, latestPoint: _latest, autoUploadEnabled: true, permissionGranted: true, serviceEnabled: true, uploadStatusText: '定位上传失败', lastError: e.message ?? '后端定位接口请求失败'));
+        rethrow;
       }
       if (_started) _schedule(phone, _latest);
     } catch (e) {
@@ -162,6 +164,7 @@ final class ElderLocationService {
     }
     final granted = await _ensurePermission(forceRequest: true);
     final enabled = await Permission.location.serviceStatus.isEnabled;
+    await _syncPermissionSnapshot(permissionGranted: granted, serviceEnabled: enabled);
     _emit(_currentState.copyWith(permissionGranted: granted, serviceEnabled: enabled));
     return granted;
   }
@@ -183,6 +186,21 @@ final class ElderLocationService {
     AMapFlutterLocation.updatePrivacyShow(true, true);
     AMapFlutterLocation.updatePrivacyAgree(true);
     _amapConfigured = true;
+  }
+
+  static Future<void> _syncPermissionSnapshot({
+    required bool permissionGranted,
+    required bool serviceEnabled,
+  }) async {
+    try {
+      await ElderLocationApi.updatePermission(
+        foregroundGranted: permissionGranted && serviceEnabled,
+        backgroundGranted: (await Permission.locationAlways.status).isGranted,
+        permissionUpdatedAt: DateTime.now(),
+      );
+    } catch (e) {
+      if (kDebugMode) debugPrint('Sync location permission failed: $e');
+    }
   }
 
   static void _emit(ElderLocationState state) {

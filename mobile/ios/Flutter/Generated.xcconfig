@@ -1,6 +1,6 @@
 // This is a generated file; do not edit or check into version control.
-FLUTTER_ROOT=D:\flutter\flutter
-FLUTTER_APPLICATION_PATH=D:\github\smartElderlyCarePlatform\mobile
+FLUTTER_ROOT=D:\apps\flutter
+FLUTTER_APPLICATION_PATH=D:\Desktop\flutter_coding\SECP-frontend\mobile
 COCOAPODS_PARALLEL_CODE_SIGN=true
 FLUTTER_TARGET=lib\main.dart
 FLUTTER_BUILD_DIR=build
