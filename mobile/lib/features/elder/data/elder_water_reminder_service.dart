@@ -44,7 +44,7 @@ final class ElderWaterReminderService {
   }
 
   static Future<ElderWaterProgress> fetchTodayProgress({required int elderId}) async {
-    if (AppConfig.useMockLocation) {
+    if (AppConfig.useMockReminders) {
       await Future<void>.delayed(const Duration(milliseconds: 180));
       return _mockProgress;
     }
@@ -73,7 +73,7 @@ final class ElderWaterReminderService {
     required int elderId,
     required int reminderId,
   }) async {
-    if (AppConfig.useMockLocation) {
+    if (AppConfig.useMockReminders) {
       return _confirmByMock();
     }
 

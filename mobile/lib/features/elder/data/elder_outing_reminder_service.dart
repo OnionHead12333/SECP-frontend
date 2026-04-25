@@ -18,7 +18,7 @@ final class ElderOutingReminderService {
   );
 
   static Future<ElderOutingStatus> fetchStatus({required int elderId}) async {
-    if (AppConfig.useMockLocation) {
+    if (AppConfig.useMockReminders) {
       await Future<void>.delayed(const Duration(milliseconds: 160));
       return _mockStatus;
     }
@@ -45,7 +45,7 @@ final class ElderOutingReminderService {
     required double longitude,
     required String source,
   }) async {
-    if (AppConfig.useMockLocation) {
+    if (AppConfig.useMockReminders) {
       await Future<void>.delayed(const Duration(milliseconds: 150));
       _mockStatus = ElderOutingStatus(
         locationEnabled: true,

@@ -22,7 +22,7 @@ final class ElderExerciseReminderService {
   );
 
   static Future<ElderExerciseProgress> fetchTodayProgress({required int elderId}) async {
-    if (AppConfig.useMockLocation) {
+    if (AppConfig.useMockReminders) {
       await Future<void>.delayed(const Duration(milliseconds: 180));
       return _mockProgress;
     }
@@ -45,7 +45,7 @@ final class ElderExerciseReminderService {
   }
 
   static Future<ElderExerciseProgress> startExercise({required int elderId, required int reminderId}) async {
-    if (AppConfig.useMockLocation) {
+    if (AppConfig.useMockReminders) {
       await Future<void>.delayed(const Duration(milliseconds: 140));
       return _mockProgress;
     }
@@ -72,7 +72,7 @@ final class ElderExerciseReminderService {
   }) async {
     final sourceNormalized = source == 'sensor' ? 'sensor' : 'manual';
 
-    if (AppConfig.useMockLocation) {
+    if (AppConfig.useMockReminders) {
       return _completeByMock(source: sourceNormalized);
     }
 

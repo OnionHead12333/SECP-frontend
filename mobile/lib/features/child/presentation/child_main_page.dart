@@ -165,6 +165,44 @@ class _ChildMainPageState extends State<ChildMainPage> {
 
   static const _titles = ['首页总览', '医疗管理', '提醒', '安全监护', '设置'];
 
+  Widget _buildTabBody() {
+    switch (_navIndex) {
+      case 0:
+        return ChildOverviewTab(
+          elders: _elders,
+          location: _location,
+          activity: _activity,
+          helpRecords: _helpRecords,
+        );
+      case 1:
+        return ChildMedicalTab(elders: _elders);
+      case 2:
+        return ChildReminderTab(elders: _elders);
+      case 3:
+        return ChildSafetyTab(
+          location: _location,
+          track: _track.reversed.toList(),
+          route: _route,
+          activity: _activity,
+          helpRecords: _helpRecords,
+          onRefreshLocation: _refreshLocationMock,
+          onResolveHelp: _resolveHelp,
+        );
+      case 4:
+        return ChildSettingsTab(
+          elders: _elders,
+          contacts: _contacts,
+          onAddElder: _addElder,
+          onRemoveElder: _removeElder,
+          onAddContact: _addContact,
+          onUpdateContact: _updateContact,
+          onRemoveContact: _removeContact,
+        );
+      default:
+        return const SizedBox.shrink();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -178,36 +216,11 @@ class _ChildMainPageState extends State<ChildMainPage> {
           ),
         ],
       ),
-      body: IndexedStack(
-        index: _navIndex,
-        children: [
-          ChildOverviewTab(
-            elders: _elders,
-            location: _location,
-            activity: _activity,
-            helpRecords: _helpRecords,
-          ),
-          ChildMedicalTab(elders: _elders),
-          ChildReminderTab(elders: _elders),
-          ChildSafetyTab(
-            location: _location,
-            track: _track.reversed.toList(),
-            route: _route,
-            activity: _activity,
-            helpRecords: _helpRecords,
-            onRefreshLocation: _refreshLocationMock,
-            onResolveHelp: _resolveHelp,
-          ),
-          ChildSettingsTab(
-            elders: _elders,
-            contacts: _contacts,
-            onAddElder: _addElder,
-            onRemoveElder: _removeElder,
-            onAddContact: _addContact,
-            onUpdateContact: _updateContact,
-            onRemoveContact: _removeContact,
-          ),
-        ],
+      // 不用 IndexedStack：否则五个子页会同时 build，含地图的「首页+安全」会各创建一个高德
+      // 原生子视图，易双实例闪退。这里只构建当前 Tab，切页时再重建。
+      body: KeyedSubtree(
+        key: ValueKey<int>(_navIndex),
+        child: _buildTabBody(),
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _navIndex,

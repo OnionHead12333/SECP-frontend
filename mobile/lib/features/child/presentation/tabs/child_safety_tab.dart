@@ -70,6 +70,7 @@ class ChildSafetyTab extends StatelessWidget {
                   track: mapTrack,
                   route: mapRoute,
                   height: 232,
+                  useOfflinePainter: true,
                 ),
                 const SizedBox(height: 12),
                 Text(location.address, style: Theme.of(context).textTheme.bodyLarge),

@@ -106,6 +106,7 @@ class ChildOverviewTab extends StatelessWidget {
                   ),
                   latitude: location.latitude,
                   longitude: location.longitude,
+                  useOfflinePainter: true,
                 ),
                 const SizedBox(height: 10),
                 Text(location.address, style: Theme.of(context).textTheme.bodyMedium),
