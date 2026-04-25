@@ -3,18 +3,20 @@ import 'package:flutter/material.dart';
 import '../../models/child_local_models.dart';
 import '../widgets/child_location_map.dart';
 
-/// ① 首页总览：老人状态、服药、提醒、定位/活动、异常摘要（演示数据）。
+/// ① 首页总览：与后端 `location-summary`、求助列表等一致。
 class ChildOverviewTab extends StatelessWidget {
   const ChildOverviewTab({
     super.key,
     required this.elders,
-    required this.location,
+    this.currentElder,
+    this.location,
     required this.activity,
     required this.helpRecords,
   });
 
   final List<BoundElder> elders;
-  final LocationSnapshot location;
+  final BoundElder? currentElder;
+  final LocationSnapshot? location;
   final ActivitySnapshot activity;
   final List<HelpRequestRecord> helpRecords;
 
@@ -27,8 +29,9 @@ class ChildOverviewTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final elderName = elders.isEmpty ? '未绑定老人' : elders.first.displayName;
+    final elderName = currentElder?.displayName ?? (elders.isEmpty ? null : elders.first.displayName) ?? '未选择';
     final pending = helpRecords.where((r) => r.status == HelpRequestStatus.pending).toList();
+    final loc = location;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
@@ -47,7 +50,9 @@ class ChildOverviewTab extends StatelessWidget {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        elders.isEmpty ? '请先在「设置」中绑定老人账号' : '$elderName · 精神尚可，饮食正常（演示）',
+                        elders.isEmpty
+                            ? '请先在「设置」中添加老人档案 ID，或从求助记录中自动出现已绑定老人'
+                            : '当前：$elderName · 状态以后端活动/定位为准',
                         style: Theme.of(context).textTheme.bodyMedium,
                       ),
                     ),
@@ -65,12 +70,11 @@ class ChildOverviewTab extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('是否已服药', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
-                const SizedBox(height: 12),
-                _MedRow(label: '上午药', done: true),
-                const Divider(height: 20),
-                _MedRow(label: '中午药', done: false),
-                const Divider(height: 20),
-                _MedRow(label: '晚间药', done: false),
+                const SizedBox(height: 8),
+                Text(
+                  '用药进度请见「医疗管理 → 远程添加医疗事项」及老人端数据',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+                ),
               ],
             ),
           ),
@@ -82,11 +86,12 @@ class ChildOverviewTab extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('今日提醒完成情况', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
-                const SizedBox(height: 12),
-                LinearProgressIndicator(value: 2 / 4, borderRadius: BorderRadius.circular(4)),
+                Text('生活提醒', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
                 const SizedBox(height: 8),
-                Text('已完成 2 / 4 项（演示）', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant)),
+                Text(
+                  '喝水/用药等见底部「提醒」',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+                ),
               ],
             ),
           ),
@@ -100,22 +105,26 @@ class ChildOverviewTab extends StatelessWidget {
               children: [
                 Text('当前定位 / 活动状态', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
                 const SizedBox(height: 10),
-                ChildLocationMap(
-                  key: ValueKey(
-                    '${location.latitude}_${location.longitude}_${location.updatedAt.millisecondsSinceEpoch}',
+                if (loc == null)
+                  Text('暂无定位（老人端未上传轨迹或老人档案 ID 无效）', style: Theme.of(context).textTheme.bodyMedium)
+                else ...[
+                  ChildLocationMap(
+                    key: ValueKey(
+                      '${loc.latitude}_${loc.longitude}_${loc.updatedAt.millisecondsSinceEpoch}',
+                    ),
+                    latitude: loc.latitude,
+                    longitude: loc.longitude,
                   ),
-                  latitude: location.latitude,
-                  longitude: location.longitude,
-                ),
-                const SizedBox(height: 10),
-                Text(location.address, style: Theme.of(context).textTheme.bodyMedium),
-                Text(
-                  '坐标 ${location.latitude.toStringAsFixed(4)}, ${location.longitude.toStringAsFixed(4)} · 更新 ${_fmtTime(location.updatedAt)}',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
-                ),
+                  const SizedBox(height: 10),
+                  Text(loc.address, style: Theme.of(context).textTheme.bodyMedium),
+                  Text(
+                    '坐标 ${loc.latitude.toStringAsFixed(4)}, ${loc.longitude.toStringAsFixed(4)} · 更新 ${_fmtTime(loc.updatedAt)}',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+                  ),
+                ],
                 const SizedBox(height: 10),
                 Text(
-                  '活动：${activity.stateLabel} · 今日步数 ${activity.stepsToday} · 更新 ${_fmtTime(activity.updatedAt)}',
+                  '活动/在家推断：${activity.stateLabel} · 今日步数（若有设备接入）${activity.stepsToday} · 更新 ${_fmtTime(activity.updatedAt)}',
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
               ],
@@ -134,12 +143,12 @@ class ChildOverviewTab extends StatelessWidget {
                   children: [
                     Icon(Icons.warning_amber_rounded, color: pending.isNotEmpty ? scheme.error : scheme.onSurfaceVariant),
                     const SizedBox(width: 8),
-                    Text('最新异常提醒', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+                    Text('安全求助', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
                   ],
                 ),
                 const SizedBox(height: 8),
                 if (pending.isEmpty)
-                  Text('暂无待处理异常（演示）', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant))
+                  Text('暂无待处理求助', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant))
                 else
                   Text(
                     '${pending.first.elderName} · ${_fmtTime(pending.first.createdAt)}\n${pending.first.summary}',
@@ -149,26 +158,6 @@ class ChildOverviewTab extends StatelessWidget {
             ),
           ),
         ),
-      ],
-    );
-  }
-}
-
-class _MedRow extends StatelessWidget {
-  const _MedRow({required this.label, required this.done});
-
-  final String label;
-  final bool done;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(done ? Icons.check_circle : Icons.radio_button_unchecked, color: done ? Colors.green : Colors.grey),
-        const SizedBox(width: 10),
-        Text(label, style: Theme.of(context).textTheme.bodyLarge),
-        const Spacer(),
-        Text(done ? '已服' : '待服', style: TextStyle(color: done ? Colors.green : Theme.of(context).colorScheme.outline)),
       ],
     );
   }

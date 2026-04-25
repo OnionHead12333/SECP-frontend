@@ -3,26 +3,26 @@ import 'package:flutter/material.dart';
 import '../../models/child_local_models.dart';
 import '../widgets/child_location_map.dart';
 
-/// ③ 安全监护：实时定位、活动状态、求助记录处理（其余为占位）。
+/// ③ 安全监护：定位摘要、参考回家路线、求助处理（对接 `/v1/child/...`）。
 class ChildSafetyTab extends StatelessWidget {
   const ChildSafetyTab({
     super.key,
-    required this.location,
+    this.location,
     required this.track,
-    required this.route,
+    this.route,
     required this.activity,
     required this.helpRecords,
     required this.onRefreshLocation,
     required this.onResolveHelp,
   });
 
-  final LocationSnapshot location;
+  final LocationSnapshot? location;
   final List<LocationTrackPoint> track;
-  final NavigationRouteSnapshot route;
+  final NavigationRouteSnapshot? route;
   final ActivitySnapshot activity;
   final List<HelpRequestRecord> helpRecords;
   final VoidCallback onRefreshLocation;
-  final void Function(String id) onResolveHelp;
+  final Future<void> Function(String id) onResolveHelp;
 
   String _fmt(DateTime t) {
     return '${t.month}/${t.day} ${_two(t.hour)}:${_two(t.minute)}';
@@ -33,10 +33,13 @@ class ChildSafetyTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final loc = location;
     final mapTrack = track.map((e) => (latitude: e.latitude, longitude: e.longitude)).toList();
-    final mapRoute = route.points.map((e) => (latitude: e.latitude, longitude: e.longitude)).toList();
+    final nav = route;
+    final mapRoute = nav == null
+        ? const <({double latitude, double longitude})>[]
+        : nav.points.map((e) => (latitude: e.latitude, longitude: e.longitude)).toList();
 
-    // 单页连续滚动，避免「上半一块、下半一块」的双滚动区割裂感
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
       children: [
@@ -45,7 +48,7 @@ class ChildSafetyTab extends StatelessWidget {
           trailing: IconButton.filledTonal(
             onPressed: onRefreshLocation,
             icon: const Icon(Icons.my_location, size: 20),
-            tooltip: '刷新定位',
+            tooltip: '刷新',
             style: IconButton.styleFrom(
               visualDensity: VisualDensity.compact,
               padding: const EdgeInsets.all(8),
@@ -58,32 +61,37 @@ class ChildSafetyTab extends StatelessWidget {
           color: scheme.surfaceContainerLow,
           child: Padding(
             padding: const EdgeInsets.fromLTRB(12, 12, 12, 14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                ChildLocationMap(
-                  key: ValueKey(
-                    '${location.latitude}_${location.longitude}_${location.updatedAt.millisecondsSinceEpoch}',
+            child: loc == null
+                ? const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 24),
+                    child: Center(child: Text('暂无定位数据')),
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ChildLocationMap(
+                        key: ValueKey(
+                          '${loc.latitude}_${loc.longitude}_${loc.updatedAt.millisecondsSinceEpoch}',
+                        ),
+                        latitude: loc.latitude,
+                        longitude: loc.longitude,
+                        track: mapTrack,
+                        route: mapRoute,
+                        height: 232,
+                      ),
+                      const SizedBox(height: 12),
+                      Text(loc.address, style: Theme.of(context).textTheme.bodyLarge),
+                      const SizedBox(height: 6),
+                      Text(
+                        '经纬度 ${loc.latitude.toStringAsFixed(5)}，${loc.longitude.toStringAsFixed(5)}',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+                      ),
+                      Text(
+                        '上次更新 ${_fmt(loc.updatedAt)}',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+                      ),
+                    ],
                   ),
-                  latitude: location.latitude,
-                  longitude: location.longitude,
-                  track: mapTrack,
-                  route: mapRoute,
-                  height: 232,
-                ),
-                const SizedBox(height: 12),
-                Text(location.address, style: Theme.of(context).textTheme.bodyLarge),
-                const SizedBox(height: 6),
-                Text(
-                  '经纬度 ${location.latitude.toStringAsFixed(5)}，${location.longitude.toStringAsFixed(5)}',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
-                ),
-                Text(
-                  '上次更新 ${_fmt(location.updatedAt)}',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
-                ),
-              ],
-            ),
           ),
         ),
         const SizedBox(height: 16),
@@ -96,18 +104,15 @@ class ChildSafetyTab extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _RouteSummary(route: route),
-                const SizedBox(height: 14),
+                if (nav != null) _RouteSummary(route: nav) else const Text('无参考回家路线数据（需定位与家围栏接口返回）'),
+                if (nav != null) const SizedBox(height: 14),
                 Text(
                   '最近轨迹',
                   style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 8),
                 if (track.isEmpty)
-                  Text(
-                    '暂无轨迹点',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.outline),
-                  )
+                  Text('暂无轨迹点', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.outline))
                 else
                   ...track.take(5).map(
                         (item) => Padding(
@@ -120,7 +125,7 @@ class ChildSafetyTab extends StatelessWidget {
                       ),
                 const SizedBox(height: 6),
                 Text(
-                  '蓝线：历史轨迹　橙线：推荐回家路线',
+                  '蓝线：历史轨迹　橙线：参考回家线',
                   style: Theme.of(context).textTheme.labelSmall?.copyWith(color: scheme.outline),
                 ),
               ],
@@ -167,9 +172,9 @@ class ChildSafetyTab extends StatelessWidget {
         ),
         const SizedBox(height: 20),
         _SafetySectionTitle(title: '快捷入口'),
-        _PlaceholderRow(title: '历史轨迹', subtitle: '按日查看轨迹回放（下一步接真实接口）'),
-        _PlaceholderRow(title: '地理围栏状态', subtitle: '围栏开关与越界记录（待开发）'),
-        _PlaceholderRow(title: '预警消息列表', subtitle: '合并推送与设备告警（待开发）'),
+        _PlaceholderRow(title: '历史轨迹', subtitle: '需后端提供子女端历史轨迹查询'),
+        _PlaceholderRow(title: '地理围栏', subtitle: '可接「家围栏」等已有接口的详情页'),
+        _PlaceholderRow(title: '预警消息', subtitle: '可接 activity-alerts 等接口'),
         const SizedBox(height: 20),
         _SafetySectionTitle(title: '求助记录'),
         const SizedBox(height: 8),
@@ -177,13 +182,10 @@ class ChildSafetyTab extends StatelessWidget {
           Card(
             elevation: 0,
             color: scheme.surfaceContainerLow,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 16),
+            child: const Padding(
+              padding: EdgeInsets.symmetric(vertical: 28, horizontal: 16),
               child: Center(
-                child: Text(
-                  '暂无求助记录',
-                  style: TextStyle(color: scheme.onSurfaceVariant),
-                ),
+                child: Text('暂无求助记录'),
               ),
             ),
           )
@@ -224,11 +226,8 @@ class ChildSafetyTab extends StatelessWidget {
                       Align(
                         alignment: Alignment.centerRight,
                         child: FilledButton.tonal(
-                          onPressed: () {
-                            onResolveHelp(r.id);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('已标记为已处理（本地演示）')),
-                            );
+                          onPressed: () async {
+                            await onResolveHelp(r.id);
                           },
                           child: const Text('标记已处理'),
                         ),
@@ -395,7 +394,9 @@ class _PlaceholderRow extends StatelessWidget {
         title: Text(title),
         subtitle: Text(subtitle),
         trailing: const Icon(Icons.chevron_right),
-        onTap: () => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('「$title」待开发'))),
+        onTap: () => ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('此入口仍可按后续需求对接已有接口扩展')),
+        ),
       ),
     );
   }

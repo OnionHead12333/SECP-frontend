@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/auth/auth_session.dart';
+import '../data/child_elder_directory_service.dart';
+import '../data/child_emergency_alerts_api.dart';
+import '../data/child_geofence_api.dart';
+import '../data/child_location_summary_api.dart';
 import '../models/child_local_models.dart';
 import 'tabs/child_medical_tab.dart';
 import 'tabs/child_overview_tab.dart';
@@ -8,7 +12,7 @@ import 'tabs/child_reminder_tab.dart';
 import 'tabs/child_safety_tab.dart';
 import 'tabs/child_settings_tab.dart';
 
-/// 子女端：底部五模块 — 首页总览 / 医疗管理 / 提醒 / 安全监护 / 设置
+/// 子女端：底部五模块 — 数据来自已有后端（定位摘要、求助、紧急联系人、家围栏等）。
 class ChildMainPage extends StatefulWidget {
   const ChildMainPage({super.key});
 
@@ -17,129 +21,204 @@ class ChildMainPage extends StatefulWidget {
 }
 
 class _ChildMainPageState extends State<ChildMainPage> {
-  static const double _homeLatitude = 31.23040;
-  static const double _homeLongitude = 121.47370;
-  static const String _homeLabel = '张奶奶家';
-
   int _navIndex = 0;
+  String? _selectedElderId;
+  bool _loading = true;
 
-  late List<BoundElder> _elders;
-  late List<EmergencyContact> _contacts;
-  late List<HelpRequestRecord> _helpRecords;
-  late LocationSnapshot _location;
-  late List<LocationTrackPoint> _track;
-  late NavigationRouteSnapshot _route;
+  List<BoundElder> _elders = const [];
+  List<HelpRequestRecord> _helpRecords = const [];
+  LocationSnapshot? _location;
+  List<LocationTrackPoint> _track = const [];
+  NavigationRouteSnapshot? _route;
   late ActivitySnapshot _activity;
 
   @override
   void initState() {
     super.initState();
-    final now = DateTime.now();
-    _elders = [
-      BoundElder(id: '1', displayName: '张奶奶', accountHint: '138****0001'),
-    ];
-    _contacts = [
-      EmergencyContact(
-        id: 'c1',
-        elderId: '1',
-        name: '李强',
-        phone: '13900001111',
-        priority: 1,
-        relation: '本人',
-      ),
-    ];
-    _helpRecords = [
-      HelpRequestRecord(
-        id: 'h1',
-        elderName: '张奶奶',
-        createdAt: now.subtract(const Duration(hours: 2)),
-        summary: '在家中跌倒告警，请尽快查看摄像头或联系老人。',
-        status: HelpRequestStatus.pending,
-      ),
-      HelpRequestRecord(
-        id: 'h2',
-        elderName: '张奶奶',
-        createdAt: now.subtract(const Duration(days: 1)),
-        summary: '长按 SOS 求助（已自动拨打紧急联系人）。',
-        status: HelpRequestStatus.resolved,
-      ),
-    ];
-    _track = [
-      LocationTrackPoint(latitude: 31.23218, longitude: 121.47502, recordedAt: now.subtract(const Duration(minutes: 18)), label: '社区东门'),
-      LocationTrackPoint(latitude: 31.23128, longitude: 121.47440, recordedAt: now.subtract(const Duration(minutes: 12)), label: '家附近路口'),
-      LocationTrackPoint(latitude: 31.23072, longitude: 121.47402, recordedAt: now.subtract(const Duration(minutes: 6)), label: '单元楼下'),
-      LocationTrackPoint(latitude: 31.23040, longitude: 121.47370, recordedAt: now.subtract(const Duration(minutes: 2)), label: '家中'),
-    ];
-    _location = LocationSnapshot(
-      latitude: _track.last.latitude,
-      longitude: _track.last.longitude,
-      address: '上海市黄浦区 · 示例小区（轨迹演示）',
-      updatedAt: _track.last.recordedAt,
-    );
-    _route = _buildRoute(_location);
     _activity = ActivitySnapshot(
-      stepsToday: 4280,
-      stateLabel: '轻度活动 · 室内为主',
-      updatedAt: now.subtract(const Duration(minutes: 8)),
+      stepsToday: 0,
+      stateLabel: '加载中',
+      updatedAt: DateTime.now(),
     );
+    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
   }
 
-  void _logout(BuildContext context) {
-    AuthSession.clear();
-    Navigator.of(context).pushNamedAndRemoveUntil('/login', (r) => false);
+  String? get _elderIdOrNull {
+    final id = _selectedElderId;
+    if (id == null) return null;
+    return int.tryParse(id) != null ? id : null;
   }
 
-  void _addElder(BoundElder e) => setState(() => _elders.add(e));
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+    });
+    final now = DateTime.now();
+    try {
+      final elders = await ChildElderDirectoryService.resolveElders();
+      if (elders.isNotEmpty) {
+        if (_selectedElderId == null || !elders.any((e) => e.id == _selectedElderId)) {
+          _selectedElderId = elders.first.id;
+        }
+      } else {
+        _selectedElderId = null;
+      }
 
-  void _removeElder(String id) => setState(() {
-        _elders.removeWhere((x) => x.id == id);
-        _contacts.removeWhere((c) => c.elderId == id);
+      final help = <HelpRequestRecord>[];
+      try {
+        final page = await ChildEmergencyAlertsApi.list(page: 1, pageSize: 200);
+        final list = page['list'];
+        if (list is List) {
+          for (final item in list) {
+            if (item is! Map) continue;
+            final m = Map<String, dynamic>.from(item);
+            final aid = '${m['alertId'] ?? m['id'] ?? ''}'.trim();
+            if (aid.isEmpty) continue;
+            final st = m['status'] as String? ?? '';
+            final pending = st == 'sent';
+            help.add(
+              HelpRequestRecord(
+                id: aid,
+                elderName: m['elderName'] as String? ?? '老人',
+                createdAt: _parseAnyTime(m['triggerTime'] ?? m['sentTime']) ?? now,
+                summary: st == 'sent' ? '安全求助，待处理' : '已处理/已核对',
+                status: pending ? HelpRequestStatus.pending : HelpRequestStatus.resolved,
+              ),
+            );
+          }
+        }
+      } catch (_) {
+        // 忽略
+      }
+      _helpRecords = help;
+
+      if (_elderIdOrNull == null) {
+        setState(() {
+          _elders = elders;
+          _location = null;
+          _track = const [];
+          _route = null;
+          _activity = ActivitySnapshot(
+            stepsToday: 0,
+            stateLabel: '无绑定老人',
+            updatedAt: now,
+          );
+        });
+        return;
+      }
+
+      final eid = int.parse(_elderIdOrNull!);
+      ChildLocationSummary? loc;
+      try {
+        loc = await ChildLocationSummaryApi.fetch(eid);
+      } catch (_) {
+        loc = null;
+      }
+
+      if (loc != null) {
+        final t = _parseAnyTime(loc.updatedAt) ?? now;
+        _location = LocationSnapshot(
+          latitude: loc.latitude,
+          longitude: loc.longitude,
+          address: (loc.address != null && loc.address!.trim().isNotEmpty)
+              ? loc.address!
+              : (loc.isHome == true ? '在家（基于家围栏/定位）' : '外出（最新定位点）'),
+          updatedAt: t,
+        );
+        _track = [
+          LocationTrackPoint(
+            latitude: loc.latitude,
+            longitude: loc.longitude,
+            recordedAt: t,
+            label: '最新定位',
+          ),
+        ];
+        _activity = ActivitySnapshot(
+          stepsToday: 0,
+          stateLabel: loc.isHome == true
+              ? '当前推断：在家'
+              : (loc.presenceSource == 'gaode_fallback' ? '当前推断：外出' : '活动状态已更新'),
+          updatedAt: t,
+        );
+      } else {
+        _location = null;
+        _track = const [];
+        _activity = ActivitySnapshot(
+          stepsToday: 0,
+          stateLabel: '暂无定位数据（老人端未上报或尚未同步）',
+          updatedAt: now,
+        );
+      }
+
+      _route = await _buildRouteForElder(
+        eid: eid,
+        loc: _location,
+        homeLabel: _elderNameForSelected(),
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _elders = elders;
       });
-
-  void _addContact(EmergencyContact c) => setState(() => _contacts.add(c));
-
-  void _updateContact(EmergencyContact c) {
-    setState(() {
-      final i = _contacts.indexWhere((x) => x.id == c.id);
-      if (i >= 0) _contacts[i] = c;
-    });
+    } finally {
+      if (mounted) {
+        setState(() => _loading = false);
+      }
+    }
   }
 
-  void _removeContact(String id) => setState(() => _contacts.removeWhere((x) => x.id == id));
-
-  void _refreshLocationMock() {
-    setState(() {
-      final last = _track.isEmpty ? const (31.23218, 121.47502) : (_track.last.latitude, _track.last.longitude);
-      final drift = (DateTime.now().millisecond % 40) / 100000;
-      final next = LocationTrackPoint(
-        latitude: last.$1 - 0.00018 + drift,
-        longitude: last.$2 - 0.00016 + drift / 2,
-        recordedAt: DateTime.now(),
-        label: '导航刷新点',
-      );
-      _track = [..._track, next].takeLast(12).toList();
-      _location = LocationSnapshot(
-        latitude: next.latitude,
-        longitude: next.longitude,
-        address: '上海市黄浦区 · 老人当前位置（前端导航演示）',
-        updatedAt: next.recordedAt,
-      );
-      _route = _buildRoute(_location);
-    });
+  String _elderNameForSelected() {
+    final id = _selectedElderId;
+    if (id == null) return '家';
+    return _elders.firstWhere((e) => e.id == id, orElse: () => BoundElder(id: id, displayName: '家')).displayName;
   }
 
-  NavigationRouteSnapshot _buildRoute(LocationSnapshot location) {
-    final distanceKm = _calculateDistanceKm(location.latitude, location.longitude, _homeLatitude, _homeLongitude);
-    final minutes = (distanceKm * 12).clamp(3, 35).round();
-    final routePoints = [
-      RoutePoint(latitude: location.latitude, longitude: location.longitude, label: '老人当前位置'),
-      RoutePoint(latitude: (location.latitude + _homeLatitude) / 2 + 0.00035, longitude: (location.longitude + _homeLongitude) / 2 - 0.00022, label: '推荐路口'),
-      RoutePoint(latitude: _homeLatitude, longitude: _homeLongitude, label: _homeLabel),
+  static DateTime? _parseAnyTime(Object? o) {
+    if (o == null) return null;
+    if (o is DateTime) return o;
+    if (o is int) {
+      return DateTime.fromMillisecondsSinceEpoch(o);
+    }
+    final s = o.toString();
+    final a = DateTime.tryParse(s);
+    if (a != null) return a;
+    return null;
+  }
+
+  Future<NavigationRouteSnapshot?> _buildRouteForElder({
+    required int eid,
+    required LocationSnapshot? loc,
+    required String homeLabel,
+  }) async {
+    if (loc == null) return null;
+    double homeLat;
+    double homeLng;
+    String endLabel;
+    final geo = await ChildGeofenceApi.firstHomePoint(eid);
+    if (geo != null) {
+      homeLat = geo.latitude;
+      homeLng = geo.longitude;
+      endLabel = geo.name == null || geo.name!.isEmpty ? homeLabel : geo.name!;
+    } else {
+      homeLat = loc.latitude;
+      homeLng = loc.longitude;
+      endLabel = '家（无围栏，参考当前点）';
+    }
+    final distanceKm = _calculateDistanceKm(loc.latitude, loc.longitude, homeLat, homeLng);
+    final minutes = (distanceKm * 12).clamp(2, 90).round();
+    final routePoints = <RoutePoint>[
+      RoutePoint(latitude: loc.latitude, longitude: loc.longitude, label: '老人当前位置'),
+      RoutePoint(
+        latitude: (loc.latitude + homeLat) / 2,
+        longitude: (loc.longitude + homeLng) / 2,
+        label: '参考路径',
+      ),
+      RoutePoint(latitude: homeLat, longitude: homeLng, label: endLabel),
     ];
-    final statusText = distanceKm < 0.15 ? '老人已接近家中，可重点查看到家状态' : '当前展示从老人位置返回家中的模拟导航路线';
+    final statusText = distanceKm < 0.1 ? '已接近家围栏中心/参考点' : '直线参考距离（非导航引擎规划）';
     return NavigationRouteSnapshot(
       startLabel: '老人当前位置',
-      endLabel: _homeLabel,
+      endLabel: endLabel,
       distanceKm: distanceKm,
       estimatedMinutes: minutes,
       statusText: statusText,
@@ -155,15 +234,43 @@ class _ChildMainPageState extends State<ChildMainPage> {
     return double.parse((lat + lng).toStringAsFixed(2));
   }
 
-  void _resolveHelp(String id) {
-    setState(() {
-      for (final r in _helpRecords) {
-        if (r.id == id) r.status = HelpRequestStatus.resolved;
+  void _logout(BuildContext context) {
+    AuthSession.clear();
+    Navigator.of(context).pushNamedAndRemoveUntil('/login', (r) => false);
+  }
+
+  Future<void> _onResolveHelp(String alertId) async {
+    final id = int.tryParse(alertId);
+    if (id == null) return;
+    try {
+      await ChildEmergencyAlertsApi.handle(alertId: id, action: 'handled', remark: '');
+      await _load();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('已标记为已处理')),
+        );
       }
-    });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('操作失败，请稍后重试')),
+        );
+      }
+    }
   }
 
   static const _titles = ['首页总览', '医疗管理', '提醒', '安全监护', '设置'];
+
+  BoundElder? get _currentElder {
+    final id = _selectedElderId;
+    if (_elders.isEmpty) return null;
+    if (id != null) {
+      for (final e in _elders) {
+        if (e.id == id) return e;
+      }
+    }
+    return _elders.first;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -171,6 +278,41 @@ class _ChildMainPageState extends State<ChildMainPage> {
       appBar: AppBar(
         title: Text(_titles[_navIndex]),
         actions: [
+          if (_elders.length > 1)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  value: _selectedElderId != null && _elders.any((e) => e.id == _selectedElderId) ? _selectedElderId : null,
+                  hint: const Text('选老人', style: TextStyle(fontSize: 14, color: Colors.white70)),
+                  dropdownColor: Theme.of(context).colorScheme.primaryContainer,
+                  items: _elders
+                      .map(
+                        (e) => DropdownMenuItem(
+                          value: e.id,
+                          child: Text(e.displayName, overflow: TextOverflow.ellipsis),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (v) {
+                    if (v == null) return;
+                    setState(() => _selectedElderId = v);
+                    _load();
+                  },
+                ),
+              ),
+            ),
+          IconButton(
+            onPressed: _loading ? null : _load,
+            icon: _loading
+                ? const SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.refresh),
+            tooltip: '刷新',
+          ),
           IconButton(
             onPressed: () => _logout(context),
             icon: const Icon(Icons.logout),
@@ -178,37 +320,35 @@ class _ChildMainPageState extends State<ChildMainPage> {
           ),
         ],
       ),
-      body: IndexedStack(
-        index: _navIndex,
-        children: [
-          ChildOverviewTab(
-            elders: _elders,
-            location: _location,
-            activity: _activity,
-            helpRecords: _helpRecords,
-          ),
-          ChildMedicalTab(elders: _elders),
-          ChildReminderTab(elders: _elders),
-          ChildSafetyTab(
-            location: _location,
-            track: _track.reversed.toList(),
-            route: _route,
-            activity: _activity,
-            helpRecords: _helpRecords,
-            onRefreshLocation: _refreshLocationMock,
-            onResolveHelp: _resolveHelp,
-          ),
-          ChildSettingsTab(
-            elders: _elders,
-            contacts: _contacts,
-            onAddElder: _addElder,
-            onRemoveElder: _removeElder,
-            onAddContact: _addContact,
-            onUpdateContact: _updateContact,
-            onRemoveContact: _removeContact,
-          ),
-        ],
-      ),
+      body: _loading && _elders.isEmpty
+          ? const Center(child: CircularProgressIndicator())
+          : IndexedStack(
+              index: _navIndex,
+              children: [
+                ChildOverviewTab(
+                  elders: _elders,
+                  currentElder: _currentElder,
+                  location: _location,
+                  activity: _activity,
+                  helpRecords: _helpRecords,
+                ),
+                ChildMedicalTab(elders: _elders),
+                ChildReminderTab(elders: _elders),
+                ChildSafetyTab(
+                  location: _location,
+                  track: _track,
+                  route: _route,
+                  activity: _activity,
+                  helpRecords: _helpRecords,
+                  onRefreshLocation: _load,
+                  onResolveHelp: _onResolveHelp,
+                ),
+                ChildSettingsTab(
+                  elders: _elders,
+                  onEldersChanged: _load,
+                ),
+              ],
+            ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _navIndex,
         onDestinationSelected: (i) => setState(() => _navIndex = i),
@@ -221,12 +361,5 @@ class _ChildMainPageState extends State<ChildMainPage> {
         ],
       ),
     );
-  }
-}
-
-extension on List<LocationTrackPoint> {
-  List<LocationTrackPoint> takeLast(int count) {
-    if (length <= count) return this;
-    return sublist(length - count);
   }
 }
