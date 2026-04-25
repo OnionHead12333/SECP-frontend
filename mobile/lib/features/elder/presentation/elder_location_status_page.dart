@@ -96,6 +96,24 @@ class _ElderLocationStatusPageState extends State<ElderLocationStatusPage> {
     if (mounted) setState(() => _track = track);
   }
 
+  String _guardModeText(String? mode) {
+    switch (mode) {
+      case 'background':
+        return '后台守护';
+      case 'foreground':
+        return '前台定位';
+      case 'off':
+        return '关闭';
+      default:
+        return '-';
+    }
+  }
+
+  String _formatDateTime(DateTime? value) {
+    if (value == null) return '-';
+    return '${value.month}/${value.day} ${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final latest = _state.latestPoint ?? (_track.isEmpty ? null : _track.first);
@@ -114,7 +132,7 @@ class _ElderLocationStatusPageState extends State<ElderLocationStatusPage> {
                   const SizedBox(height: 8),
                   Text(!ready ? '最近状态：待开启守护轨迹' : latest == null ? '最近状态：等待首次定位' : latest.isHome ? '最近状态：家附近' : '最近状态：外出', style: const TextStyle(fontWeight: FontWeight.w700)),
                   const SizedBox(height: 8),
-                  Text('当前先按“树莓派蓝牙断开、老人处于户外”这个场景来跑高德定位，并把定位权限状态与轨迹上传到后端老人端接口。', style: const TextStyle(color: Color(0xFF475569), height: 1.6)),
+                  const Text('当前先按“树莓派蓝牙断开、老人处于户外”这个场景来跑高德定位，并把定位权限状态与轨迹上传到后端老人端接口。', style: TextStyle(color: Color(0xFF475569), height: 1.6)),
                   const SizedBox(height: 8),
                   Text(_state.uploadStatusText, style: const TextStyle(color: Color(0xFF0F766E), height: 1.6)),
                   if (_state.lastError != null) ...[
@@ -126,18 +144,33 @@ class _ElderLocationStatusPageState extends State<ElderLocationStatusPage> {
                 _Card(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   const Text('权限与状态', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
                   const SizedBox(height: 12),
-                  _InfoRow(title: '运行场景', value: '树莓派蓝牙断开 / 户外高德定位', ok: true),
+                  const _InfoRow(title: '运行场景', value: '树莓派蓝牙断开 / 户外高德定位', ok: true),
                   const SizedBox(height: 10),
                   _InfoRow(title: '定位权限', value: _state.permissionGranted ? '已就绪' : '未授权', ok: _state.permissionGranted),
                   const SizedBox(height: 10),
+                  _InfoRow(title: '后台定位权限', value: _state.backgroundPermissionGranted ? '已授权' : '未授权', ok: _state.backgroundPermissionGranted),
+                  const SizedBox(height: 10),
                   _InfoRow(title: '定位服务', value: _state.serviceEnabled ? '已开启' : '未开启', ok: _state.serviceEnabled),
                   const SizedBox(height: 10),
-                  _InfoRow(title: '上传内容', value: '户外经纬度 + 时间 + 来源', ok: true),
+                  _InfoRow(title: '守护开关', value: _state.guardSetting?.enabled == true || _state.autoUploadEnabled ? '已开启' : '未开启', ok: _state.guardSetting?.enabled == true || _state.autoUploadEnabled),
                   const SizedBox(height: 10),
-                  _InfoRow(title: '后端接口', value: '/v1/elder/location-permissions 与 /location-tracks', ok: true),
+                  _InfoRow(title: '守护模式', value: _guardModeText(_state.guardSetting?.mode), ok: _state.guardSetting?.enabled == true || _state.autoUploadEnabled),
+                  const SizedBox(height: 10),
+                  _InfoRow(title: '最近上传', value: _formatDateTime(_state.guardSetting?.lastUploadAt), ok: _state.guardSetting?.lastUploadAt != null),
+                  const SizedBox(height: 10),
+                  const _InfoRow(title: '上传内容', value: '户外经纬度 + 时间 + 来源', ok: true),
+                  const SizedBox(height: 10),
+                  const _InfoRow(title: '后端接口', value: '/v1/elder/location-guard 与 /location-tracks', ok: true),
                   if (_error != null) ...[const SizedBox(height: 12), Text(_error!, style: const TextStyle(color: Color(0xFFB91C1C)))],
                   const SizedBox(height: 14),
-                  FilledButton.icon(onPressed: ready || _requesting ? null : _requestPermission, icon: Icon(ready ? Icons.check_circle : Icons.route), label: Text(_requesting ? '切换中...' : (ready ? '轨迹采集已可用' : '启动守护轨迹测试'))),
+                  if (_state.autoUploadEnabled)
+                    FilledButton.icon(onPressed: _requesting ? null : () async {
+                      setState(() => _requesting = true);
+                      await ElderLocationService.stopAutoUpload();
+                      if (mounted) setState(() => _requesting = false);
+                    }, icon: const Icon(Icons.pause_circle), label: Text(_requesting ? '处理中...' : '关闭定位守护'))
+                  else
+                    FilledButton.icon(onPressed: _requesting ? null : _requestPermission, icon: Icon(ready ? Icons.play_circle : Icons.route), label: Text(_requesting ? '切换中...' : (ready ? '开启定位守护' : '启动守护轨迹测试'))),
                 ])),
                 const SizedBox(height: 16),
                 _Card(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
