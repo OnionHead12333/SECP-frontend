@@ -18,7 +18,7 @@ String describeChildApiError(Object? error) {
           '可能原因：当前不是子女角色、或该老人与账号无 family 绑定。';
     }
     if (sc == 404) {
-      return '未找到（HTTP 404）\n请确认老人档案 ID 正确且后端存在对应资源。';
+      return '未找到（HTTP 404）\n请确认已绑定该老人，且后端存在对应数据。';
     }
     if (sc != null && sc >= 500) {
       return '服务器错误（HTTP $sc）\n请稍后重试或查看后端日志。';

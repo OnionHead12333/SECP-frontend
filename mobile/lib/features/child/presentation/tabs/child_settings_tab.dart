@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../../data/child_api_error_text.dart';
-import '../../data/child_elder_directory_service.dart';
 import '../../data/child_emergency_contacts_api.dart';
 import '../../models/child_local_models.dart';
 
-/// 设置：老人列表（手动档案 ID + 求助记录发现）+ 紧急联系人走 `/v1/children/elders/...`。
+/// 设置：老人列表来自家庭绑定表（`/v1/child/bound-elders`）+ 紧急联系人走 `/v1/children/elders/...`。
 class ChildSettingsTab extends StatefulWidget {
   const ChildSettingsTab({
     super.key,
@@ -22,68 +21,6 @@ class ChildSettingsTab extends StatefulWidget {
 
 class _ChildSettingsTabState extends State<ChildSettingsTab> {
   bool _pushDemo = true;
-
-  Future<void> _showBindElderDialog() async {
-    // 在独立 [StatefulWidget] 内创建/释放 [TextEditingController]。
-    // 在 [showDialog] 返回时立刻 dispose 会早于路由卸载完成，易触发
-    // Framework `'_dependents.isEmpty': is not true` 断言。
-    final result = await showDialog<_AddBoundElderResult?>(
-      context: context,
-      builder: (ctx) => const _AddBoundElderDialog(),
-    );
-
-    if (result == null || !mounted) return;
-    if (result.id.isEmpty || int.tryParse(result.id) == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('请填写有效数字档案 ID')));
-      return;
-    }
-    if (result.name.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('请填写显示名称')));
-      return;
-    }
-
-    await ChildElderDirectoryService.saveManualElder(
-      elderId: result.id,
-      displayName: result.name,
-      hint: result.hint,
-    );
-    if (!mounted) return;
-    // 等当前帧/弹层卸载后再刷新整页，避免与父级 [setState] 抢同一帧
-    await Future<void>.delayed(Duration.zero);
-    if (!mounted) return;
-    await widget.onEldersChanged();
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('已保存，列表已更新')));
-    }
-  }
-
-  Future<void> _confirmUnbindOrHide(BoundElder e) async {
-    final yes = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('从本机列表移除'),
-        content: Text(
-          e.accountHint == '来自求助记录'
-              ? '此老人由求助记录发现，将仅从本机隐藏；不影响后端绑定关系。'
-              : '将删除您手动添加的该老人项。',
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('确定')),
-        ],
-      ),
-    );
-    if (yes != true || !mounted) return;
-    if (e.accountHint == '来自求助记录') {
-      await ChildElderDirectoryService.hideElder(e.id);
-    } else {
-      await ChildElderDirectoryService.removeManualElder(e.id);
-    }
-    if (!mounted) return;
-    await Future<void>.delayed(Duration.zero);
-    if (!mounted) return;
-    await widget.onEldersChanged();
-  }
 
   int _defaultPriorityForNewContact(List<EmergencyContact> list) {
     if (list.isEmpty) return 1;
@@ -187,7 +124,7 @@ class _ChildSettingsTabState extends State<ChildSettingsTab> {
     final eid = int.tryParse(e.id);
     if (eid == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('老人档案 ID 无效，请重新添加数字 ID')),
+        const SnackBar(content: Text('该老人信息异常，无法管理紧急联系人，请稍后再试')),
       );
       return;
     }
@@ -373,7 +310,7 @@ class _ChildSettingsTabState extends State<ChildSettingsTab> {
         Text('老人', style: Theme.of(context).textTheme.titleSmall?.copyWith(color: scheme.onSurfaceVariant)),
         const SizedBox(height: 4),
         Text(
-          '老人列表 = 本机保存的档案 ID + 求助记录中自动出现的已绑定老人',
+          '老人列表与账号注册时登记的家庭绑定一致，由服务端同步，不可在本机手填或隐藏。',
           style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
         ),
         const SizedBox(height: 8),
@@ -388,12 +325,9 @@ class _ChildSettingsTabState extends State<ChildSettingsTab> {
                     contentPadding: const EdgeInsets.fromLTRB(12, 8, 4, 4),
                     leading: const CircleAvatar(child: Icon(Icons.elderly)),
                     title: Text(e.displayName),
-                    subtitle: Text(e.accountHint == null || e.accountHint!.isEmpty ? '档案 ID：${e.id}' : '${e.id} · ${e.accountHint}'),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.link_off_outlined),
-                      tooltip: '移除',
-                      onPressed: () => _confirmUnbindOrHide(e),
-                    ),
+                    subtitle: (e.accountHint == null || e.accountHint!.isEmpty)
+                        ? null
+                        : Text(e.accountHint!),
                   ),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
@@ -408,15 +342,7 @@ class _ChildSettingsTabState extends State<ChildSettingsTab> {
             );
           },
         ),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: FilledButton.tonalIcon(
-            onPressed: _showBindElderDialog,
-            icon: const Icon(Icons.person_add_alt_1),
-            label: const Text('添加老人档案 ID'),
-          ),
-        ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 8),
         Text('其他', style: Theme.of(context).textTheme.titleSmall?.copyWith(color: scheme.onSurfaceVariant)),
         const SizedBox(height: 8),
         Card(
@@ -583,104 +509,6 @@ class _EmergencyContactEditorDialogState extends State<_EmergencyContactEditorDi
       actions: [
         TextButton(onPressed: () => Navigator.pop(context), child: const Text('取消')),
         FilledButton(onPressed: _submit, child: const Text('保存')),
-      ],
-    );
-  }
-}
-
-class _AddBoundElderResult {
-  const _AddBoundElderResult({required this.id, required this.name, this.hint});
-
-  final String id;
-  final String name;
-  final String? hint;
-}
-
-class _AddBoundElderDialog extends StatefulWidget {
-  const _AddBoundElderDialog();
-
-  @override
-  State<_AddBoundElderDialog> createState() => _AddBoundElderDialogState();
-}
-
-class _AddBoundElderDialogState extends State<_AddBoundElderDialog> {
-  late final TextEditingController _idCtrl;
-  late final TextEditingController _nameCtrl;
-  late final TextEditingController _hintCtrl;
-
-  @override
-  void initState() {
-    super.initState();
-    _idCtrl = TextEditingController();
-    _nameCtrl = TextEditingController();
-    _hintCtrl = TextEditingController();
-  }
-
-  @override
-  void dispose() {
-    _idCtrl.dispose();
-    _nameCtrl.dispose();
-    _hintCtrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('添加关注老人'),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('填写老人档案 ID（与后台 elder_profile_id 一致，数字）', style: TextStyle(fontSize: 12)),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _idCtrl,
-              decoration: const InputDecoration(
-                labelText: '老人档案 ID',
-                hintText: '数字',
-                border: OutlineInputBorder(),
-              ),
-              keyboardType: TextInputType.number,
-              textInputAction: TextInputAction.next,
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _nameCtrl,
-              decoration: const InputDecoration(
-                labelText: '显示名称',
-                hintText: '如：张奶奶',
-                border: OutlineInputBorder(),
-              ),
-              textInputAction: TextInputAction.next,
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _hintCtrl,
-              decoration: const InputDecoration(
-                labelText: '备注（选填）',
-                border: OutlineInputBorder(),
-              ),
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('取消')),
-        FilledButton(
-          onPressed: () {
-            final hint = _hintCtrl.text.trim();
-            Navigator.pop(
-              context,
-              _AddBoundElderResult(
-                id: _idCtrl.text.trim(),
-                name: _nameCtrl.text.trim(),
-                hint: hint.isEmpty ? null : hint,
-              ),
-            );
-          },
-          child: const Text('保存'),
-        ),
       ],
     );
   }

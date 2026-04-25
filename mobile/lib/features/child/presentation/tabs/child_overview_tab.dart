@@ -51,7 +51,7 @@ class ChildOverviewTab extends StatelessWidget {
                     Expanded(
                       child: Text(
                         elders.isEmpty
-                            ? '请先在「设置」中添加老人档案 ID，或从求助记录中自动出现已绑定老人'
+                            ? '请先在「设置」中通过家庭绑定确认已关联的老人'
                             : '当前：$elderName · 状态以后端活动/定位为准',
                         style: Theme.of(context).textTheme.bodyMedium,
                       ),
@@ -106,7 +106,7 @@ class ChildOverviewTab extends StatelessWidget {
                 Text('当前定位 / 活动状态', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
                 const SizedBox(height: 10),
                 if (loc == null)
-                  Text('暂无定位（老人端未上传轨迹或老人档案 ID 无效）', style: Theme.of(context).textTheme.bodyMedium)
+                  Text('暂无定位（老人端未上传轨迹或网络异常）', style: Theme.of(context).textTheme.bodyMedium)
                 else ...[
                   ChildLocationMap(
                     key: ValueKey(
