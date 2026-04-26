@@ -1,6 +1,27 @@
 /// 与后端 [application.yml] 对齐：`server.servlet.context-path: /api`
-/// 模拟器访问本机后端请用 10.0.2.2；真机请改为电脑局域网 IP。
-/// 构建示例：`flutter run --dart-define=API_BASE=http://192.168.1.10:8080/api`
+///
+/// 常用启动命令，后面可以直接复制：
+///
+/// 1. Android 模拟器访问电脑本机后端：
+/// `flutter run --dart-define=API_BASE=http://10.0.2.2:8080/api`
+///
+/// 2. Android 真机 + 电脑 WLAN 当前校园/局域网 IP：
+/// `flutter run --dart-define=API_BASE=http://10.61.195.102:8080/api`
+///
+/// 3. Android 真机 + 手机热点时电脑旧 IP 示例：
+/// `flutter run --dart-define=API_BASE=http://172.20.10.3:8080/api`
+///
+/// 4. Android 真机 + Windows 移动热点/共享网络网卡：
+/// `flutter run --dart-define=API_BASE=http://192.168.137.1:8080/api`
+///
+/// 6. Flutter Windows 桌面端或电脑浏览器访问本机后端：
+/// `flutter run -d windows --dart-define=API_BASE=http://localhost:8080/api`
+///
+/// 选择规则：
+/// - 跑 Android 模拟器：用 `10.0.2.2`。
+/// - 跑 USB 真机但后端在电脑：用电脑当前 WLAN IPv4，例如 `10.61.195.102`。
+/// - 电脑连接手机热点后 IP 会变，重新执行 `ipconfig`，看 WLAN 的 IPv4。
+/// - 后端配置了 `/api` 上下文路径，所以这里保留 `/api`。
 class AppConfig {
   AppConfig._();
 
@@ -11,7 +32,7 @@ class AppConfig {
 
   static const String amapAndroidKey = String.fromEnvironment(
     'AMAP_ANDROID_KEY',
-    defaultValue: '84f7b71fbfea73f06252e2b06685934c',
+    defaultValue: '55f733fae7a326ac12009b17dde876a4',
   );
 
   static const String amapIosKey = String.fromEnvironment(
