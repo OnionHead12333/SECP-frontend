@@ -93,6 +93,8 @@ class _LoginPageState extends State<LoginPage> {
         phone: result.phone ?? username,
         claimed: result.claimed ?? false,
         familyCount: result.familyCount ?? 0,
+        gender: result.gender,
+        birthday: result.birthday,
       );
       if (!mounted) return;
       Navigator.of(context).pushNamedAndRemoveUntil(ElderModuleRoutes.elderHome, (r) => false);

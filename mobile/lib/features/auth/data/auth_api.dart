@@ -8,6 +8,8 @@ final class LoginResult {
     this.name,
     this.phone,
     this.nickname,
+    this.gender,
+    this.birthday,
     this.claimed,
     this.familyCount,
   });
@@ -17,6 +19,8 @@ final class LoginResult {
   final String? name;
   final String? phone;
   final String? nickname;
+  final String? gender;
+  final String? birthday;
   final bool? claimed;
   final int? familyCount;
 }
@@ -73,6 +77,8 @@ final class AuthApi {
       name: data['name'] as String?,
       phone: data['phone'] as String?,
       nickname: data['nickname'] as String?,
+      gender: data['gender'] as String?,
+      birthday: data['birthday'] as String?,
       claimed: data['claimed'] as bool?,
       familyCount: data['familyCount'] as int?,
     );
