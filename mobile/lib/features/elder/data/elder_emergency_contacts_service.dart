@@ -12,7 +12,7 @@ final class ElderEmergencyContactsService {
       final contacts = await ElderMockAuthService.emergencyContactsForPhone(elderPhone);
       return contacts.map(_fromMock).toList();
     }
-    return ElderEmergencyContactsApi.fetchContacts(elderPhone: elderPhone);
+    return ElderEmergencyContactsApi.fetchContactsForCurrentElder();
   }
 
   static Future<List<ElderEmergencyContact>> addContact({

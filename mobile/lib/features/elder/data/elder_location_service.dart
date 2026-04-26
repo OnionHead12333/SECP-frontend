@@ -4,9 +4,11 @@ import 'package:amap_flutter_location/amap_flutter_location.dart';
 import 'package:amap_flutter_location/amap_location_option.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../../core/config/app_config.dart';
+import '../models/elder_location_guard_setting.dart';
 import '../models/elder_location_point.dart';
 import 'elder_location_api.dart';
 import 'elder_location_mock_service.dart';
@@ -52,16 +54,30 @@ final class ElderLocationService {
     }
 
     _ensureAmapConfigured();
+    final guard = await _fetchGuardSettingSafely();
     final permissionGranted = await _ensurePermission();
-    final serviceEnabled = await Permission.location.serviceStatus.isEnabled;
-    final latest = await _readCurrentPoint(saveToTrack: _track.isEmpty);
-    _latest = latest;
-    final state = ElderLocationState(
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    final backgroundGranted = (await Permission.locationAlways.status).isGranted;
+    final syncedGuard = await _syncGuardPermissionSnapshot(
       permissionGranted: permissionGranted,
       serviceEnabled: serviceEnabled,
-      autoUploadEnabled: permissionGranted && serviceEnabled,
+      backgroundGranted: backgroundGranted,
+    );
+    final effectiveGuard = syncedGuard ?? guard;
+    final shouldRestore = effectiveGuard?.enabled == true && permissionGranted && serviceEnabled;
+    _started = shouldRestore;
+    final latest = permissionGranted && serviceEnabled ? await _readCurrentPoint(saveToTrack: _track.isEmpty) : null;
+    _latest = latest;
+    if (shouldRestore) _schedule(phone, latest);
+    final state = ElderLocationState(
+      permissionGranted: permissionGranted,
+      backgroundPermissionGranted: backgroundGranted,
+      serviceEnabled: serviceEnabled,
+      autoUploadEnabled: shouldRestore,
+      guardSetting: effectiveGuard,
       latestPoint: latest,
-      uploadStatusText: latest == null ? '等待首次定位' : '定位已获取，等待后端联调',
+      uploadStatusText: _restoreStatusText(effectiveGuard, shouldRestore, latest),
+      lastError: effectiveGuard?.lastError,
     );
     _emit(state);
     return state;
@@ -82,7 +98,6 @@ final class ElderLocationService {
   }
 
   static Future<void> startAutoUpload(String phone) async {
-    if (_started) return;
     if (AppConfig.useMockLocation) {
       _started = true;
       _emit(_currentState.copyWith(autoUploadEnabled: true, permissionGranted: true, serviceEnabled: true, usingMock: true, uploadStatusText: '蓝牙默认断开，已切到高德模拟导航轨迹', clearLastError: true));
@@ -91,11 +106,61 @@ final class ElderLocationService {
       return;
     }
 
+    // 已开启时：再次点击可重试「立即上传+排程」，避免上次失败后 _started 为 true 却 early-return 像「没反应」
+    if (_started) {
+      try {
+        await uploadNow(phone);
+        _schedule(phone, _latest);
+      } catch (e) {
+        rethrow;
+      }
+      return;
+    }
+
     final permissionGranted = await _ensurePermission();
-    final serviceEnabled = await Permission.location.serviceStatus.isEnabled;
-    if (!permissionGranted || !serviceEnabled) return;
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    final backgroundGranted = (await Permission.locationAlways.status).isGranted;
+    if (!permissionGranted || !serviceEnabled) {
+      throw Exception('定位权限未就绪，请先授权并开启系统定位服务');
+    }
+    ElderLocationGuardSetting? guard;
+    try {
+      guard = await ElderLocationApi.startGuard(
+        mode: backgroundGranted ? 'background' : 'foreground',
+        intervalSeconds: _normalInterval.inSeconds,
+        outsideIntervalSeconds: _outsideInterval.inSeconds,
+        foregroundGranted: permissionGranted && serviceEnabled,
+        backgroundGranted: backgroundGranted,
+      );
+    } catch (e) {
+      if (kDebugMode) debugPrint('startGuard API failed: $e');
+    }
+    // 须等首次「定位+上传」成功再置 _started，否则失败后会永久命中上方 _started 分支却立刻 return，表现为点击无效
+    _emit(_currentState.copyWith(
+      guardSetting: guard,
+      autoUploadEnabled: false,
+      backgroundPermissionGranted: backgroundGranted,
+      uploadStatusText: '正在获取首次定位并上传，请稍候…',
+      clearLastError: true,
+    ));
+    try {
+      await uploadNow(phone);
+    } catch (e) {
+      _emit(_currentState.copyWith(
+        autoUploadEnabled: false,
+        uploadStatusText: '启动失败，可再次点击重试',
+        lastError: e.toString().replaceFirst('Exception: ', ''),
+      ));
+      rethrow;
+    }
     _started = true;
-    await uploadNow(phone);
+    _emit(_currentState.copyWith(
+      guardSetting: guard,
+      autoUploadEnabled: true,
+      backgroundPermissionGranted: backgroundGranted,
+      uploadStatusText: '定位守护已开启，正按设定间隔上传',
+      clearLastError: true,
+    ));
     _schedule(phone, _latest);
   }
 
@@ -103,7 +168,15 @@ final class ElderLocationService {
     _timer?.cancel();
     _timer = null;
     _started = false;
-    _emit(_currentState.copyWith(autoUploadEnabled: false, isUploading: false, uploadStatusText: '自动采集已暂停'));
+    ElderLocationGuardSetting? guard;
+    if (!AppConfig.useMockLocation) {
+      try {
+        guard = await ElderLocationApi.stopGuard();
+      } catch (e) {
+        if (kDebugMode) debugPrint('Stop location guard failed: $e');
+      }
+    }
+    _emit(_currentState.copyWith(autoUploadEnabled: false, isUploading: false, guardSetting: guard, uploadStatusText: '自动采集已暂停'));
   }
 
   static Future<void> captureTestPoint(String phone) async {
@@ -112,7 +185,7 @@ final class ElderLocationService {
       return;
     }
     final permissionGranted = await _ensurePermission();
-    final serviceEnabled = await Permission.location.serviceStatus.isEnabled;
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!permissionGranted || !serviceEnabled) {
       throw Exception('请先开启定位权限和系统定位服务');
     }
@@ -138,17 +211,23 @@ final class ElderLocationService {
       if (point == null) throw Exception('当前无法获取高德定位，请检查 Key / 包名 / SHA1 / 系统定位开关');
       try {
         await ElderLocationApi.uploadLocation(latitude: point.latitude, longitude: point.longitude, locationType: point.locationType, source: point.source, recordedAt: point.recordedAt);
+        final guard = await _fetchGuardSettingSafely();
         _latest = point.copyWith(uploaded: true);
         _replaceLastPoint(_latest!);
-        _emit(_currentState.copyWith(isUploading: false, latestPoint: _latest, autoUploadEnabled: true, permissionGranted: true, serviceEnabled: true, uploadStatusText: '定位已获取，上传成功', clearLastError: true));
-      } on DioException catch (_) {
+        _emit(_currentState.copyWith(isUploading: false, latestPoint: _latest, guardSetting: guard, autoUploadEnabled: _started, permissionGranted: true, serviceEnabled: true, uploadStatusText: '定位已获取，上传成功', clearLastError: true));
+      } on DioException catch (e) {
+        final errorMessage = e.message ?? '后端定位接口请求失败';
+        await _reportGuardErrorSafely(errorMessage);
         _latest = point.copyWith(uploaded: false);
         _replaceLastPoint(_latest!);
-        _emit(_currentState.copyWith(isUploading: false, latestPoint: _latest, autoUploadEnabled: true, permissionGranted: true, serviceEnabled: true, uploadStatusText: '定位已获取，等待后端接口', lastError: '后端接口暂未联通，轨迹已保存在本机页面供测试查看'));
+        _emit(_currentState.copyWith(isUploading: false, latestPoint: _latest, autoUploadEnabled: true, permissionGranted: true, serviceEnabled: true, uploadStatusText: '定位上传失败', lastError: errorMessage));
+        rethrow;
       }
       if (_started) _schedule(phone, _latest);
     } catch (e) {
-      _emit(_currentState.copyWith(isUploading: false, uploadStatusText: '定位获取失败', lastError: e.toString().replaceFirst('Exception: ', '')));
+      final errorMessage = e.toString().replaceFirst('Exception: ', '');
+      if (!AppConfig.useMockLocation) await _reportGuardErrorSafely(errorMessage);
+      _emit(_currentState.copyWith(isUploading: false, uploadStatusText: '定位获取失败', lastError: errorMessage));
       rethrow;
     } finally {
       _uploading = false;
@@ -160,9 +239,22 @@ final class ElderLocationService {
       _emit(_currentState.copyWith(permissionGranted: true, serviceEnabled: true, usingMock: true, uploadStatusText: '当前为前端测试模式，无需真机定位授权', clearLastError: true));
       return true;
     }
+    await _requestNotificationPermissionIfSupported();
+    await _requestMicrophonePermissionIfSupported();
     final granted = await _ensurePermission(forceRequest: true);
-    final enabled = await Permission.location.serviceStatus.isEnabled;
-    _emit(_currentState.copyWith(permissionGranted: granted, serviceEnabled: enabled));
+    final enabled = await Geolocator.isLocationServiceEnabled();
+    var backgroundGranted = (await Permission.locationAlways.status).isGranted;
+    if (granted && !backgroundGranted) {
+      await Permission.locationAlways.request();
+      backgroundGranted = (await Permission.locationAlways.status).isGranted;
+    }
+    final guard = await _syncGuardPermissionSnapshot(
+      permissionGranted: granted,
+      serviceEnabled: enabled,
+      backgroundGranted: backgroundGranted,
+    );
+    await _syncPermissionSnapshot(permissionGranted: granted, serviceEnabled: enabled);
+    _emit(_currentState.copyWith(permissionGranted: granted, backgroundPermissionGranted: backgroundGranted, serviceEnabled: enabled, guardSetting: guard));
     return granted;
   }
 
@@ -183,6 +275,61 @@ final class ElderLocationService {
     AMapFlutterLocation.updatePrivacyShow(true, true);
     AMapFlutterLocation.updatePrivacyAgree(true);
     _amapConfigured = true;
+  }
+
+  static Future<ElderLocationGuardSetting?> _fetchGuardSettingSafely() async {
+    try {
+      return await ElderLocationApi.fetchGuardSetting();
+    } catch (e) {
+      if (kDebugMode) debugPrint('Fetch location guard failed: $e');
+      return null;
+    }
+  }
+
+  static Future<ElderLocationGuardSetting?> _syncGuardPermissionSnapshot({
+    required bool permissionGranted,
+    required bool serviceEnabled,
+    required bool backgroundGranted,
+  }) async {
+    try {
+      return await ElderLocationApi.syncGuardPermissions(
+        foregroundGranted: permissionGranted && serviceEnabled,
+        backgroundGranted: backgroundGranted,
+      );
+    } catch (e) {
+      if (kDebugMode) debugPrint('Sync location guard permissions failed: $e');
+      return null;
+    }
+  }
+
+  static Future<void> _reportGuardErrorSafely(String message) async {
+    try {
+      await ElderLocationApi.reportGuardError(message);
+    } catch (e) {
+      if (kDebugMode) debugPrint('Report location guard error failed: $e');
+    }
+  }
+
+  static String _restoreStatusText(ElderLocationGuardSetting? guard, bool restored, ElderLocationPoint? latest) {
+    if (guard == null) return latest == null ? '等待首次定位' : '定位已获取，等待后端联调';
+    if (!guard.enabled) return '定位守护未开启';
+    if (!restored) return '服务端记录为已开启，但当前权限或系统定位未就绪';
+    return '已从服务端恢复定位守护状态';
+  }
+
+  static Future<void> _syncPermissionSnapshot({
+    required bool permissionGranted,
+    required bool serviceEnabled,
+  }) async {
+    try {
+      await ElderLocationApi.updatePermission(
+        foregroundGranted: permissionGranted && serviceEnabled,
+        backgroundGranted: (await Permission.locationAlways.status).isGranted,
+        permissionUpdatedAt: DateTime.now(),
+      );
+    } catch (e) {
+      if (kDebugMode) debugPrint('Sync location permission failed: $e');
+    }
   }
 
   static void _emit(ElderLocationState state) {
@@ -214,8 +361,22 @@ final class ElderLocationService {
     _track.removeRange(0, _track.length - _maxTrackPoints);
   }
 
+  static Future<void> _requestNotificationPermissionIfSupported() async {
+    final status = await Permission.notification.status;
+    if (status.isDenied || status.isRestricted || status.isLimited) {
+      await Permission.notification.request();
+    }
+  }
+
+  static Future<void> _requestMicrophonePermissionIfSupported() async {
+    final status = await Permission.microphone.status;
+    if (status.isDenied || status.isRestricted || status.isLimited) {
+      await Permission.microphone.request();
+    }
+  }
+
   static Future<bool> _ensurePermission({bool forceRequest = false}) async {
-    final serviceEnabled = await Permission.location.serviceStatus.isEnabled;
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) return false;
 
     final status = await Permission.location.status;
@@ -223,20 +384,17 @@ final class ElderLocationService {
       await Permission.locationAlways.request();
       return true;
     }
-    if (!forceRequest && status.isDenied) {
-      final requested = await Permission.location.request();
-      if (requested.isGranted) {
-        await Permission.locationAlways.request();
-        return true;
-      }
+    if (status.isPermanentlyDenied) {
+      if (forceRequest) await openAppSettings();
       return false;
     }
-    if (forceRequest) {
+    if (status.isDenied || forceRequest) {
       final requested = await Permission.location.request();
       if (requested.isGranted) {
         await Permission.locationAlways.request();
         return true;
       }
+      if (requested.isPermanentlyDenied && forceRequest) await openAppSettings();
       return false;
     }
     return false;
@@ -255,7 +413,13 @@ final class ElderLocationService {
       final errorCode = result['errorCode']?.toString();
       final errorInfo = result['errorInfo']?.toString();
       if (errorCode != null && errorCode != '0') {
-        completer.completeError(Exception('高德定位失败，errorCode=$errorCode${errorInfo == null || errorInfo.isEmpty ? '' : '，errorInfo=$errorInfo'}'));
+        final base = '高德定位失败，errorCode=$errorCode${errorInfo == null || errorInfo.isEmpty ? '' : '，errorInfo=$errorInfo'}';
+        final hint = errorCode == '7'
+            ? '\n\n【Key 鉴权】errorCode=7 表示当前 Key 与「包名 + 签名 SHA1」未在高德控制台匹配。'
+                '请在 console.amap.com 应用里：应用名 → Key 设置 → Android：添加包名 com.laoleme.smartcare.mobile，'
+                '并添加本次安装使用的 keystore 的 SHA1（调试/正式需分别配置）。下方 error 中的 SHA1 即当前包签名。'
+            : '';
+        completer.completeError(Exception('$base$hint'));
         return;
       }
       final latitude = (result['latitude'] as num?)?.toDouble();
@@ -297,22 +461,26 @@ final class ElderLocationService {
 }
 
 class ElderLocationState {
-  const ElderLocationState({this.permissionGranted = false, this.serviceEnabled = false, this.autoUploadEnabled = false, this.latestPoint, this.isUploading = false, this.usingMock = false, this.uploadStatusText = '待初始化', this.lastError});
+  const ElderLocationState({this.permissionGranted = false, this.backgroundPermissionGranted = false, this.serviceEnabled = false, this.autoUploadEnabled = false, this.guardSetting, this.latestPoint, this.isUploading = false, this.usingMock = false, this.uploadStatusText = '待初始化', this.lastError});
 
   final bool permissionGranted;
+  final bool backgroundPermissionGranted;
   final bool serviceEnabled;
   final bool autoUploadEnabled;
+  final ElderLocationGuardSetting? guardSetting;
   final ElderLocationPoint? latestPoint;
   final bool isUploading;
   final bool usingMock;
   final String uploadStatusText;
   final String? lastError;
 
-  ElderLocationState copyWith({bool? permissionGranted, bool? serviceEnabled, bool? autoUploadEnabled, ElderLocationPoint? latestPoint, bool clearLatestPoint = false, bool? isUploading, bool? usingMock, String? uploadStatusText, String? lastError, bool clearLastError = false}) {
+  ElderLocationState copyWith({bool? permissionGranted, bool? backgroundPermissionGranted, bool? serviceEnabled, bool? autoUploadEnabled, ElderLocationGuardSetting? guardSetting, bool clearGuardSetting = false, ElderLocationPoint? latestPoint, bool clearLatestPoint = false, bool? isUploading, bool? usingMock, String? uploadStatusText, String? lastError, bool clearLastError = false}) {
     return ElderLocationState(
       permissionGranted: permissionGranted ?? this.permissionGranted,
+      backgroundPermissionGranted: backgroundPermissionGranted ?? this.backgroundPermissionGranted,
       serviceEnabled: serviceEnabled ?? this.serviceEnabled,
       autoUploadEnabled: autoUploadEnabled ?? this.autoUploadEnabled,
+      guardSetting: clearGuardSetting ? null : (guardSetting ?? this.guardSetting),
       latestPoint: clearLatestPoint ? null : (latestPoint ?? this.latestPoint),
       isUploading: isUploading ?? this.isUploading,
       usingMock: usingMock ?? this.usingMock,

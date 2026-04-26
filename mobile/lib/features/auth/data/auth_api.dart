@@ -8,6 +8,8 @@ final class LoginResult {
     this.name,
     this.phone,
     this.nickname,
+    this.gender,
+    this.birthday,
     this.claimed,
     this.familyCount,
   });
@@ -17,8 +19,28 @@ final class LoginResult {
   final String? name;
   final String? phone;
   final String? nickname;
+  final String? gender;
+  final String? birthday;
   final bool? claimed;
   final int? familyCount;
+}
+
+final class RegisterResult {
+  const RegisterResult({
+    this.userId,
+    this.username,
+    this.role,
+    this.name,
+    this.phone,
+    this.nickname,
+  });
+
+  final int? userId;
+  final String? username;
+  final String? role;
+  final String? name;
+  final String? phone;
+  final String? nickname;
 }
 
 /// 与计划中的后端约定：POST /api/v1/auth/login、/register
@@ -55,6 +77,8 @@ final class AuthApi {
       name: data['name'] as String?,
       phone: data['phone'] as String?,
       nickname: data['nickname'] as String?,
+      gender: data['gender'] as String?,
+      birthday: data['birthday'] as String?,
       claimed: data['claimed'] as bool?,
       familyCount: data['familyCount'] as int?,
     );

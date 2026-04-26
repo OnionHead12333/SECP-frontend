@@ -9,8 +9,11 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
   cupertino_icons: ^1.0.8
   dio: ^5.7.0
+  shared_preferences: ^2.3.3
   speech_to_text: ^7.0.0
   flutter_tts: ^4.0.2
   permission_handler: ^11.3.1
@@ -23,6 +26,7 @@ dependencies:
     path: packages/amap_flutter_map
   vibration: ^3.1.8
   flutter_ringtone_player: ^4.0.0+4
+  geolocator: ^14.0.1
 
 dev_dependencies:
   flutter_test:

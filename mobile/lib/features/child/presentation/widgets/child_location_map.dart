@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/config/app_config.dart';
 
-/// 子女端地图：mock 时用自绘轨迹；真实环境用高德 [AMapWidget]。
+/// 子女端地图：mock/自绘 时用 [_OfflineAmapStyleView]；否则用高德 [AMapWidget]。
 class ChildLocationMap extends StatelessWidget {
   const ChildLocationMap({
     super.key,
@@ -16,6 +16,9 @@ class ChildLocationMap extends StatelessWidget {
     this.route = const [],
     this.height,
     this.expandInParent = false,
+    /// 为 true 时不创建 [AMapWidget]（仅自绘底图+轨迹）。子女端多 Tab 若与
+    /// [AppConfig.useMockLocation]==false 叠加，会同时出现多个高德原生子视图，易闪退。
+    this.useOfflinePainter = false,
   });
 
   final double latitude;
@@ -24,6 +27,7 @@ class ChildLocationMap extends StatelessWidget {
   final List<({double latitude, double longitude})> route;
   final double? height;
   final bool expandInParent;
+  final bool useOfflinePainter;
 
   double _defaultHeight(BuildContext context) {
     final sh = MediaQuery.sizeOf(context).height;
@@ -32,7 +36,8 @@ class ChildLocationMap extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final mapCore = AppConfig.useMockLocation
+    final useOffline = AppConfig.useMockLocation || useOfflinePainter;
+    final mapCore = useOffline
         ? _OfflineAmapStyleView(
             latitude: latitude,
             longitude: longitude,
@@ -68,8 +73,10 @@ class ChildLocationMap extends StatelessWidget {
         mapBody,
         const SizedBox(height: 6),
         Text(
-          AppConfig.useMockLocation
-              ? '当前为本地演示轨迹；联调真实定位请使用 flutter run --dart-define=USE_MOCK_LOCATION=false'
+          useOffline
+              ? (useOfflinePainter
+                  ? '子女端为稳定性使用自绘地图（不加载高德 SDK）。需原生地图请改组件策略并避免同屏多实例。'
+                  : '当前为本地演示轨迹；联调真实定位请使用 flutter run --dart-define=USE_MOCK_LOCATION=false')
               : '已使用高德地图 SDK 展示位置与轨迹。',
           style: Theme.of(context).textTheme.labelSmall?.copyWith(
                 color: Theme.of(context).colorScheme.outline,
