@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/auth/auth_session.dart';
 import '../data/elder_location_service.dart';
@@ -15,6 +16,8 @@ class ElderLocationStatusPage extends StatefulWidget {
 }
 
 class _ElderLocationStatusPageState extends State<ElderLocationStatusPage> {
+  static const String _autoGuideShownKey = 'elder_location_auto_permission_guide_shown_v1';
+
   bool _loading = true, _requesting = false, _capturing = false;
   String? _error;
   List<ElderLocationPoint> _track = const [];
@@ -49,6 +52,7 @@ class _ElderLocationStatusPageState extends State<ElderLocationStatusPage> {
         _track = track;
         _loading = false;
       });
+      unawaited(_showFirstOpenPermissionGuideIfNeeded());
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -56,6 +60,40 @@ class _ElderLocationStatusPageState extends State<ElderLocationStatusPage> {
         _loading = false;
       });
     }
+  }
+
+  Future<void> _showFirstOpenPermissionGuideIfNeeded() async {
+    final prefs = await SharedPreferences.getInstance();
+    final alreadyShown = prefs.getBool(_autoGuideShownKey) ?? false;
+    if (!mounted || alreadyShown || _state.autoUploadEnabled) return;
+    await prefs.setBool(_autoGuideShownKey, true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          title: const Text('开启定位守护权限'),
+          content: const Text(
+            '为了让子女端及时看到您的安全位置，并支持语音求助/撤回，接下来会依次申请通知、麦克风、定位权限，并尝试开启定位守护。\n\n'
+            '安卓系统不允许软件刚下载完成就自动弹权限，必须在首次打开 App 后由用户确认。后台定位、电池优化等权限在部分手机上还需要到系统设置里手动开启。',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('稍后再说'),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                unawaited(_requestPermission());
+              },
+              child: const Text('立即开启'),
+            ),
+          ],
+        ),
+      );
+    });
   }
 
   Future<void> _requestPermission() async {

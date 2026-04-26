@@ -1,11 +1,14 @@
+import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import '../../../core/auth/auth_session.dart';
 import '../data/elder_help_service.dart';
+import '../data/elder_location_service.dart';
 import '../elder_module_routes.dart';
 import '../models/elder_help_request.dart';
 import 'elder_reminder_center_tab.dart';
@@ -22,11 +25,63 @@ class ElderHomePage extends StatefulWidget {
 
 class _ElderHomePageState extends State<ElderHomePage> {
   static const int _fallbackRevokeSeconds = 10;
+  static const String _loginPermissionGuideShownKey = 'elder_login_permission_guide_shown_v1';
 
   int _index = 0;
   int? _currentAlertId;
   _HelpRequestState _helpState = _HelpRequestState.idle;
   bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(_showLoginPermissionGuideIfNeeded());
+    });
+  }
+
+  Future<void> _showLoginPermissionGuideIfNeeded() async {
+    final prefs = await SharedPreferences.getInstance();
+    final alreadyShown = prefs.getBool(_loginPermissionGuideShownKey) ?? false;
+    if (!mounted || alreadyShown) return;
+    await prefs.setBool(_loginPermissionGuideShownKey, true);
+    if (!mounted) return;
+    final shouldStart = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('开启必要权限'),
+        content: const Text(
+          '为了让子女端及时看到您的安全位置，并支持语音求助/撤回，接下来会依次申请通知、麦克风、定位权限，并尝试开启定位守护。\n\n'
+          '安卓系统不允许软件刚下载完成就自动弹权限，必须在首次登录进入 App 后由用户确认。后台定位、电池优化等权限在部分手机上还需要到系统设置里手动开启。',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('稍后再说')),
+          FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('立即开启')),
+        ],
+      ),
+    );
+    if (shouldStart != true || !mounted) return;
+    await _requestLoginPermissionsAndStartGuard();
+  }
+
+  Future<void> _requestLoginPermissionsAndStartGuard() async {
+    setState(() => _busy = true);
+    try {
+      final granted = await ElderLocationService.requestPermission();
+      if (!granted) {
+        _showMessage('未获得定位权限，请在系统设置中开启后再进入「我的-定位服务状态」重试。');
+        return;
+      }
+      await ElderLocationService.startAutoUpload(AuthSession.elderPhone ?? '');
+      _showMessage('已开启定位守护。若需退出后仍定位，请到系统设置中允许「始终定位」和后台运行。');
+    } catch (e) {
+      _showMessage(e.toString().replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
 
   Future<void> _openElderProfile() async {
     final r = await Navigator.of(context).pushNamed(ElderModuleRoutes.elderProfile);

@@ -239,9 +239,15 @@ final class ElderLocationService {
       _emit(_currentState.copyWith(permissionGranted: true, serviceEnabled: true, usingMock: true, uploadStatusText: '当前为前端测试模式，无需真机定位授权', clearLastError: true));
       return true;
     }
+    await _requestNotificationPermissionIfSupported();
+    await _requestMicrophonePermissionIfSupported();
     final granted = await _ensurePermission(forceRequest: true);
     final enabled = await Geolocator.isLocationServiceEnabled();
-    final backgroundGranted = (await Permission.locationAlways.status).isGranted;
+    var backgroundGranted = (await Permission.locationAlways.status).isGranted;
+    if (granted && !backgroundGranted) {
+      await Permission.locationAlways.request();
+      backgroundGranted = (await Permission.locationAlways.status).isGranted;
+    }
     final guard = await _syncGuardPermissionSnapshot(
       permissionGranted: granted,
       serviceEnabled: enabled,
@@ -353,6 +359,20 @@ final class ElderLocationService {
   static void _trimTrack() {
     if (_track.length <= _maxTrackPoints) return;
     _track.removeRange(0, _track.length - _maxTrackPoints);
+  }
+
+  static Future<void> _requestNotificationPermissionIfSupported() async {
+    final status = await Permission.notification.status;
+    if (status.isDenied || status.isRestricted || status.isLimited) {
+      await Permission.notification.request();
+    }
+  }
+
+  static Future<void> _requestMicrophonePermissionIfSupported() async {
+    final status = await Permission.microphone.status;
+    if (status.isDenied || status.isRestricted || status.isLimited) {
+      await Permission.microphone.request();
+    }
   }
 
   static Future<bool> _ensurePermission({bool forceRequest = false}) async {
