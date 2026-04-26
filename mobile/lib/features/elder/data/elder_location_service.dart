@@ -109,14 +109,21 @@ final class ElderLocationService {
     final permissionGranted = await _ensurePermission();
     final serviceEnabled = await Permission.location.serviceStatus.isEnabled;
     final backgroundGranted = (await Permission.locationAlways.status).isGranted;
-    if (!permissionGranted || !serviceEnabled) return;
-    final guard = await ElderLocationApi.startGuard(
-      mode: backgroundGranted ? 'background' : 'foreground',
-      intervalSeconds: _normalInterval.inSeconds,
-      outsideIntervalSeconds: _outsideInterval.inSeconds,
-      foregroundGranted: permissionGranted && serviceEnabled,
-      backgroundGranted: backgroundGranted,
-    );
+    if (!permissionGranted || !serviceEnabled) {
+      throw Exception('定位权限未就绪，请先授权并开启系统定位服务');
+    }
+    ElderLocationGuardSetting? guard;
+    try {
+      guard = await ElderLocationApi.startGuard(
+        mode: backgroundGranted ? 'background' : 'foreground',
+        intervalSeconds: _normalInterval.inSeconds,
+        outsideIntervalSeconds: _outsideInterval.inSeconds,
+        foregroundGranted: permissionGranted && serviceEnabled,
+        backgroundGranted: backgroundGranted,
+      );
+    } catch (e) {
+      if (kDebugMode) debugPrint('startGuard API failed: $e');
+    }
     _started = true;
     _emit(_currentState.copyWith(guardSetting: guard, autoUploadEnabled: true, backgroundPermissionGranted: backgroundGranted, uploadStatusText: '定位守护已开启，正在上传首次定位', clearLastError: true));
     await uploadNow(phone);
@@ -323,20 +330,17 @@ final class ElderLocationService {
       await Permission.locationAlways.request();
       return true;
     }
-    if (!forceRequest && status.isDenied) {
-      final requested = await Permission.location.request();
-      if (requested.isGranted) {
-        await Permission.locationAlways.request();
-        return true;
-      }
+    if (status.isPermanentlyDenied) {
+      if (forceRequest) await openAppSettings();
       return false;
     }
-    if (forceRequest) {
+    if (status.isDenied || forceRequest) {
       final requested = await Permission.location.request();
       if (requested.isGranted) {
         await Permission.locationAlways.request();
         return true;
       }
+      if (requested.isPermanentlyDenied && forceRequest) await openAppSettings();
       return false;
     }
     return false;
