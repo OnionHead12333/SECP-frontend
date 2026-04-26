@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/auth/auth_session.dart';
+import '../../../core/util/api_instant.dart';
 import '../data/child_elder_directory_service.dart';
 import '../data/child_emergency_alerts_api.dart';
 import '../data/child_geofence_api.dart';
@@ -174,15 +175,7 @@ class _ChildMainPageState extends State<ChildMainPage> {
   }
 
   static DateTime? _parseAnyTime(Object? o) {
-    if (o == null) return null;
-    if (o is DateTime) return o;
-    if (o is int) {
-      return DateTime.fromMillisecondsSinceEpoch(o);
-    }
-    final s = o.toString();
-    final a = DateTime.tryParse(s);
-    if (a != null) return a;
-    return null;
+    return parseApiInstantToLocal(o);
   }
 
   Future<NavigationRouteSnapshot?> _buildRouteForElder({
