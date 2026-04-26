@@ -14,6 +14,7 @@ class ElderEmergencyContactsPage extends StatefulWidget {
 class _ElderEmergencyContactsPageState extends State<ElderEmergencyContactsPage> {
   bool _loading = true;
   bool _busy = false;
+  String? _loadError;
   List<ElderEmergencyContact> _contacts = const [];
 
   @override
@@ -23,12 +24,30 @@ class _ElderEmergencyContactsPageState extends State<ElderEmergencyContactsPage>
   }
 
   Future<void> _loadContacts() async {
-    final contacts = await ElderEmergencyContactsService.fetchContacts(elderPhone: AuthSession.elderPhone ?? '');
-    if (!mounted) return;
     setState(() {
-      _contacts = contacts;
-      _loading = false;
+      _loadError = null;
+      _loading = true;
     });
+    try {
+      final contacts = await ElderEmergencyContactsService.fetchContacts(
+        elderPhone: AuthSession.elderPhone ?? '',
+      );
+      if (!mounted) return;
+      setState(() {
+        _contacts = contacts;
+        _loadError = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _contacts = const [];
+        _loadError = e.toString().replaceFirst('Exception: ', '');
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _loading = false);
+      }
+    }
   }
 
   Future<void> _openAddContact() async {
@@ -70,23 +89,45 @@ class _ElderEmergencyContactsPageState extends State<ElderEmergencyContactsPage>
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : ListView(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 96),
-              children: [
-                _Header(phone: AuthSession.elderPhone ?? '-', count: _contacts.length),
-                const SizedBox(height: 16),
-                const _TipCard(),
-                const SizedBox(height: 16),
-                if (_contacts.isEmpty)
-                  const _EmptyCard()
-                else
-                  ..._contacts.map(
-                    (contact) => Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: _ContactCard(contact: contact),
+          : RefreshIndicator(
+              onRefresh: _loadContacts,
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 96),
+                children: [
+                  if (_loadError != null) ...[
+                    Material(
+                      color: Theme.of(context).colorScheme.errorContainer,
+                      borderRadius: BorderRadius.circular(12),
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Text(
+                          '加载失败：$_loadError',
+                          style: TextStyle(color: Theme.of(context).colorScheme.onErrorContainer),
+                        ),
+                      ),
                     ),
-                  ),
-              ],
+                    const SizedBox(height: 12),
+                    FilledButton.tonal(
+                      onPressed: _loadContacts,
+                      child: const Text('重试'),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                  _Header(phone: AuthSession.elderPhone ?? '-', count: _contacts.length),
+                  const SizedBox(height: 16),
+                  const _TipCard(),
+                  const SizedBox(height: 16),
+                  if (_loadError == null && _contacts.isEmpty)
+                    const _EmptyCard()
+                  else if (_loadError == null)
+                    ..._contacts.map(
+                      (contact) => Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: _ContactCard(contact: contact),
+                      ),
+                    ),
+                ],
+              ),
             ),
     );
   }
@@ -111,7 +152,7 @@ class _Header extends StatelessWidget {
         const SizedBox(height: 10),
         Text('老人手机号：$phone'),
         const SizedBox(height: 8),
-        Text('已登记 $count 位联系人，对应数据库表 emergency_contacts，可用于 SOS 联调。', style: const TextStyle(color: Color(0xFF475569), height: 1.5)),
+        Text('已登记 $count 位联系人，求助时将按优先级通知。', style: const TextStyle(color: Color(0xFF475569), height: 1.5)),
       ]),
     );
   }
@@ -126,7 +167,7 @@ class _TipCard extends StatelessWidget {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(color: const Color(0xFFFAFAF9), borderRadius: BorderRadius.circular(20), border: Border.all(color: const Color(0xFFE7E5E4))),
       child: const Text(
-        '当前老人端保留“新增联系人”的能力，并已预留真实接口：查询 /v1/elder/emergency-contacts，新增 POST /v1/elder/emergency-contacts。数据库最终落点为 emergency_contacts。',
+        '列表由登录账号从服务端拉取。可在此新增联系人，数据保存在服务器。',
         style: TextStyle(fontSize: 16, height: 1.6, color: Color(0xFF44403C)),
       ),
     );
@@ -146,7 +187,7 @@ class _EmptyCard extends StatelessWidget {
         SizedBox(height: 12),
         Text('还没有紧急联系人', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
         SizedBox(height: 8),
-        Text('可以先新增联系人；真实接口打通后会直接写入 emergency_contacts。', textAlign: TextAlign.center, style: TextStyle(height: 1.6, color: Color(0xFF475569))),
+        Text('可点击右下角新增首位联系人。', textAlign: TextAlign.center, style: TextStyle(height: 1.6, color: Color(0xFF475569))),
       ]),
     );
   }
@@ -179,14 +220,14 @@ class _ContactCard extends StatelessWidget {
         const SizedBox(height: 6),
         Text('备注：${contact.note.isEmpty ? '暂无备注' : contact.note}', style: const TextStyle(color: Color(0xFF64748B), height: 1.5)),
         const SizedBox(height: 14),
-        const Text('老人端仅支持新增联系人，不支持编辑或删除已有联系人；真实接口落库到 emergency_contacts。', style: TextStyle(color: Color(0xFF64748B), height: 1.5)),
+        const Text('老人端仅支持新增联系人，不支持在此编辑或删除。', style: TextStyle(color: Color(0xFF64748B), height: 1.5)),
       ]),
     );
   }
 }
 
 class _ContactEditorSheet extends StatefulWidget {
-  const _ContactEditorSheet({super.key});
+  const _ContactEditorSheet();
 
   @override
   State<_ContactEditorSheet> createState() => _ContactEditorSheetState();

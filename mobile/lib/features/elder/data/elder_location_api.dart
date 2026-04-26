@@ -1,9 +1,130 @@
 import '../../../core/models/api_response.dart';
 import '../../../core/network/api_client.dart';
+import '../models/elder_location_guard_setting.dart';
 import '../models/elder_location_point.dart';
 
 final class ElderLocationApi {
   ElderLocationApi._();
+
+  static Future<ElderLocationGuardSetting> fetchGuardSetting() async {
+    final res = await ApiClient.dio.get<Map<String, dynamic>>('/v1/elder/location-guard');
+    final body = res.data;
+    if (body == null) throw Exception('空响应');
+    final api = ApiResponse.fromJson(
+      body,
+      (raw) => raw is Map<String, dynamic> ? ElderLocationGuardSetting.fromJson(raw) : null,
+    );
+    if (!api.isSuccess || api.data == null) throw Exception(api.message);
+    return api.data!;
+  }
+
+  static Future<ElderLocationGuardSetting> startGuard({
+    required String mode,
+    required int intervalSeconds,
+    required int outsideIntervalSeconds,
+    required bool foregroundGranted,
+    required bool backgroundGranted,
+    bool backgroundRequired = true,
+    bool batteryOptimizationIgnored = false,
+  }) async {
+    final res = await ApiClient.dio.post<Map<String, dynamic>>(
+      '/v1/elder/location-guard/start',
+      data: {
+        'mode': mode,
+        'intervalSeconds': intervalSeconds,
+        'outsideIntervalSeconds': outsideIntervalSeconds,
+        'backgroundRequired': backgroundRequired,
+        'foregroundGranted': foregroundGranted,
+        'backgroundGranted': backgroundGranted,
+        'batteryOptimizationIgnored': batteryOptimizationIgnored,
+      },
+    );
+    final body = res.data;
+    if (body == null) throw Exception('空响应');
+    final api = ApiResponse.fromJson(
+      body,
+      (raw) => raw is Map<String, dynamic> ? ElderLocationGuardSetting.fromJson(raw) : null,
+    );
+    if (!api.isSuccess || api.data == null) throw Exception(api.message);
+    return api.data!;
+  }
+
+  static Future<ElderLocationGuardSetting> stopGuard() async {
+    final res = await ApiClient.dio.post<Map<String, dynamic>>('/v1/elder/location-guard/stop');
+    final body = res.data;
+    if (body == null) throw Exception('空响应');
+    final api = ApiResponse.fromJson(
+      body,
+      (raw) => raw is Map<String, dynamic> ? ElderLocationGuardSetting.fromJson(raw) : null,
+    );
+    if (!api.isSuccess || api.data == null) throw Exception(api.message);
+    return api.data!;
+  }
+
+  static Future<ElderLocationGuardSetting> syncGuardPermissions({
+    required bool foregroundGranted,
+    required bool backgroundGranted,
+    bool batteryOptimizationIgnored = false,
+  }) async {
+    final res = await ApiClient.dio.put<Map<String, dynamic>>(
+      '/v1/elder/location-guard/permissions',
+      data: {
+        'foregroundGranted': foregroundGranted,
+        'backgroundGranted': backgroundGranted,
+        'batteryOptimizationIgnored': batteryOptimizationIgnored,
+      },
+    );
+    final body = res.data;
+    if (body == null) throw Exception('空响应');
+    final api = ApiResponse.fromJson(
+      body,
+      (raw) => raw is Map<String, dynamic> ? ElderLocationGuardSetting.fromJson(raw) : null,
+    );
+    if (!api.isSuccess || api.data == null) throw Exception(api.message);
+    return api.data!;
+  }
+
+  static Future<void> reportGuardError(String message) async {
+    await ApiClient.dio.post<Map<String, dynamic>>(
+      '/v1/elder/location-guard/error',
+      data: {'message': message},
+    );
+  }
+
+  static Future<LocationPermissionSnapshot> fetchPermission() async {
+    final res = await ApiClient.dio.get<Map<String, dynamic>>('/v1/elder/location-permissions');
+    final body = res.data;
+    if (body == null) throw Exception('空响应');
+    final api = ApiResponse.fromJson(
+      body,
+      (raw) => raw is Map<String, dynamic> ? LocationPermissionSnapshot.fromJson(raw) : null,
+    );
+    if (!api.isSuccess || api.data == null) throw Exception(api.message);
+    return api.data!;
+  }
+
+  static Future<LocationPermissionSnapshot> updatePermission({
+    required bool foregroundGranted,
+    required bool backgroundGranted,
+    required DateTime permissionUpdatedAt,
+  }) async {
+    final res = await ApiClient.dio.put<Map<String, dynamic>>(
+      '/v1/elder/location-permissions',
+      data: {
+        'foregroundGranted': foregroundGranted,
+        'backgroundGranted': backgroundGranted,
+        'permissionUpdatedAt': permissionUpdatedAt.toLocal().toIso8601String(),
+      },
+    );
+    final body = res.data;
+    if (body == null) throw Exception('空响应');
+    final api = ApiResponse.fromJson(
+      body,
+      (raw) => raw is Map<String, dynamic> ? LocationPermissionSnapshot.fromJson(raw) : null,
+    );
+    if (!api.isSuccess || api.data == null) throw Exception(api.message);
+    return api.data!;
+  }
 
   static Future<int> uploadLocation({
     required double latitude,
@@ -69,6 +190,27 @@ final class ElderLocationApi {
       source: source,
       locationType: locationType,
       uploaded: true,
+    );
+  }
+}
+
+class LocationPermissionSnapshot {
+  const LocationPermissionSnapshot({
+    required this.foregroundGranted,
+    required this.backgroundGranted,
+    this.permissionUpdatedAt,
+  });
+
+  final bool foregroundGranted;
+  final bool backgroundGranted;
+  final DateTime? permissionUpdatedAt;
+
+  factory LocationPermissionSnapshot.fromJson(Map<String, dynamic> json) {
+    final updatedRaw = json['permissionUpdatedAt']?.toString();
+    return LocationPermissionSnapshot(
+      foregroundGranted: json['foregroundGranted'] == true,
+      backgroundGranted: json['backgroundGranted'] == true,
+      permissionUpdatedAt: updatedRaw == null ? null : DateTime.tryParse(updatedRaw)?.toLocal(),
     );
   }
 }

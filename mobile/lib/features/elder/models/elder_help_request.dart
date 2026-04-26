@@ -1,3 +1,5 @@
+import '../../../core/util/api_instant.dart';
+
 class ElderHelpRequest {
   const ElderHelpRequest({
     required this.alertId,
@@ -50,20 +52,19 @@ class ElderHelpRequest {
   }
 
   factory ElderHelpRequest.fromJson(Map<String, dynamic> json) {
-    DateTime? parseDate(Object? raw) {
-      if (raw is! String || raw.isEmpty) return null;
-      return DateTime.tryParse(raw)?.toLocal();
-    }
-
     return ElderHelpRequest(
       alertId: (json['alertId'] as num?)?.toInt() ?? (json['id'] as num?)?.toInt() ?? 0,
       status: json['status'] as String? ?? 'pending_revoke',
-      triggerTime: parseDate(json['triggerTime']) ?? parseDate(json['trigger_time']) ?? DateTime.now(),
-      revokeDeadline: parseDate(json['revokeDeadline']) ?? parseDate(json['revoke_deadline']),
-      sentTime: parseDate(json['sentTime']) ?? parseDate(json['sent_time']),
-      cancelTime: parseDate(json['cancelTime']) ?? parseDate(json['cancel_time']),
+      triggerTime: _firstInstant(json, 'triggerTime', 'trigger_time') ?? DateTime.now(),
+      revokeDeadline: _firstInstant(json, 'revokeDeadline', 'revoke_deadline'),
+      sentTime: _firstInstant(json, 'sentTime', 'sent_time'),
+      cancelTime: _firstInstant(json, 'cancelTime', 'cancel_time'),
       cancelMode: json['cancelMode'] as String? ?? json['cancel_mode'] as String?,
-      serverTime: parseDate(json['serverTime']) ?? parseDate(json['server_time']),
+      serverTime: _firstInstant(json, 'serverTime', 'server_time'),
     );
+  }
+
+  static DateTime? _firstInstant(Map<String, dynamic> json, String a, String b) {
+    return parseApiInstantToLocal(json[a]) ?? parseApiInstantToLocal(json[b]);
   }
 }

@@ -469,7 +469,7 @@ class _ChildRemoteMedicalItemPageState extends State<ChildRemoteMedicalItemPage>
     }
     final elderProfileId = int.tryParse(selectedId);
     if (elderProfileId == null || elderProfileId <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('所选老人档案ID 无效')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('所选老人无效，请重新选择')));
       return;
     }
 
