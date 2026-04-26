@@ -32,7 +32,7 @@ class AppConfig {
 
   static const String amapAndroidKey = String.fromEnvironment(
     'AMAP_ANDROID_KEY',
-    defaultValue: '84f7b71fbfea73f06252e2b06685934c',
+    defaultValue: '55f733fae7a326ac12009b17dde876a4',
   );
 
   static const String amapIosKey = String.fromEnvironment(

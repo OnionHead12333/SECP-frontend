@@ -4,6 +4,7 @@ import 'package:amap_flutter_location/amap_flutter_location.dart';
 import 'package:amap_flutter_location/amap_location_option.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../../core/config/app_config.dart';
@@ -55,7 +56,7 @@ final class ElderLocationService {
     _ensureAmapConfigured();
     final guard = await _fetchGuardSettingSafely();
     final permissionGranted = await _ensurePermission();
-    final serviceEnabled = await Permission.location.serviceStatus.isEnabled;
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
     final backgroundGranted = (await Permission.locationAlways.status).isGranted;
     final syncedGuard = await _syncGuardPermissionSnapshot(
       permissionGranted: permissionGranted,
@@ -97,7 +98,6 @@ final class ElderLocationService {
   }
 
   static Future<void> startAutoUpload(String phone) async {
-    if (_started) return;
     if (AppConfig.useMockLocation) {
       _started = true;
       _emit(_currentState.copyWith(autoUploadEnabled: true, permissionGranted: true, serviceEnabled: true, usingMock: true, uploadStatusText: '蓝牙默认断开，已切到高德模拟导航轨迹', clearLastError: true));
@@ -106,8 +106,19 @@ final class ElderLocationService {
       return;
     }
 
+    // 已开启时：再次点击可重试「立即上传+排程」，避免上次失败后 _started 为 true 却 early-return 像「没反应」
+    if (_started) {
+      try {
+        await uploadNow(phone);
+        _schedule(phone, _latest);
+      } catch (e) {
+        rethrow;
+      }
+      return;
+    }
+
     final permissionGranted = await _ensurePermission();
-    final serviceEnabled = await Permission.location.serviceStatus.isEnabled;
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
     final backgroundGranted = (await Permission.locationAlways.status).isGranted;
     if (!permissionGranted || !serviceEnabled) {
       throw Exception('定位权限未就绪，请先授权并开启系统定位服务');
@@ -124,9 +135,32 @@ final class ElderLocationService {
     } catch (e) {
       if (kDebugMode) debugPrint('startGuard API failed: $e');
     }
+    // 须等首次「定位+上传」成功再置 _started，否则失败后会永久命中上方 _started 分支却立刻 return，表现为点击无效
+    _emit(_currentState.copyWith(
+      guardSetting: guard,
+      autoUploadEnabled: false,
+      backgroundPermissionGranted: backgroundGranted,
+      uploadStatusText: '正在获取首次定位并上传，请稍候…',
+      clearLastError: true,
+    ));
+    try {
+      await uploadNow(phone);
+    } catch (e) {
+      _emit(_currentState.copyWith(
+        autoUploadEnabled: false,
+        uploadStatusText: '启动失败，可再次点击重试',
+        lastError: e.toString().replaceFirst('Exception: ', ''),
+      ));
+      rethrow;
+    }
     _started = true;
-    _emit(_currentState.copyWith(guardSetting: guard, autoUploadEnabled: true, backgroundPermissionGranted: backgroundGranted, uploadStatusText: '定位守护已开启，正在上传首次定位', clearLastError: true));
-    await uploadNow(phone);
+    _emit(_currentState.copyWith(
+      guardSetting: guard,
+      autoUploadEnabled: true,
+      backgroundPermissionGranted: backgroundGranted,
+      uploadStatusText: '定位守护已开启，正按设定间隔上传',
+      clearLastError: true,
+    ));
     _schedule(phone, _latest);
   }
 
@@ -151,7 +185,7 @@ final class ElderLocationService {
       return;
     }
     final permissionGranted = await _ensurePermission();
-    final serviceEnabled = await Permission.location.serviceStatus.isEnabled;
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!permissionGranted || !serviceEnabled) {
       throw Exception('请先开启定位权限和系统定位服务');
     }
@@ -206,7 +240,7 @@ final class ElderLocationService {
       return true;
     }
     final granted = await _ensurePermission(forceRequest: true);
-    final enabled = await Permission.location.serviceStatus.isEnabled;
+    final enabled = await Geolocator.isLocationServiceEnabled();
     final backgroundGranted = (await Permission.locationAlways.status).isGranted;
     final guard = await _syncGuardPermissionSnapshot(
       permissionGranted: granted,
@@ -322,7 +356,7 @@ final class ElderLocationService {
   }
 
   static Future<bool> _ensurePermission({bool forceRequest = false}) async {
-    final serviceEnabled = await Permission.location.serviceStatus.isEnabled;
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) return false;
 
     final status = await Permission.location.status;
@@ -359,7 +393,13 @@ final class ElderLocationService {
       final errorCode = result['errorCode']?.toString();
       final errorInfo = result['errorInfo']?.toString();
       if (errorCode != null && errorCode != '0') {
-        completer.completeError(Exception('高德定位失败，errorCode=$errorCode${errorInfo == null || errorInfo.isEmpty ? '' : '，errorInfo=$errorInfo'}'));
+        final base = '高德定位失败，errorCode=$errorCode${errorInfo == null || errorInfo.isEmpty ? '' : '，errorInfo=$errorInfo'}';
+        final hint = errorCode == '7'
+            ? '\n\n【Key 鉴权】errorCode=7 表示当前 Key 与「包名 + 签名 SHA1」未在高德控制台匹配。'
+                '请在 console.amap.com 应用里：应用名 → Key 设置 → Android：添加包名 com.laoleme.smartcare.mobile，'
+                '并添加本次安装使用的 keystore 的 SHA1（调试/正式需分别配置）。下方 error 中的 SHA1 即当前包签名。'
+            : '';
+        completer.completeError(Exception('$base$hint'));
         return;
       }
       final latitude = (result['latitude'] as num?)?.toDouble();
