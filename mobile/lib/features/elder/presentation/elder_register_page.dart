@@ -76,6 +76,8 @@ class _ElderRegisterPageState extends State<ElderRegisterPage> {
         phone: result.phone ?? phone,
         claimed: result.claimed ?? false,
         familyCount: result.familyCount ?? 0,
+        gender: result.gender,
+        birthday: result.birthday,
       );
       if (!mounted) return;
       Navigator.of(context).pushNamedAndRemoveUntil(ElderModuleRoutes.elderHome, (route) => false);

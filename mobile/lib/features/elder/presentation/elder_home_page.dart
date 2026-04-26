@@ -28,16 +28,44 @@ class _ElderHomePageState extends State<ElderHomePage> {
   _HelpRequestState _helpState = _HelpRequestState.idle;
   bool _busy = false;
 
+  Future<void> _openElderProfile() async {
+    final r = await Navigator.of(context).pushNamed(ElderModuleRoutes.elderProfile);
+    if (mounted && r == true) setState(() {});
+  }
+
+  String _elderGenderLabel() {
+    switch (AuthSession.elderGender) {
+      case 'male':
+        return '男';
+      case 'female':
+        return '女';
+      default:
+        return '不愿透露';
+    }
+  }
+
+  String _elderBirthdayLabel() {
+    final s = AuthSession.elderBirthday;
+    if (s == null || s.isEmpty) return '未设置';
+    final d = DateTime.tryParse(s);
+    if (d == null) return s;
+    return '${d.year}年${d.month}月${d.day}日';
+  }
+
   @override
   Widget build(BuildContext context) {
     final name = AuthSession.elderName ?? '老人用户';
     final phone = AuthSession.elderPhone ?? '-';
     final claimed = AuthSession.elderClaimed;
     final familyCount = AuthSession.elderFamilyCount;
+    final genderText = _elderGenderLabel();
+    final birthText = _elderBirthdayLabel();
     final pages = <Widget>[
       _HomeTab(
         name: name,
         phone: phone,
+        genderText: genderText,
+        birthText: birthText,
         claimed: claimed,
         familyCount: familyCount,
         helpState: _helpState,
@@ -51,7 +79,10 @@ class _ElderHomePageState extends State<ElderHomePage> {
       _MyTab(
         name: name,
         phone: phone,
+        genderText: genderText,
+        birthText: birthText,
         claimed: claimed,
+        onProfileEditTap: _openElderProfile,
         onBindingTap: () => Navigator.of(context).pushNamed(ElderModuleRoutes.elderBinding),
         onEmergencyContactsTap: () => Navigator.of(context).pushNamed(ElderModuleRoutes.elderEmergencyContacts),
         onLocationTap: () => Navigator.of(context).pushNamed(ElderModuleRoutes.elderLocationStatus),
@@ -163,10 +194,12 @@ class _ElderHomePageState extends State<ElderHomePage> {
 }
 
 class _HomeTab extends StatelessWidget {
-  const _HomeTab({required this.name, required this.phone, required this.claimed, required this.familyCount, required this.helpState, required this.onBindingTap, required this.onOpenReminders, required this.onSosTap});
+  const _HomeTab({required this.name, required this.phone, required this.genderText, required this.birthText, required this.claimed, required this.familyCount, required this.helpState, required this.onBindingTap, required this.onOpenReminders, required this.onSosTap});
 
   final String name;
   final String phone;
+  final String genderText;
+  final String birthText;
   final bool claimed;
   final int familyCount;
   final _HelpRequestState helpState;
@@ -193,7 +226,7 @@ class _HomeTab extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 12),
-        _ResponsiveHeroCard(name: name, phone: phone, statusText: statusText, statusColor: statusColor),
+        _ResponsiveHeroCard(name: name, phone: phone, genderText: genderText, birthText: birthText, statusText: statusText, statusColor: statusColor),
         if (helpState != _HelpRequestState.idle) ...[
           const SizedBox(height: 12),
           _HelpStatusBanner(state: helpState),
@@ -214,10 +247,12 @@ class _HomeTab extends StatelessWidget {
 }
 
 class _ResponsiveHeroCard extends StatelessWidget {
-  const _ResponsiveHeroCard({required this.name, required this.phone, required this.statusText, required this.statusColor});
+  const _ResponsiveHeroCard({required this.name, required this.phone, required this.genderText, required this.birthText, required this.statusText, required this.statusColor});
 
   final String name;
   final String phone;
+  final String genderText;
+  final String birthText;
   final String statusText;
   final Color statusColor;
 
@@ -232,6 +267,8 @@ class _ResponsiveHeroCard extends StatelessWidget {
         Text('您好，$name', style: TextStyle(fontSize: compact ? 24 : 28, fontWeight: FontWeight.w800, height: 1.15)),
         const SizedBox(height: 10),
         Text('手机号：$phone', style: const TextStyle(fontSize: 16, color: Color(0xFF334155))),
+        const SizedBox(height: 6),
+        Text('性别：$genderText  ·  生日：$birthText', style: const TextStyle(fontSize: 15, color: Color(0xFF475569))),
         const SizedBox(height: 16),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -541,10 +578,13 @@ class _ReminderMedicalTab extends StatelessWidget {
 }
 
 class _MyTab extends StatelessWidget {
-  const _MyTab({required this.name, required this.phone, required this.claimed, required this.onBindingTap, required this.onEmergencyContactsTap, required this.onLocationTap, required this.onLogout});
+  const _MyTab({required this.name, required this.phone, required this.genderText, required this.birthText, required this.claimed, required this.onProfileEditTap, required this.onBindingTap, required this.onEmergencyContactsTap, required this.onLocationTap, required this.onLogout});
   final String name;
   final String phone;
+  final String genderText;
+  final String birthText;
   final bool claimed;
+  final VoidCallback onProfileEditTap;
   final VoidCallback onBindingTap;
   final VoidCallback onEmergencyContactsTap;
   final VoidCallback onLocationTap;
@@ -557,10 +597,14 @@ class _MyTab extends StatelessWidget {
             Text(name, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
             const SizedBox(height: 8),
             Text('手机号：$phone', style: const TextStyle(color: Color(0xFF475569))),
+            const SizedBox(height: 4),
+            Text('性别：$genderText  ·  生日：$birthText', style: const TextStyle(color: Color(0xFF475569), fontSize: 15)),
             const SizedBox(height: 8),
             Text(claimed ? '当前状态：已认领老人资料' : '当前状态：未认领老人资料', style: const TextStyle(color: Color(0xFF475569))),
           ])),
           const SizedBox(height: 12),
+          _ItemCard(title: '个人信息', subtitle: '修改称呼、性别与出生日期', onTap: onProfileEditTap),
+          const SizedBox(height: 10),
           _ItemCard(title: '家属绑定状态', subtitle: '查看绑定详情与当前说明', onTap: onBindingTap),
           const SizedBox(height: 10),
           _ItemCard(title: '紧急联系人', subtitle: '只支持新增联系人，已有信息统一维护', onTap: onEmergencyContactsTap),

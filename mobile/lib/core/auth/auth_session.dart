@@ -11,6 +11,10 @@ final class AuthSession {
 
   /// 老人端首页展示所需的基础状态。
   static String? elderName;
+  /// 与后端 users.gender 一致：male / female / unknown
+  static String? elderGender;
+  /// yyyy-MM-dd，未设置时为 null
+  static String? elderBirthday;
   static bool elderClaimed = false;
   static int elderFamilyCount = 0;
   static String? elderPhone;
@@ -22,11 +26,15 @@ final class AuthSession {
     required String phone,
     required bool claimed,
     required int familyCount,
+    String? gender,
+    String? birthday,
   }) {
     elderName = name;
     elderPhone = phone;
     elderClaimed = claimed;
     elderFamilyCount = familyCount;
+    elderGender = gender;
+    elderBirthday = birthday;
   }
 
   static void clear() {
@@ -34,6 +42,8 @@ final class AuthSession {
     role = null;
     elderName = null;
     elderPhone = null;
+    elderGender = null;
+    elderBirthday = null;
     elderClaimed = false;
     elderFamilyCount = 0;
   }
