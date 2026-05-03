@@ -1,8 +1,13 @@
 import 'dart:async';
+<<<<<<< HEAD
 import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:sensors_plus/sensors_plus.dart';
+=======
+
+import 'package:flutter/material.dart';
+>>>>>>> child
 
 import '../../../core/auth/auth_session.dart';
 import '../data/elder_exercise_reminder_service.dart';
@@ -22,6 +27,7 @@ class ElderExerciseInProgressPage extends StatefulWidget {
 }
 
 class _ElderExerciseInProgressPageState extends State<ElderExerciseInProgressPage> {
+<<<<<<< HEAD
   static const double _motionThreshold = 0.8;
   static const int _requiredActiveSeconds = 8;
 
@@ -40,6 +46,12 @@ class _ElderExerciseInProgressPageState extends State<ElderExerciseInProgressPag
   bool _submitting = false;
   bool _sensorVerified = false;
   String? _sensorError;
+=======
+  Timer? _timer;
+  DateTime? _startedAt;
+  Duration _elapsed = Duration.zero;
+  bool _submitting = false;
+>>>>>>> child
 
   int get _elderId {
     switch (AuthSession.elderPhone) {
@@ -54,12 +66,16 @@ class _ElderExerciseInProgressPageState extends State<ElderExerciseInProgressPag
     }
   }
 
+<<<<<<< HEAD
   double get _sensorProgress => (_activeSeconds / _requiredActiveSeconds).clamp(0, 1).toDouble();
 
+=======
+>>>>>>> child
   @override
   void initState() {
     super.initState();
     _startedAt = DateTime.now();
+<<<<<<< HEAD
     _startTimer();
     _startMotionDetection();
   }
@@ -155,6 +171,18 @@ class _ElderExerciseInProgressPageState extends State<ElderExerciseInProgressPag
     _timer?.cancel();
     _accelerometerSubscription?.cancel();
     _userAccelerometerSubscription?.cancel();
+=======
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      final startedAt = _startedAt;
+      if (startedAt == null) return;
+      setState(() => _elapsed = DateTime.now().difference(startedAt));
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+>>>>>>> child
     super.dispose();
   }
 
@@ -165,14 +193,23 @@ class _ElderExerciseInProgressPageState extends State<ElderExerciseInProgressPag
     return '$h:$m:$s';
   }
 
+<<<<<<< HEAD
   Future<void> _completeVerifiedExercise() async {
     if (_submitting || !_sensorVerified) return;
+=======
+  Future<void> _complete({required String source}) async {
+    if (_submitting) return;
+>>>>>>> child
     setState(() => _submitting = true);
     try {
       await ElderExerciseReminderService.completeExercise(
         elderId: _elderId,
         reminderId: widget.reminderId,
+<<<<<<< HEAD
         source: 'sensor',
+=======
+        source: source,
+>>>>>>> child
       );
       if (!mounted) return;
       await widget.onCompleted();
@@ -194,7 +231,11 @@ class _ElderExerciseInProgressPageState extends State<ElderExerciseInProgressPag
           children: [
             const Text('正在运动', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900)),
             const SizedBox(height: 8),
+<<<<<<< HEAD
             const Text('需要先完成传感器验证，验证通过后老人再点击完成。', style: TextStyle(color: Color(0xFF475569))),
+=======
+            const Text('坚持一下，完成后点“已完成运动”。', style: TextStyle(color: Color(0xFF475569))),
+>>>>>>> child
             const SizedBox(height: 18),
             Container(
               width: double.infinity,
@@ -213,6 +254,7 @@ class _ElderExerciseInProgressPageState extends State<ElderExerciseInProgressPag
                 ],
               ),
             ),
+<<<<<<< HEAD
             const SizedBox(height: 14),
             Container(
               width: double.infinity,
@@ -268,12 +310,27 @@ class _ElderExerciseInProgressPageState extends State<ElderExerciseInProgressPag
                 ],
               ),
             ),
+=======
+>>>>>>> child
             const Spacer(),
             SizedBox(
               width: double.infinity,
               child: FilledButton(
+<<<<<<< HEAD
                 onPressed: (_submitting || !_sensorVerified) ? null : _completeVerifiedExercise,
                 child: Text(_submitting ? '提交中...' : (_sensorVerified ? '已完成运动' : '请先完成传感器验证')),
+=======
+                onPressed: _submitting ? null : () => _complete(source: 'manual'),
+                child: Text(_submitting ? '提交中...' : '已完成运动'),
+              ),
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed: _submitting ? null : () => _complete(source: 'sensor'),
+                child: const Text('模拟传感器判定已完成'),
+>>>>>>> child
               ),
             ),
           ],
@@ -282,3 +339,7 @@ class _ElderExerciseInProgressPageState extends State<ElderExerciseInProgressPag
     );
   }
 }
+<<<<<<< HEAD
+=======
+
+>>>>>>> child
