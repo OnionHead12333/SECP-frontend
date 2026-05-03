@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../models/child_local_models.dart';
-<<<<<<< HEAD
-=======
 import '../pages/child_exercise_reminder_page.dart';
->>>>>>> child
 import '../pages/child_water_reminder_page.dart';
 
 /// ⑤ 提醒：生活提醒入口（喝水/锻炼等）。
@@ -20,11 +17,7 @@ class ChildReminderTab extends StatelessWidget {
   Widget build(BuildContext context) {
     final items = [
       (Icons.water_drop_outlined, '喝水提醒', '设置喝水量与提醒间隔'),
-<<<<<<< HEAD
-      (Icons.directions_run_outlined, '锻炼提醒', '开发中'),
-=======
       (Icons.directions_run_outlined, '锻炼提醒', '设置锻炼内容'),
->>>>>>> child
       (Icons.event_note_outlined, '其他提醒', '开发中'),
     ];
 
@@ -49,8 +42,6 @@ class ChildReminderTab extends StatelessWidget {
                 );
                 return;
               }
-<<<<<<< HEAD
-=======
               if (it.$2 == '锻炼提醒') {
                 Navigator.of(context).push(
                   MaterialPageRoute(
@@ -59,7 +50,6 @@ class ChildReminderTab extends StatelessWidget {
                 );
                 return;
               }
->>>>>>> child
               ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('「${it.$2}」功能开发中')));
             },
           ),
@@ -68,4 +58,3 @@ class ChildReminderTab extends StatelessWidget {
     );
   }
 }
-

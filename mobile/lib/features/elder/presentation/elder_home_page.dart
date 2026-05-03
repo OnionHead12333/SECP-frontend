@@ -277,11 +277,7 @@ class _HomeTab extends StatelessWidget {
               child: Text('首页', style: TextStyle(fontSize: 32, fontWeight: FontWeight.w800)),
             ),
             const SizedBox(width: 12),
-<<<<<<< HEAD
-            const SizedBox.shrink(),
-=======
             _SosCircleButton(onTap: onSosTap, compact: false),
->>>>>>> child
           ],
         ),
         const SizedBox(height: 12),
