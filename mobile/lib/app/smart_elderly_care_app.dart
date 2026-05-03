@@ -4,6 +4,10 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import '../features/auth/presentation/login_page.dart';
 import '../features/child/presentation/child_main_page.dart';
 import '../features/elder/elder_module_routes.dart';
+import '../features/elder/presentation/elder_global_sos_overlay.dart';
+
+final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
+final GlobalKey<ScaffoldMessengerState> appScaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
 
 /// 应用根组件：主题、路由入口。
 class SmartElderlyCareApp extends StatelessWidget {
@@ -12,6 +16,8 @@ class SmartElderlyCareApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: appNavigatorKey,
+      scaffoldMessengerKey: appScaffoldMessengerKey,
       title: '智慧养老',
       locale: const Locale('zh', 'CN'),
       localizationsDelegates: const [
@@ -28,6 +34,11 @@ class SmartElderlyCareApp extends StatelessWidget {
         useMaterial3: true,
       ),
       initialRoute: '/login',
+      builder: (context, child) => ElderGlobalSosOverlay(
+        navigatorKey: appNavigatorKey,
+        scaffoldMessengerKey: appScaffoldMessengerKey,
+        child: child ?? const SizedBox.shrink(),
+      ),
       routes: {
         '/login': (_) => const LoginPage(),
         ...ElderModuleRoutes.routes(),
