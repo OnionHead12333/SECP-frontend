@@ -7,15 +7,6 @@ import 'package:vibration/vibration.dart';
 import '../../../core/auth/auth_session.dart';
 import '../data/elder_exercise_reminder_service.dart';
 import '../data/elder_medicine_reminder_service.dart';
-<<<<<<< HEAD
-
-import '../data/elder_water_reminder_service.dart';
-import 'elder_exercise_in_progress_page.dart';
-
-import '../models/elder_exercise_progress.dart';
-import '../models/elder_medicine_progress.dart';
-
-=======
 import '../data/elder_outing_reminder_service.dart';
 import '../data/elder_water_reminder_service.dart';
 import 'elder_exercise_in_progress_page.dart';
@@ -23,7 +14,6 @@ import 'elder_outing_summary_page.dart';
 import '../models/elder_exercise_progress.dart';
 import '../models/elder_medicine_progress.dart';
 import '../models/elder_outing_status.dart';
->>>>>>> child
 import '../models/elder_water_progress.dart';
 import 'dart:async';
 
@@ -46,11 +36,7 @@ class _ElderReminderCenterTabState extends State<ElderReminderCenterTab>
 
   ElderWaterProgress? _water;
   ElderExerciseProgress? _exercise;
-<<<<<<< HEAD
-
-=======
   ElderOutingStatus? _outing;
->>>>>>> child
   ElderMedicineProgress? _medicine;
 
   bool _waterDialogOpen = false;
@@ -109,21 +95,13 @@ class _ElderReminderCenterTabState extends State<ElderReminderCenterTab>
     try {
       final water = await ElderWaterReminderService.fetchTodayProgress(elderId: _elderId);
       final exercise = await ElderExerciseReminderService.fetchTodayProgress(elderId: _elderId);
-<<<<<<< HEAD
-
-=======
       final outing = await ElderOutingReminderService.fetchStatus(elderId: _elderId);
->>>>>>> child
       final medicine = await ElderMedicineReminderService.fetchTodayProgress(elderId: _elderId);
       if (!mounted) return;
       setState(() {
         _water = water;
         _exercise = exercise;
-<<<<<<< HEAD
-
-=======
         _outing = outing;
->>>>>>> child
         _medicine = medicine;
         _loading = false;
       });
@@ -226,8 +204,6 @@ void didChangeAppLifecycleState(AppLifecycleState state) {
     setState(() => _medicine = latest);
   }
 
-<<<<<<< HEAD
-=======
 
 
   Future<void> _refreshOutingStatus() async {
@@ -236,7 +212,6 @@ void didChangeAppLifecycleState(AppLifecycleState state) {
     setState(() => _outing = latest);
   }
 
->>>>>>> child
   Future<void> _simulateMedicineReminder() async {
     final now = DateTime.now();
     if (_medicineDialogOpen) return;
@@ -515,8 +490,6 @@ void didChangeAppLifecycleState(AppLifecycleState state) {
     }
   }
 
-<<<<<<< HEAD
-=======
   void _openOutingSummary() {
     final outing = _outing;
     if (outing == null) return;
@@ -535,7 +508,6 @@ void didChangeAppLifecycleState(AppLifecycleState state) {
     );
   }
 
->>>>>>> child
   void _toast(String message) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
@@ -600,13 +572,10 @@ void didChangeAppLifecycleState(AppLifecycleState state) {
                   ),
                   const SizedBox(height: 12),
                   Wrap(spacing: 10, runSpacing: 10, children: [
-<<<<<<< HEAD
-=======
                     FilledButton(
                       onPressed: _medicineSubmitting ? null : _confirmMedicine,
                       child: Text(_medicineSubmitting ? '提交中...' : '已吃药', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
                     ),
->>>>>>> child
                     OutlinedButton(
                       onPressed: _simulateMedicineReminder,
                       child: const Text('模拟触发提醒', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
@@ -627,13 +596,10 @@ void didChangeAppLifecycleState(AppLifecycleState state) {
                   ),
                   const SizedBox(height: 12),
                   Wrap(spacing: 10, runSpacing: 10, children: [
-<<<<<<< HEAD
-=======
                     FilledButton(
                       onPressed: _waterSubmitting ? null : _confirmWater,
                       child: Text(_waterSubmitting ? '提交中...' : '已喝水', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
                     ),
->>>>>>> child
                     OutlinedButton(
                       onPressed: _simulateWaterReminder,
                       child: const Text('模拟触发提醒', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
@@ -647,19 +613,6 @@ void didChangeAppLifecycleState(AppLifecycleState state) {
           step: '到时间会弹窗提醒，确认后进入运动过程页',
           child: _exercise == null
               ? const Text('暂无数据')
-<<<<<<< HEAD
-              : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(
-                    '剩余 ${_exercise!.pendingCount} 次',
-                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
-                  ),
-                  const SizedBox(height: 12),
-                  Wrap(spacing: 10, runSpacing: 10, children: [
-                    OutlinedButton(
-                      onPressed: _simulateExerciseReminder,
-                      child: const Text('模拟触发提醒', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-                    ),
-=======
               : Row(
                   children: [
                     Expanded(
@@ -708,7 +661,6 @@ void didChangeAppLifecycleState(AppLifecycleState state) {
                     OutlinedButton(onPressed: _refreshOutingStatus, child: const Text('刷新状态')),
                     FilledButton(onPressed: _openOutingSummary, child: const Text('查看摘要')),
                     OutlinedButton(onPressed: widget.onOpenLocationPage, child: const Text('定位详情')),
->>>>>>> child
                   ]),
                 ]),
         ),
