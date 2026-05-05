@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:developer' as developer;
 
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -11,9 +12,13 @@ import '../data/elder_help_service.dart';
 import '../data/elder_location_service.dart';
 import '../elder_module_routes.dart';
 import '../models/elder_help_request.dart';
+import '../../medical_hub/presentation/medical_archive_page.dart';
+import '../../medical_hub/presentation/medical_calendar_page.dart';
+import '../../medical_hub/presentation/medical_smart_hub_page.dart';
 import 'elder_reminder_center_tab.dart';
 
 enum _HelpRequestState { idle, pending, sent, revoked }
+
 enum _HelpSheetResult { revokeByButton, revokeByVoice, sendNow, timeout }
 
 class ElderHomePage extends StatefulWidget {
@@ -167,6 +172,7 @@ class _ElderHomePageState extends State<ElderHomePage> {
   Future<void> _handleHelpTap() async {
     setState(() => _busy = true);
     try {
+      await _preflightSosVoicePermissions();
       final request = await ElderHelpService.createHelpRequest();
       if (!mounted) return;
       _applyRequestState(request);
@@ -215,6 +221,26 @@ class _ElderHomePageState extends State<ElderHomePage> {
     }
   }
 
+  /// 在调用后端创建求助之前申请麦克风（及 iOS 语音识别）权限，避免倒计时在弹窗期间流逝导致语音撤回来不及。
+  Future<void> _preflightSosVoicePermissions() async {
+    try {
+      var mic = await Permission.microphone.status;
+      if (!mic.isGranted) {
+        mic = await Permission.microphone.request();
+      }
+      developer.log('SOS preflight mic: $mic', name: 'speech_debug');
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
+        var speech = await Permission.speech.status;
+        if (!speech.isGranted) {
+          speech = await Permission.speech.request();
+        }
+        developer.log('SOS preflight speech: $speech', name: 'speech_debug');
+      }
+    } catch (e, st) {
+      developer.log('SOS preflight permissions failed: $e', name: 'speech_debug', stackTrace: st);
+    }
+  }
+
   int _resolveSeconds(ElderHelpRequest request) {
     final deadline = request.revokeDeadline;
     final reference = request.serverTime ?? DateTime.now();
@@ -249,7 +275,18 @@ class _ElderHomePageState extends State<ElderHomePage> {
 }
 
 class _HomeTab extends StatelessWidget {
-  const _HomeTab({required this.name, required this.phone, required this.genderText, required this.birthText, required this.claimed, required this.familyCount, required this.helpState, required this.onBindingTap, required this.onOpenReminders, required this.onSosTap});
+  const _HomeTab({
+    required this.name,
+    required this.phone,
+    required this.genderText,
+    required this.birthText,
+    required this.claimed,
+    required this.familyCount,
+    required this.helpState,
+    required this.onBindingTap,
+    required this.onOpenReminders,
+    required this.onSosTap,
+  });
 
   final String name;
   final String phone;
@@ -292,6 +329,33 @@ class _HomeTab extends StatelessWidget {
             const Text('今日最重要', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
             const SizedBox(height: 12),
             _SimpleRow(icon: Icons.notifications_active_outlined, title: '今日提醒', value: '上午吃药已完成，晚间提醒待处理', onTap: onOpenReminders),
+            const Divider(height: 24),
+            _SimpleRow(
+              icon: Icons.document_scanner_outlined,
+              title: '拍照识别单据',
+              value: 'OCR、自动归档并支持日历提醒',
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(builder: (_) => const MedicalSmartHubPage()),
+              ),
+            ),
+            const Divider(height: 24),
+            _SimpleRow(
+              icon: Icons.calendar_month_outlined,
+              title: '医疗日历',
+              value: '检查 / 复诊 / 用药提醒',
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(builder: (_) => const MedicalCalendarPage()),
+              ),
+            ),
+            const Divider(height: 24),
+            _SimpleRow(
+              icon: Icons.folder_open_outlined,
+              title: '医疗档案',
+              value: '历史单据与图片',
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(builder: (_) => const MedicalArchivePage()),
+              ),
+            ),
             const Divider(height: 24),
             _SimpleRow(icon: Icons.family_restroom_outlined, title: '家属状态', value: familyText, onTap: onBindingTap),
           ]),
@@ -341,6 +405,7 @@ class _ResponsiveHeroCard extends StatelessWidget {
     return '晚上好';
   }
 }
+
 class _HelpCountdownSheet extends StatefulWidget {
   const _HelpCountdownSheet({required this.seconds});
   final int seconds;
@@ -361,6 +426,7 @@ class _HelpCountdownSheetState extends State<_HelpCountdownSheet> {
   bool _promptSpeaking = false;
   String _heardText = '等待语音指令';
 
+  @override
   void initState() {
     super.initState();
     _secondsLeft = widget.seconds;
@@ -369,12 +435,33 @@ class _HelpCountdownSheetState extends State<_HelpCountdownSheet> {
   }
 
   Future<bool> _ensureMicPermission() async {
-    final status = await Permission.microphone.request();
-    developer.log('SOS mic permission: $status', name: 'speech_debug');
+    var mic = await Permission.microphone.status;
+    if (!mic.isGranted) {
+      mic = await Permission.microphone.request();
+    }
+    developer.log('SOS mic permission: $mic', name: 'speech_debug');
     if (!mounted) return false;
-    if (status.isGranted) return true;
-    setState(() => _heardText = '麦克风权限未开启，请先允许录音');
-    return false;
+    if (!mic.isGranted) {
+      setState(() => _heardText = mic.isPermanentlyDenied
+          ? '麦克风权限被拒绝，请到系统设置 → 应用权限中开启录音'
+          : '麦克风权限未开启，请先允许录音');
+      return false;
+    }
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
+      var speech = await Permission.speech.status;
+      if (!speech.isGranted) {
+        speech = await Permission.speech.request();
+      }
+      developer.log('SOS speech permission: $speech', name: 'speech_debug');
+      if (!mounted) return false;
+      if (!speech.isGranted) {
+        setState(() => _heardText = speech.isPermanentlyDenied
+            ? '语音识别权限被拒绝，请到系统设置中开启「语音识别」'
+            : '需要语音识别权限才能口述「撤回」');
+        return false;
+      }
+    }
+    return true;
   }
 
   Future<void> _prepareVoiceFlow() async {
@@ -468,7 +555,12 @@ class _HelpCountdownSheetState extends State<_HelpCountdownSheet> {
 
   bool _shouldTriggerVoiceRevoke(String text) {
     final normalized = text.replaceAll(' ', '');
-    return normalized.contains('撤回撤回') || normalized.contains('撤回') || normalized.contains('车会车会') || normalized.contains('策回策回') || normalized.contains('取消求助') || normalized.contains('不要发送');
+    return normalized.contains('撤回撤回') ||
+        normalized.contains('撤回') ||
+        normalized.contains('车会车会') ||
+        normalized.contains('策回策回') ||
+        normalized.contains('取消求助') ||
+        normalized.contains('不要发送');
   }
 
   Future<void> _tick() async {
@@ -477,10 +569,10 @@ class _HelpCountdownSheetState extends State<_HelpCountdownSheet> {
       if (!mounted) return;
       setState(() => _secondsLeft -= 1);
     }
-    if (mounted) {
-      await _speech.stop();
-      Navigator.of(context).pop(_HelpSheetResult.timeout);
-    }
+    if (!mounted) return;
+    await _speech.stop();
+    if (!mounted) return;
+    Navigator.of(context).pop(_HelpSheetResult.timeout);
   }
 
   @override
@@ -514,7 +606,10 @@ class _HelpCountdownSheetState extends State<_HelpCountdownSheet> {
               children: [
                 Text('求助已发起，$_secondsLeft 秒内可撤回', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
                 const SizedBox(height: 10),
-                const Text('倒计时结束后，系统将自动发送给子女端。\n系统会先短播提示：\n“误触请说撤回。”\n播报结束后会立即开始语音识别。', style: TextStyle(fontSize: 15, color: Color(0xFF475569), height: 1.65)),
+                const Text(
+                  '倒计时结束后，系统将自动发送给子女端。\n系统会先短播提示：\n“误触请说撤回。”\n播报结束后会立即开始语音识别。',
+                  style: TextStyle(fontSize: 15, color: Color(0xFF475569), height: 1.65),
+                ),
                 const SizedBox(height: 16),
                 LinearProgressIndicator(
                   value: _secondsLeft / widget.seconds,
@@ -528,26 +623,34 @@ class _HelpCountdownSheetState extends State<_HelpCountdownSheet> {
                   width: double.infinity,
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(18)),
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    const Text('语音撤回', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-                    const SizedBox(height: 8),
-                    const Text('播报内容：误触请说撤回。', style: TextStyle(color: Color(0xFF475569), height: 1.5)),
-                    const SizedBox(height: 8),
-                    Row(children: [
-                      Icon(_isListening ? Icons.mic : Icons.mic_none, color: _isListening ? const Color(0xFFDC2626) : const Color(0xFF64748B)),
-                      const SizedBox(width: 8),
-                      Expanded(child: Text(listeningText, style: const TextStyle(color: Color(0xFF475569), height: 1.5))),
-                    ]),
-                    const SizedBox(height: 8),
-                    Text('识别结果：$_heardText', style: const TextStyle(color: Color(0xFF64748B), height: 1.5)),
-                  ]),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('语音撤回', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                      const SizedBox(height: 8),
+                      const Text('播报内容：误触请说撤回。', style: TextStyle(color: Color(0xFF475569), height: 1.5)),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Icon(_isListening ? Icons.mic : Icons.mic_none,
+                              color: _isListening ? const Color(0xFFDC2626) : const Color(0xFF64748B)),
+                          const SizedBox(width: 8),
+                          Expanded(child: Text(listeningText, style: const TextStyle(color: Color(0xFF475569), height: 1.5))),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text('识别结果：$_heardText', style: const TextStyle(color: Color(0xFF64748B), height: 1.5)),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 18),
-                Row(children: [
-                  Expanded(child: OutlinedButton(onPressed: () => Navigator.of(context).pop(_HelpSheetResult.revokeByButton), child: const Text('确认撤回'))),
-                  const SizedBox(width: 12),
-                  Expanded(child: FilledButton(onPressed: () => Navigator.of(context).pop(_HelpSheetResult.sendNow), child: const Text('立即发送'))),
-                ]),
+                Row(
+                  children: [
+                    Expanded(child: OutlinedButton(onPressed: () => Navigator.of(context).pop(_HelpSheetResult.revokeByButton), child: const Text('确认撤回'))),
+                    const SizedBox(width: 12),
+                    Expanded(child: FilledButton(onPressed: () => Navigator.of(context).pop(_HelpSheetResult.sendNow), child: const Text('立即发送'))),
+                  ],
+                ),
               ],
             ),
           ),
@@ -599,37 +702,16 @@ class _HelpStatusBanner extends StatelessWidget {
       child: Row(children: [
         Icon(icon, color: fg),
         const SizedBox(width: 10),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(title, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: fg)),
-          const SizedBox(height: 4),
-          Text(subtitle, style: TextStyle(color: fg.withOpacity(0.9), height: 1.45)),
-        ])),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(title, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: fg)),
+            const SizedBox(height: 4),
+            Text(subtitle, style: TextStyle(color: fg.withOpacity(0.9), height: 1.45)),
+          ]),
+        ),
       ]),
     );
   }
-}
-
-class _ReminderMedicalTab extends StatelessWidget {
-  const _ReminderMedicalTab({required this.onOpenLocationPage});
-
-  final VoidCallback onOpenLocationPage;
-  @override
-  Widget build(BuildContext context) => ListView(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
-        children: const [
-          _Panel(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('提醒与医疗', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
-            SizedBox(height: 10),
-            Text('把吃药、复诊、医疗事项放在同一栏，老人不用来回找。', style: TextStyle(color: Color(0xFF475569), height: 1.5)),
-          ])),
-          SizedBox(height: 14),
-          _ItemCard(title: '今日提醒', subtitle: '上午吃药：已完成\n晚间吃药：待提醒'),
-          SizedBox(height: 10),
-          _ItemCard(title: '复诊安排', subtitle: '本周五上午 9:30 复诊'),
-          SizedBox(height: 10),
-          _ItemCard(title: '医疗档案', subtitle: '后续接入病历、报告、单据归档'),
-        ],
-      );
 }
 
 class _MyTab extends StatelessWidget {

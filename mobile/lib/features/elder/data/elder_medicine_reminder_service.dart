@@ -37,7 +37,7 @@ final class ElderMedicineReminderService {
       final body = res.data;
       if (body == null) throw Exception('空响应');
       final api = ApiResponse.fromJson(body, (raw) => raw is Map<String, dynamic> ? raw : null);
-      if (!api.isSuccess || api.data == null) throw Exception(api.message);
+      if (!api.isSuccess || api.data == null) throw Exception(api.displayMessage);
       _mockProgress = ElderMedicineProgress.fromJson(api.data!);
       return _mockProgress;
     } on DioException {
@@ -65,7 +65,7 @@ final class ElderMedicineReminderService {
       final body = res.data;
       if (body == null) throw Exception('空响应');
       final api = ApiResponse.fromJson(body, (raw) => raw is Map<String, dynamic> ? raw : null);
-      if (!api.isSuccess || api.data == null) throw Exception(api.message);
+      if (!api.isSuccess || api.data == null) throw Exception(api.displayMessage);
       _mockProgress = ElderMedicineProgress.fromJson(api.data!);
       return _mockProgress;
     } on DioException {

@@ -18,7 +18,7 @@ final class ElderEmergencyContactsApi {
           ? raw.whereType<Map<String, dynamic>>().map(ElderEmergencyContact.fromJson).toList()
           : const <ElderEmergencyContact>[],
     );
-    if (!api.isSuccess) throw Exception(api.message);
+    if (!api.isSuccess) throw Exception(api.displayMessage);
     return api.data ?? const <ElderEmergencyContact>[];
   }
 
@@ -35,7 +35,7 @@ final class ElderEmergencyContactsApi {
           ? raw.whereType<Map<String, dynamic>>().map(ElderEmergencyContact.fromJson).toList()
           : const <ElderEmergencyContact>[],
     );
-    if (!api.isSuccess) throw Exception(api.message);
+    if (!api.isSuccess) throw Exception(api.displayMessage);
     return api.data ?? const <ElderEmergencyContact>[];
   }
 
@@ -66,7 +66,7 @@ final class ElderEmergencyContactsApi {
           ? raw.whereType<Map<String, dynamic>>().map(ElderEmergencyContact.fromJson).toList()
           : const <ElderEmergencyContact>[],
     );
-    if (!api.isSuccess) throw Exception(api.message);
+    if (!api.isSuccess) throw Exception(api.displayMessage);
     return api.data ?? const <ElderEmergencyContact>[];
   }
 }

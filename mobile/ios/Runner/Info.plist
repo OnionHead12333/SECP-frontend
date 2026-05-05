@@ -28,6 +28,10 @@
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>用于在 SOS 倒计时期间识别语音撤回指令</string>
+	<key>NSCameraUsageDescription</key>
+	<string>用于拍摄医疗单据并进行文字识别</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>用于从相册选择医疗单据照片并进行文字识别</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>用于自动获取当前位置并同步给家属查看</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>

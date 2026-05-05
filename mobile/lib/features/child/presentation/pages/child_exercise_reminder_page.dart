@@ -89,7 +89,7 @@ class _ChildExerciseReminderPageState extends State<ChildExerciseReminderPage> {
           return const <Map<String, dynamic>>[];
         },
       );
-      if (!api.isSuccess) throw Exception(api.message);
+      if (!api.isSuccess) throw Exception(api.displayMessage);
       final list = (api.data ?? const <Map<String, dynamic>>[]).map(_ExerciseReminderRecord.fromJson).toList();
       if (!mounted) return;
       setState(() => _records = list);
@@ -241,7 +241,7 @@ class _ChildExerciseReminderPageState extends State<ChildExerciseReminderPage> {
       final body = res.data;
       if (body != null) {
         final api = ApiResponse.fromJson(body, (raw) => raw);
-        if (!api.isSuccess) throw Exception(api.message);
+        if (!api.isSuccess) throw Exception(api.displayMessage);
       }
       if (!mounted) return;
       await _loadRecords();
@@ -300,7 +300,7 @@ class _ChildExerciseReminderPageState extends State<ChildExerciseReminderPage> {
       final body = res.data;
       if (body == null) throw Exception('空响应');
       final api = ApiResponse.fromJson(body, (raw) => raw);
-      if (!api.isSuccess) throw Exception(api.message);
+      if (!api.isSuccess) throw Exception(api.displayMessage);
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('已创建锻炼提醒')));

@@ -40,7 +40,7 @@ final class ElderUserProfileApi {
     final body = res.data;
     if (body == null) throw Exception('空响应');
     final api = ApiResponse.fromJson(body, ElderUserProfile.fromData);
-    if (!api.isSuccess || api.data == null) throw Exception(api.message);
+    if (!api.isSuccess || api.data == null) throw Exception(api.displayMessage);
     return api.data!;
   }
 
@@ -60,7 +60,7 @@ final class ElderUserProfileApi {
     final body = res.data;
     if (body == null) throw Exception('空响应');
     final api = ApiResponse.fromJson(body, ElderUserProfile.fromData);
-    if (!api.isSuccess || api.data == null) throw Exception(api.message);
+    if (!api.isSuccess || api.data == null) throw Exception(api.displayMessage);
     return api.data!;
   }
 }
