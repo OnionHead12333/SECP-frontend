@@ -18,7 +18,7 @@ final class ChildLocationSummaryApi {
         return Map<String, dynamic>.from(raw);
       },
     );
-    if (!api.isSuccess) throw Exception(api.message);
+    if (!api.isSuccess) throw Exception(api.displayMessage);
     final m = api.data;
     if (m == null) return null;
     return ChildLocationSummary.fromJson(m);

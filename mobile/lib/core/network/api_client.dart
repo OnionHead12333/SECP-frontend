@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 
 import '../auth/auth_session.dart';
 import '../config/app_config.dart';
+import '../util/api_user_message.dart';
 
 /// 全局 HTTP 客户端，统一 Base URL、超时和 token 注入。
 final class ApiClient {
@@ -20,6 +21,9 @@ final class ApiClient {
           final token = AuthSession.token;
           if (token != null && token.isNotEmpty) {
             options.headers['Authorization'] = 'Bearer $token';
+          }
+          if (options.data is FormData) {
+            options.headers.remove('Content-Type');
           }
           handler.next(options);
         },
@@ -40,9 +44,12 @@ final class ApiClient {
 
   static String _extractMessage(DioException e) {
     final data = e.response?.data;
+    String raw;
     if (data is Map && data['message'] is String) {
-      return data['message'] as String;
+      raw = data['message'] as String;
+    } else {
+      raw = e.message ?? '请求失败';
     }
-    return e.message ?? '请求失败';
+    return userFacingApiMessage(raw);
   }
 }
