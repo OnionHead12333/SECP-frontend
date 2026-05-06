@@ -34,7 +34,11 @@ class SmartElderlyCareApp extends StatelessWidget {
         useMaterial3: true,
       ),
       initialRoute: '/login',
-      builder: (context, child) => ElderGlobalSosOverlay(child: child ?? const SizedBox.shrink()),
+      builder: (context, child) => ElderGlobalSosOverlay(
+        navigatorKey: appNavigatorKey,
+        scaffoldMessengerKey: appScaffoldMessengerKey,
+        child: child ?? const SizedBox.shrink(),
+      ),
       routes: {
         '/login': (_) => const LoginPage(),
         ...ElderModuleRoutes.routes(),
