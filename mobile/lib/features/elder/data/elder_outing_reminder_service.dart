@@ -31,7 +31,7 @@ final class ElderOutingReminderService {
       final body = res.data;
       if (body == null) throw Exception('空响应');
       final api = ApiResponse.fromJson(body, (raw) => raw is Map<String, dynamic> ? raw : null);
-      if (!api.isSuccess || api.data == null) throw Exception(api.message);
+      if (!api.isSuccess || api.data == null) throw Exception(api.displayMessage);
       return ElderOutingStatus.fromJson(api.data!);
     } on DioException {
       await Future<void>.delayed(const Duration(milliseconds: 120));

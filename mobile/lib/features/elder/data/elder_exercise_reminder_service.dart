@@ -35,7 +35,7 @@ final class ElderExerciseReminderService {
       final body = res.data;
       if (body == null) throw Exception('空响应');
       final api = ApiResponse.fromJson(body, (raw) => raw is Map<String, dynamic> ? raw : null);
-      if (!api.isSuccess || api.data == null) throw Exception(api.message);
+      if (!api.isSuccess || api.data == null) throw Exception(api.displayMessage);
       _mockProgress = ElderExerciseProgress.fromJson(api.data!);
       return _mockProgress;
     } on DioException {
@@ -88,7 +88,7 @@ final class ElderExerciseReminderService {
       final body = res.data;
       if (body == null) throw Exception('空响应');
       final api = ApiResponse.fromJson(body, (raw) => raw is Map<String, dynamic> ? raw : null);
-      if (!api.isSuccess) throw Exception(api.message);
+      if (!api.isSuccess) throw Exception(api.displayMessage);
       final status = api.data?['status']?.toString() ?? (sourceNormalized == 'sensor' ? 'sensor_verified' : 'self_confirmed');
       _mockProgress = _mockProgress.copyWith(
         completedCount: min(_mockProgress.completedCount + 1, _mockProgress.plannedCount),

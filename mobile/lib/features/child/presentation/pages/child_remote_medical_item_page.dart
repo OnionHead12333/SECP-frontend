@@ -131,7 +131,7 @@ class _ChildRemoteMedicalItemPageState extends State<ChildRemoteMedicalItemPage>
           return const <Map<String, dynamic>>[];
         },
       );
-      if (!api.isSuccess) throw Exception(api.message);
+      if (!api.isSuccess) throw Exception(api.displayMessage);
       final list = (api.data ?? const <Map<String, dynamic>>[]).map(_MedicineReminderRecord.fromJson).toList();
       if (!mounted) return;
       setState(() => _records = list);
@@ -297,7 +297,7 @@ class _ChildRemoteMedicalItemPageState extends State<ChildRemoteMedicalItemPage>
       final body = res.data;
       if (body != null) {
         final api = ApiResponse.fromJson(body, (raw) => raw);
-        if (!api.isSuccess) throw Exception(api.message);
+        if (!api.isSuccess) throw Exception(api.displayMessage);
       }
       if (!mounted) return;
       await _loadRecords();
@@ -504,7 +504,7 @@ class _ChildRemoteMedicalItemPageState extends State<ChildRemoteMedicalItemPage>
           final body = res.data;
           if (body == null) throw Exception('空响应');
           final api = ApiResponse.fromJson(body, (raw) => raw);
-          if (!api.isSuccess) throw Exception(api.message);
+          if (!api.isSuccess) throw Exception(api.displayMessage);
           ok++;
         } catch (e) {
           firstErr ??= e;
@@ -557,7 +557,7 @@ class _ChildRemoteMedicalItemPageState extends State<ChildRemoteMedicalItemPage>
                       for (final e in elders)
                         DropdownMenuItem(
                           value: e.id,
-                          child: Text(e.accountHint == null || e.accountHint!.isEmpty ? e.displayName : '${e.displayName}（${e.accountHint}）'),
+                          child: Text(e.displayName.trim().isEmpty ? '未命名' : e.displayName.trim()),
                         ),
                     ],
                     decoration: const InputDecoration(

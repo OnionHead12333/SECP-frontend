@@ -60,7 +60,7 @@ final class ElderWaterReminderService {
         body,
         (raw) => raw is Map<String, dynamic> ? raw : null,
       );
-      if (!api.isSuccess || api.data == null) throw Exception(api.message);
+      if (!api.isSuccess || api.data == null) throw Exception(api.displayMessage);
       _mockProgress = ElderWaterProgress.fromJson(api.data!);
       return _mockProgress;
     } on DioException {
@@ -91,7 +91,7 @@ final class ElderWaterReminderService {
         body,
         (raw) => raw is Map<String, dynamic> ? raw : null,
       );
-      if (!api.isSuccess || api.data == null) throw Exception(api.message);
+      if (!api.isSuccess || api.data == null) throw Exception(api.displayMessage);
       _mockProgress = ElderWaterProgress.fromJson(api.data!);
       return _mockProgress;
     } on DioException {

@@ -61,7 +61,7 @@ final class AuthApi {
       body,
       (raw) => raw is Map<String, dynamic> ? raw : null,
     );
-    if (!api.isSuccess || api.data == null) throw Exception(api.message);
+    if (!api.isSuccess || api.data == null) throw Exception(api.displayMessage);
     final data = api.data!;
     final token = data['token'] as String?;
     if (token == null || token.isEmpty) {
@@ -109,7 +109,7 @@ final class AuthApi {
       body,
       (raw) => raw is Map<String, dynamic> ? raw : null,
     );
-    if (!api.isSuccess) throw Exception(api.message);
+    if (!api.isSuccess) throw Exception(api.displayMessage);
   }
 
   /// 子女注册并一次创建/绑定多个老人主体（按 `注册绑定流程设计.md` 首版设计）。
@@ -138,6 +138,6 @@ final class AuthApi {
       body,
       (raw) => raw is Map<String, dynamic> ? raw : null,
     );
-    if (!api.isSuccess) throw Exception(api.message);
+    if (!api.isSuccess) throw Exception(api.displayMessage);
   }
 }
