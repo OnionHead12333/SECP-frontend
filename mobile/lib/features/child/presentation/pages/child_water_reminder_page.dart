@@ -72,7 +72,7 @@ class _ChildWaterReminderPageState extends State<ChildWaterReminderPage> {
           return const <Map<String, dynamic>>[];
         },
       );
-      if (!api.isSuccess) throw Exception(api.message);
+      if (!api.isSuccess) throw Exception(api.displayMessage);
       final list = (api.data ?? const <Map<String, dynamic>>[]).map(_WaterReminderRecord.fromJson).toList();
       if (!mounted) return;
       setState(() => _records = list);
@@ -203,7 +203,7 @@ class _ChildWaterReminderPageState extends State<ChildWaterReminderPage> {
       final body = res.data;
       if (body != null) {
         final api = ApiResponse.fromJson(body, (raw) => raw);
-        if (!api.isSuccess) throw Exception(api.message);
+        if (!api.isSuccess) throw Exception(api.displayMessage);
       }
       if (!mounted) return;
       await _loadRecords();
@@ -355,7 +355,7 @@ class _ChildWaterReminderPageState extends State<ChildWaterReminderPage> {
       final body = res.data;
       if (body == null) throw Exception('空响应');
       final api = ApiResponse.fromJson(body, (raw) => raw);
-      if (!api.isSuccess) throw Exception(api.message);
+      if (!api.isSuccess) throw Exception(api.displayMessage);
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('已创建喝水提醒')));

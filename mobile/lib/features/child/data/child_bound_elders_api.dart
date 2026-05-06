@@ -17,7 +17,7 @@ final class ChildBoundEldersApi {
         return raw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
       },
     );
-    if (!api.isSuccess) throw Exception(api.message);
+    if (!api.isSuccess) throw Exception(api.displayMessage);
     final list = api.data ?? const <Map<String, dynamic>>[];
     return list.map(_fromRow).toList();
   }

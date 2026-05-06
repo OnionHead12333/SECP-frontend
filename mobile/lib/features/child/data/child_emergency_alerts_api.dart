@@ -17,7 +17,7 @@ final class ChildEmergencyAlertsApi {
     final body = res.data;
     if (body == null) throw Exception('空响应');
     final api = ApiResponse.fromJson(body, (raw) => raw);
-    if (!api.isSuccess) throw Exception(api.message);
+    if (!api.isSuccess) throw Exception(api.displayMessage);
     final data = api.data;
     if (data is! Map) {
       throw Exception('数据格式错误');
@@ -40,6 +40,6 @@ final class ChildEmergencyAlertsApi {
     final body = res.data;
     if (body == null) throw Exception('空响应');
     final api = ApiResponse.fromJson(body, (raw) => raw);
-    if (!api.isSuccess) throw Exception(api.message);
+    if (!api.isSuccess) throw Exception(api.displayMessage);
   }
 }
