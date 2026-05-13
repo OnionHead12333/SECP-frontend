@@ -43,6 +43,28 @@ class AppConfig {
     defaultValue: false,
   );
 
+  /// 本机 / 模拟器调试语音撤回链路用：不调用系统 SpeechRecognizer，
+  /// 在进入监听态后自动模拟识别到“撤回”。真实设备联调保持 false。
+  static const bool useMockStt = bool.fromEnvironment(
+    'USE_MOCK_STT',
+    defaultValue: false,
+  );
+
+  static const String xfyunIatAppId =
+      String.fromEnvironment('XFYUN_IAT_APP_ID');
+  static const String xfyunIatApiKey =
+      String.fromEnvironment('XFYUN_IAT_API_KEY');
+  static const String xfyunIatApiSecret =
+      String.fromEnvironment('XFYUN_IAT_API_SECRET');
+  static const String xfyunIatHost = String.fromEnvironment(
+    'XFYUN_IAT_HOST',
+    defaultValue: 'iat-api.xfyun.cn',
+  );
+  static const String xfyunIatPath = String.fromEnvironment(
+    'XFYUN_IAT_PATH',
+    defaultValue: '/v2/iat',
+  );
+
   /// 当前紧急联系人功能默认保留前端本地联调能力；
   /// 后端准备好后可通过 dart-define 切到真实接口。
   static const bool useMockEmergencyContacts = bool.fromEnvironment(
