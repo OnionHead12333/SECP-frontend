@@ -58,12 +58,10 @@ class AppConfig {
     defaultValue: false,
   );
 
-  /// 喝水/用药/运动/外出提醒等接口后端未实现时，必须与「是否用真实高德」解耦：
-  /// 否则 `USE_MOCK_LOCATION=false` 时会去请求不存在的 `/v1/elder/.../today-progress`，
-  /// 服务端打出 `No static resource ...`，易误以为是 SOS 或子女登录问题。
-  /// 需要联调真实提醒 API 时再 `--dart-define=USE_MOCK_REMINDERS=false`。
+  /// 喝水/用药/锻炼提醒已与后端 `/api/v1/elder/...` 对齐。
+  /// 纯离线演示时再 `--dart-define=USE_MOCK_REMINDERS=true`。
   static const bool useMockReminders = bool.fromEnvironment(
     'USE_MOCK_REMINDERS',
-    defaultValue: true,
+    defaultValue: false,
   );
 }

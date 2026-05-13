@@ -135,8 +135,13 @@ class _ChildRemoteMedicalItemPageState extends State<ChildRemoteMedicalItemPage>
       final list = (api.data ?? const <Map<String, dynamic>>[]).map(_MedicineReminderRecord.fromJson).toList();
       if (!mounted) return;
       setState(() => _records = list);
-    } catch (e) {
-      // 不向用户暴露后端错误；保留当前列表状态即可
+    } catch (e, st) {
+      debugPrint('medicine _loadRecords failed: $e\n$st');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('加载提醒列表失败，请检查网络与登录后点击刷新')),
+        );
+      }
     } finally {
       if (mounted) setState(() => _loadingRecords = false);
     }
@@ -292,6 +297,7 @@ class _ChildRemoteMedicalItemPageState extends State<ChildRemoteMedicalItemPage>
           'frequencyRule': freq.value,
           'repeatRule': repeat.value,
           'remindTime': remindAt.toUtc().toIso8601String(),
+          'enabled': r.enabled,
         },
       );
       final body = res.data;
@@ -311,148 +317,6 @@ class _ChildRemoteMedicalItemPageState extends State<ChildRemoteMedicalItemPage>
       freq.dispose();
       repeat.dispose();
     }
-  }
-
-  Future<void> _editExampleRecord(_MedicineReminderRecord r) async {
-    final medCtrl = TextEditingController(text: r.medicineName);
-    final dosageCtrl = TextEditingController(text: r.dosage ?? '');
-    final freq = ValueNotifier<String>(r.frequencyRule ?? 'none');
-    final repeat = ValueNotifier<String>(r.repeatRule ?? 'none');
-    DateTime remindAt = r.remindTime.toLocal();
-    int hour = remindAt.hour;
-    int minute = remindAt.minute;
-
-    Future<void> pickDate() async {
-      final now = DateTime.now();
-      final picked = await showDatePicker(
-        context: context,
-        firstDate: DateTime(now.year - 1),
-        lastDate: DateTime(now.year + 5),
-        initialDate: DateTime(remindAt.year, remindAt.month, remindAt.day),
-      );
-      if (picked == null) return;
-      remindAt = DateTime(picked.year, picked.month, picked.day, hour, minute);
-    }
-
-    final saved = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialog) => AlertDialog(
-          title: const Text('修改提醒（示例）'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(controller: medCtrl, decoration: const InputDecoration(labelText: '药品名称')),
-                const SizedBox(height: 8),
-                TextField(controller: dosageCtrl, decoration: const InputDecoration(labelText: '剂量（可选）')),
-                const SizedBox(height: 8),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.calendar_today_outlined),
-                  title: const Text('日期'),
-                  subtitle: Text('${remindAt.year}-${remindAt.month.toString().padLeft(2, '0')}-${remindAt.day.toString().padLeft(2, '0')}'),
-                  trailing: TextButton(
-                    onPressed: () async {
-                      await pickDate();
-                      setDialog(() {});
-                    },
-                    child: const Text('选择'),
-                  ),
-                ),
-                Row(
-                  children: [
-                    Expanded(
-                      child: DropdownButtonFormField<int>(
-                        value: hour,
-                        items: [for (var h = 0; h < 24; h++) DropdownMenuItem(value: h, child: Text(h.toString().padLeft(2, '0')))],
-                        decoration: const InputDecoration(labelText: '小时'),
-                        onChanged: (v) => setDialog(() {
-                          if (v == null) return;
-                          hour = v;
-                          remindAt = DateTime(remindAt.year, remindAt.month, remindAt.day, hour, minute);
-                        }),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: DropdownButtonFormField<int>(
-                        value: minute,
-                        items: [for (var m = 0; m < 60; m++) DropdownMenuItem(value: m, child: Text(m.toString().padLeft(2, '0')))],
-                        decoration: const InputDecoration(labelText: '分钟'),
-                        onChanged: (v) => setDialog(() {
-                          if (v == null) return;
-                          minute = v;
-                          remindAt = DateTime(remindAt.year, remindAt.month, remindAt.day, hour, minute);
-                        }),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                ValueListenableBuilder(
-                  valueListenable: freq,
-                  builder: (context, v, _) => DropdownButtonFormField<String>(
-                    value: v,
-                    items: const [
-                      DropdownMenuItem(value: 'daily', child: Text('每天')),
-                      DropdownMenuItem(value: 'weekly', child: Text('每周')),
-                      DropdownMenuItem(value: 'none', child: Text('不重复')),
-                    ],
-                    decoration: const InputDecoration(labelText: '服用频率'),
-                    onChanged: (nv) => freq.value = nv ?? 'none',
-                  ),
-                ),
-                const SizedBox(height: 8),
-                ValueListenableBuilder(
-                  valueListenable: repeat,
-                  builder: (context, v, _) => DropdownButtonFormField<String>(
-                    value: v,
-                    items: const [
-                      DropdownMenuItem(value: 'none', child: Text('不重复')),
-                      DropdownMenuItem(value: 'daily', child: Text('每天')),
-                      DropdownMenuItem(value: 'weekly', child: Text('每周')),
-                    ],
-                    decoration: const InputDecoration(labelText: '提醒重复规则'),
-                    onChanged: (nv) => repeat.value = nv ?? 'none',
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('取消')),
-            FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('保存')),
-          ],
-        ),
-      ),
-    );
-
-    medCtrl.dispose();
-    dosageCtrl.dispose();
-    freq.dispose();
-    repeat.dispose();
-
-    if (saved != true) return;
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('示例已模拟保存（未请求后端）')));
-  }
-
-  Future<void> _deleteExampleRecord() async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('删除提醒（示例）'),
-        content: const Text('这是示例数据，仅用于测试交互。确定要模拟删除吗？'),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('取消')),
-          FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('删除')),
-        ],
-      ),
-    );
-    if (ok != true) return;
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('示例已模拟删除（未请求后端）')));
   }
 
   Future<void> _submit() async {
@@ -497,6 +361,7 @@ class _ChildRemoteMedicalItemPageState extends State<ChildRemoteMedicalItemPage>
               'dosage': dosage,
               'frequencyRule': frequencyRule,
               'repeatRule': repeatRule,
+              'enabled': true,
               'status': 'pending',
               'createdBy': 'child',
             },
@@ -564,7 +429,12 @@ class _ChildRemoteMedicalItemPageState extends State<ChildRemoteMedicalItemPage>
                       labelText: '选择老人',
                       prefixIcon: Icon(Icons.person_outline),
                     ),
-                    onChanged: _submitting || !_enabled || elders.isEmpty ? null : (v) => setState(() => _selectedElderId = v),
+                    onChanged: _submitting || elders.isEmpty
+                        ? null
+                        : (v) {
+                            setState(() => _selectedElderId = v);
+                            _loadRecords();
+                          },
                     validator: (_) {
                       if (elders.isEmpty) return '请先到「设置」绑定老人';
                       if (_selectedElderId == null || _selectedElderId!.isEmpty) return '必选';
@@ -812,68 +682,17 @@ class _ChildRemoteMedicalItemPageState extends State<ChildRemoteMedicalItemPage>
                     ],
                   ),
                   const SizedBox(height: 8),
-                  if (_records.isEmpty) ...[
-                    Text('暂无记录（示例）', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant)),
-                    const SizedBox(height: 8),
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: const Icon(Icons.medication_outlined),
-                      title: const Text('阿司匹林'),
-                      subtitle: const Text('饭后服用\n2026-04-18 08:00'),
-                      isThreeLine: true,
-                      trailing: Wrap(
-                        spacing: 6,
-                        children: [
-                          IconButton(
-                            tooltip: '修改',
-                            onPressed: () => _editExampleRecord(
-                              _MedicineReminderRecord(
-                                id: -1,
-                                elderProfileId: _elderProfileIdOrNull() ?? 0,
-                                title: '阿司匹林',
-                                medicineName: '阿司匹林',
-                                remindTime: DateTime(2026, 4, 18, 8, 0),
-                                dosage: '1片',
-                                frequencyRule: 'daily',
-                                repeatRule: 'daily',
-                              ),
-                            ),
-                            icon: const Icon(Icons.edit_outlined),
-                          ),
-                          IconButton(tooltip: '删除', onPressed: _deleteExampleRecord, icon: const Icon(Icons.delete_outline)),
-                        ],
+                  if (_records.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      child: Text(
+                        _loadingRecords
+                            ? '正在加载…'
+                            : '暂无提醒记录。批量创建成功后将显示在此处；切换老人后请点击刷新。',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
                       ),
-                    ),
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: const Icon(Icons.medication_outlined),
-                      title: const Text('降压药'),
-                      subtitle: const Text('早晚各一次\n2026-04-18 20:00'),
-                      isThreeLine: true,
-                      trailing: Wrap(
-                        spacing: 6,
-                        children: [
-                          IconButton(
-                            tooltip: '修改',
-                            onPressed: () => _editExampleRecord(
-                              _MedicineReminderRecord(
-                                id: -2,
-                                elderProfileId: _elderProfileIdOrNull() ?? 0,
-                                title: '降压药',
-                                medicineName: '降压药',
-                                remindTime: DateTime(2026, 4, 18, 20, 0),
-                                dosage: '1片',
-                                frequencyRule: 'daily',
-                                repeatRule: 'daily',
-                              ),
-                            ),
-                            icon: const Icon(Icons.edit_outlined),
-                          ),
-                          IconButton(tooltip: '删除', onPressed: _deleteExampleRecord, icon: const Icon(Icons.delete_outline)),
-                        ],
-                      ),
-                    ),
-                  ] else ...[
+                    )
+                  else ...[
                     for (final r in _records)
                       ListTile(
                         contentPadding: EdgeInsets.zero,
@@ -910,6 +729,7 @@ final class _MedicineReminderRecord {
     this.dosage,
     this.frequencyRule,
     this.repeatRule,
+    this.enabled = true,
   });
 
   final int id;
@@ -920,6 +740,7 @@ final class _MedicineReminderRecord {
   final String? dosage;
   final String? frequencyRule;
   final String? repeatRule;
+  final bool enabled;
 
   static _MedicineReminderRecord fromJson(Map<String, dynamic> json) {
     int asInt(Object? v) => v is int ? v : (v is num ? v.toInt() : int.tryParse(v?.toString() ?? '') ?? 0);
@@ -929,6 +750,8 @@ final class _MedicineReminderRecord {
     final medicineName = (json['medicineName'] ?? json['medicine_name'] ?? '').toString();
     final remindRaw = (json['remindTime'] ?? json['remind_time'])?.toString();
     final remindTime = remindRaw == null ? DateTime.now() : DateTime.tryParse(remindRaw)?.toLocal() ?? DateTime.now();
+    final en = json['enabled'];
+    final enabled = en is bool ? en : (en?.toString() == '1' || en?.toString().toLowerCase() == 'true');
     return _MedicineReminderRecord(
       id: id,
       elderProfileId: elderProfileId,
@@ -938,6 +761,7 @@ final class _MedicineReminderRecord {
       dosage: json['dosage']?.toString(),
       frequencyRule: (json['frequencyRule'] ?? json['frequency_rule'])?.toString(),
       repeatRule: (json['repeatRule'] ?? json['repeat_rule'])?.toString(),
+      enabled: enabled || en == null,
     );
   }
 }

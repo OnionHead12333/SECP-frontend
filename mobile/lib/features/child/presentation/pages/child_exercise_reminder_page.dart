@@ -93,7 +93,13 @@ class _ChildExerciseReminderPageState extends State<ChildExerciseReminderPage> {
       final list = (api.data ?? const <Map<String, dynamic>>[]).map(_ExerciseReminderRecord.fromJson).toList();
       if (!mounted) return;
       setState(() => _records = list);
-    } catch (_) {
+    } catch (e, st) {
+      debugPrint('exercise _loadRecords failed: $e\n$st');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('加载提醒列表失败，请检查网络与登录后点击刷新')),
+        );
+      }
     } finally {
       if (mounted) setState(() => _loadingRecords = false);
     }
@@ -496,22 +502,17 @@ class _ChildExerciseReminderPageState extends State<ChildExerciseReminderPage> {
                     ],
                   ),
                   const SizedBox(height: 8),
-                  if (_records.isEmpty) ...[
-                    Text('暂无记录', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant)),
-                    const SizedBox(height: 8),
-                    _exampleTile(
-                      context,
-                      title: '散步锻炼',
-                      subtitle: '散步 · 每天 · 08:00 - 18:00',
-                      statusLabel: '老人已确认',
-                    ),
-                    _exampleTile(
-                      context,
-                      title: '太极锻炼',
-                      subtitle: '太极 · 每周 · 08:00 - 18:00',
-                      statusLabel: '待完成',
-                    ),
-                  ] else ...[
+                  if (_records.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      child: Text(
+                        _loadingRecords
+                            ? '正在加载…'
+                            : '暂无锻炼提醒记录。创建后将显示在此处；切换老人后请点击刷新。',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
+                      ),
+                    )
+                  else ...[
                     for (final r in _records)
                       ListTile(
                         contentPadding: EdgeInsets.zero,
@@ -537,16 +538,6 @@ class _ChildExerciseReminderPageState extends State<ChildExerciseReminderPage> {
           ),
         ],
       ),
-    );
-  }
-
-  Widget _exampleTile(BuildContext context, {required String title, required String subtitle, required String statusLabel}) {
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      leading: const Icon(Icons.directions_run_outlined),
-      title: Text('$title（示例）'),
-      subtitle: Text('$subtitle\n状态：$statusLabel'),
-      isThreeLine: true,
     );
   }
 }
