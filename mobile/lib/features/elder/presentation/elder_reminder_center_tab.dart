@@ -49,16 +49,7 @@ class _ElderReminderCenterTabState extends State<ElderReminderCenterTab>
   Timer? _progressRefreshTimer;
 
   int get _elderId {
-    switch (AuthSession.elderPhone) {
-      case '13800138001':
-        return 1;
-      case '13800138002':
-        return 2;
-      case '13800138003':
-        return 3;
-      default:
-        return 1;
-    }
+    return AuthSession.elderId ?? 1;
   }
 
   @override
@@ -535,6 +526,20 @@ void didChangeAppLifecycleState(AppLifecycleState state) {
         ],
         const SizedBox(height: 12),
         _box(
+          title: '调试信息',
+          step: '用于确认当前登录态与接口返回的老人标识',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Auth role: ${AuthSession.role?.name ?? 'null'}', style: const TextStyle(fontSize: 16, height: 1.5)),
+              Text('Auth phone: ${AuthSession.elderPhone ?? 'null'}', style: const TextStyle(fontSize: 16, height: 1.5)),
+              Text('Auth userId: ${AuthSession.elderId?.toString() ?? 'null'}', style: const TextStyle(fontSize: 16, height: 1.5)),
+              Text('elderId used by page: $_elderId', style: const TextStyle(fontSize: 16, height: 1.5)),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        _box(
           title: '吃药提醒',
           step: '到时间会弹窗提醒并语音播报',
           child: _medicine == null
@@ -593,6 +598,20 @@ void didChangeAppLifecycleState(AppLifecycleState state) {
                   ]),
                 ]),
         ),
+        const SizedBox(height: 12),
+        _box(
+          title: '调试信息',
+          step: '查看当前接口返回的关键字段，方便确认数据库数据是否生效',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _debugRow('elderId', '$_elderId'),
+              _debugRow('water', _debugWater()),
+              _debugRow('medicine', _debugMedicine()),
+              _debugRow('exercise', _debugExercise()),
+            ],
+          ),
+        ),
       ],
     );
   }
@@ -615,5 +634,31 @@ void didChangeAppLifecycleState(AppLifecycleState state) {
     );
   }
 
-  // 这里不再展示复杂字段，老人端只保留“剩余次数”和“操作步骤”。
+  Widget _debugRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: SelectableText(
+        '$label: $value',
+        style: const TextStyle(fontSize: 14, color: Color(0xFF0F172A)),
+      ),
+    );
+  }
+
+  String _debugWater() {
+    final w = _water;
+    if (w == null) return 'null';
+    return 'planned=${w.plannedCount}, confirmed=${w.confirmedCount}, missed=${w.missedCount}, pending=${w.pendingCount}, activeReminderId=${w.activeReminderId}, lastConfirmedAt=${w.lastConfirmedAt}, nextReminderAt=${w.nextReminderAt}';
+  }
+
+  String _debugMedicine() {
+    final m = _medicine;
+    if (m == null) return 'null';
+    return 'planned=${m.plannedCount}, confirmed=${m.confirmedCount}, missed=${m.missedCount}, pending=${m.pendingCount}, activeReminderId=${m.activeReminderId}, medicineName=${m.medicineName}, doseDesc=${m.doseDesc}, lastConfirmedAt=${m.lastConfirmedAt}, nextReminderAt=${m.nextReminderAt}';
+  }
+
+  String _debugExercise() {
+    final e = _exercise;
+    if (e == null) return 'null';
+    return 'planned=${e.plannedCount}, completed=${e.completedCount}, missed=${e.missedCount}, pending=${e.pendingCount}, activeReminderId=${e.activeReminderId}, lastStatus=${e.lastCompletionStatus}, lastSource=${e.lastCompletionSource}, lastCompletedAt=${e.lastCompletedAt}';
+  }
 }

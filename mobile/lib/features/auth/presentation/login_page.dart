@@ -96,6 +96,7 @@ class _LoginPageState extends State<LoginPage> {
         gender: result.gender,
         birthday: result.birthday,
       );
+      AuthSession.elderId = result.userId;
       if (!mounted) return;
       Navigator.of(context).pushNamedAndRemoveUntil(ElderModuleRoutes.elderHome, (r) => false);
     } catch (e, st) {

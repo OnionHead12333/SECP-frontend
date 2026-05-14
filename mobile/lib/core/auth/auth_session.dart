@@ -18,6 +18,7 @@ final class AuthSession {
   static bool elderClaimed = false;
   static int elderFamilyCount = 0;
   static String? elderPhone;
+  static int? elderId;
 
   static bool get isLoggedIn => token != null && token!.isNotEmpty;
 
@@ -44,6 +45,7 @@ final class AuthSession {
     elderPhone = null;
     elderGender = null;
     elderBirthday = null;
+    elderId = null;
     elderClaimed = false;
     elderFamilyCount = 0;
   }

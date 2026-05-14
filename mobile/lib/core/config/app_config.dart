@@ -4,6 +4,7 @@
 ///
 /// 当前真机 + 电脑 WLAN IPv4：
 /// `flutter run --dart-define=API_BASE=http://172.20.10.3:8080/api`
+/// `flutter run --dart-define=API_BASE=http://10.61.251.148:8080/api`
 ///
 /// 其他环境备用地址（不用时保持注释）：
 /// - Android 模拟器访问电脑本机后端：
@@ -14,7 +15,7 @@
 ///   `flutter run -d windows --dart-define=API_BASE=http://localhost:8080/api`
 ///
 /// 选择规则：
-/// - 跑 Android 真机且后端在电脑：用电脑当前 WLAN IPv4，例如 `172.20.10.3`。
+/// - 跑 Android 真机且后端在电脑：用电脑当前 WLAN IPv4，例如 `10.61.251.148`。
 /// - 跑 Android 模拟器：用 `10.0.2.2`。
 /// - 换 WiFi / 手机热点后 IP 可能变化，重新执行 `ipconfig`，看 WLAN 的 IPv4。
 /// - 后端配置了 `/api` 上下文路径，所以这里保留 `/api`。
@@ -64,6 +65,6 @@ class AppConfig {
   /// 需要联调真实提醒 API 时再 `--dart-define=USE_MOCK_REMINDERS=false`。
   static const bool useMockReminders = bool.fromEnvironment(
     'USE_MOCK_REMINDERS',
-    defaultValue: true,
+    defaultValue: false,
   );
 }
