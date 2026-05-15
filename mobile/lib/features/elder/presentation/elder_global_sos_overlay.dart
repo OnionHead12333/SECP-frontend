@@ -29,9 +29,9 @@ class _ElderGlobalSosOverlayState extends State<ElderGlobalSosOverlay> {
   static const int _fallbackRevokeSeconds = 10;
 
   Timer? _sessionWatcher;
-  AppRole? _lastRole;
   bool _busy = false;
   int? _currentAlertId;
+  AppRole? _lastRole;
 
   bool get _shouldShowSos => AuthSession.isLoggedIn && AuthSession.role == AppRole.elder;
 
@@ -39,16 +39,22 @@ class _ElderGlobalSosOverlayState extends State<ElderGlobalSosOverlay> {
   void initState() {
     super.initState();
     _lastRole = AuthSession.role;
-    _sessionWatcher = Timer.periodic(const Duration(milliseconds: 500), (_) {
-      if (!mounted) return;
-      if (_lastRole != AuthSession.role) {
-        setState(() => _lastRole = AuthSession.role);
-      }
-    });
+    AuthSession.sessionChanges.addListener(_handleSessionChanged);
+  }
+
+  void _handleSessionChanged() {
+    if (!mounted) return;
+    final nextRole = AuthSession.role;
+    if (_lastRole != nextRole) {
+      setState(() => _lastRole = nextRole);
+      return;
+    }
+    setState(() {});
   }
 
   @override
   void dispose() {
+    AuthSession.sessionChanges.removeListener(_handleSessionChanged);
     _sessionWatcher?.cancel();
     super.dispose();
   }

@@ -54,6 +54,19 @@ class _ChildWaterReminderPageState extends State<ChildWaterReminderPage> {
 
   String _fmtHm(int h, int m) => '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}';
 
+  String _apiTime(int h, int m) {
+    if (h >= 24) return '23:59:59';
+    if (h < 0) return '00:00:00';
+    return '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}:00';
+  }
+
+  String _displayTime(String? raw) {
+    if (raw == null || raw.isEmpty) return '--';
+    if (raw == '24:00:00') return '23:59';
+    if (raw.length >= 5) return raw.substring(0, 5);
+    return raw;
+  }
+
   Future<void> _loadRecords() async {
     final elderProfileId = _elderProfileIdOrNull();
     if (elderProfileId == null) return;
@@ -196,8 +209,8 @@ class _ChildWaterReminderPageState extends State<ChildWaterReminderPage> {
           'title': '喝水提醒',
           'dailyTargetMl': target,
           'intervalMinutes': interval,
-          'startTime': '${sh.toString().padLeft(2, '0')}:${sm.toString().padLeft(2, '0')}:00',
-          'endTime': '${eh.toString().padLeft(2, '0')}:${em.toString().padLeft(2, '0')}:00',
+          'startTime': _apiTime(sh, sm),
+          'endTime': _apiTime(eh, em),
         },
       );
       final body = res.data;
@@ -557,7 +570,7 @@ class _ChildWaterReminderPageState extends State<ChildWaterReminderPage> {
                       contentPadding: EdgeInsets.zero,
                       leading: const Icon(Icons.water_drop_outlined),
                       title: const Text('喝水提醒'),
-                      subtitle: const Text('目标 1500ml · 间隔 60 分钟\n时段 08:00 - 22:00'),
+                      subtitle: Text('目标 1500ml · 间隔 60 分钟\n时段 ${_displayTime('08:00:00')} - ${_displayTime('22:00:00')}'),
                       isThreeLine: true,
                       trailing: Wrap(
                         spacing: 6,
@@ -585,7 +598,7 @@ class _ChildWaterReminderPageState extends State<ChildWaterReminderPage> {
                       contentPadding: EdgeInsets.zero,
                       leading: const Icon(Icons.water_drop_outlined),
                       title: const Text('喝水提醒'),
-                      subtitle: const Text('目标 1800ml · 间隔 90 分钟\n时段 09:00 - 21:00'),
+                      subtitle: Text('目标 1800ml · 间隔 90 分钟\n时段 ${_displayTime('09:00:00')} - ${_displayTime('21:00:00')}'),
                       isThreeLine: true,
                       trailing: Wrap(
                         spacing: 6,
@@ -615,7 +628,7 @@ class _ChildWaterReminderPageState extends State<ChildWaterReminderPage> {
                         contentPadding: EdgeInsets.zero,
                         leading: const Icon(Icons.water_drop_outlined),
                         title: const Text('喝水提醒'),
-                        subtitle: Text('目标 ${r.dailyTargetMl}ml · 间隔 ${r.intervalMinutes} 分钟\n时段 ${r.startTimeText ?? '--'} - ${r.endTimeText ?? '--'}'),
+                        subtitle: Text('目标 ${r.dailyTargetMl}ml · 间隔 ${r.intervalMinutes} 分钟\n时段 ${_displayTime(r.startTimeText)} - ${_displayTime(r.endTimeText)}'),
                         isThreeLine: true,
                         trailing: Wrap(
                           spacing: 6,
