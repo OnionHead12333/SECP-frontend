@@ -8,12 +8,14 @@ import 'package:flutter_tts/flutter_tts.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:crypto/crypto.dart';
 import 'package:record/record.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:web_socket_channel/status.dart' as ws_status;
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../../../core/auth/app_role.dart';
 import '../../../core/auth/auth_session.dart';
 import '../../../core/config/app_config.dart';
+import '../data/elder_emergency_contacts_service.dart';
 import '../data/elder_help_service.dart';
 import '../models/elder_help_request.dart';
 
@@ -259,8 +261,10 @@ class _GlobalSosCountdownSheetState extends State<_GlobalSosCountdownSheet>
   final AudioRecorder _recorder = AudioRecorder();
 
   late final AnimationController _micPulseController;
+  late DateTime _deadlineAt;
   late int _secondsLeft;
   Timer? _countdownTimer;
+  Timer? _timeoutTimer;
   Timer? _mockSpeechTimer;
   StreamSubscription<Uint8List>? _recordSub;
   StreamSubscription<dynamic>? _xfResultSub;
@@ -276,6 +280,7 @@ class _GlobalSosCountdownSheetState extends State<_GlobalSosCountdownSheet>
   @override
   void initState() {
     super.initState();
+    _deadlineAt = DateTime.now().add(Duration(seconds: widget.seconds));
     _secondsLeft = widget.seconds;
     _sosLog('sheet init alertId=${widget.alertId} seconds=${widget.seconds}');
     _micPulseController = AnimationController(
@@ -301,26 +306,39 @@ class _GlobalSosCountdownSheetState extends State<_GlobalSosCountdownSheet>
   }
 
   void _startCountdown() {
+    _countdownTimer?.cancel();
+    _timeoutTimer?.cancel();
+    _syncSecondsLeft();
     _sosLog('countdown start alertId=${widget.alertId} seconds=$_secondsLeft');
-    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) async {
+    _countdownTimer = Timer.periodic(const Duration(milliseconds: 250), (_) {
       if (!mounted || _isSubmitting) return;
-      if (_secondsLeft <= 1) {
-        _sosLog(
-            'countdown reached timeout alertId=${widget.alertId}; submit send-now');
-        await _submitSendNow(_SosSheetResult.timeout);
-        return;
-      }
-      setState(() => _secondsLeft -= 1);
+      _syncSecondsLeft();
+    });
+    final remaining = _deadlineAt.difference(DateTime.now());
+    _timeoutTimer = Timer(remaining.isNegative ? Duration.zero : remaining, () {
+      if (!mounted || _isSubmitting) return;
+      _sosLog(
+          'countdown timeout fired alertId=${widget.alertId}; submit send-now');
+      unawaited(_submitSendNow(_SosSheetResult.timeout));
     });
   }
 
+  void _syncSecondsLeft() {
+    final remainingMs = _deadlineAt.difference(DateTime.now()).inMilliseconds;
+    final nextSeconds = (remainingMs / 1000).ceil().clamp(0, widget.seconds);
+    if (nextSeconds == _secondsLeft) return;
+    setState(() => _secondsLeft = nextSeconds);
+  }
+
   void _stopCountdown() {
-    if (_countdownTimer != null) {
+    if (_countdownTimer != null || _timeoutTimer != null) {
       _sosLog(
           'countdown stop alertId=${widget.alertId} secondsLeft=$_secondsLeft');
     }
     _countdownTimer?.cancel();
     _countdownTimer = null;
+    _timeoutTimer?.cancel();
+    _timeoutTimer = null;
   }
 
   Future<void> _startVoiceWithdrawFlow() async {
@@ -704,6 +722,7 @@ class _GlobalSosCountdownSheetState extends State<_GlobalSosCountdownSheet>
           'revoke submit failed alertId=${widget.alertId} mode=$cancelMode error=$e');
       _isSubmitting = false;
       if (!mounted) return;
+      _deadlineAt = DateTime.now().add(Duration(seconds: _secondsLeft));
       setState(() => _voicePhase = _VoiceWithdrawPhase.listening);
       _startCountdown();
       ScaffoldMessenger.maybeOf(context)?.showSnackBar(
@@ -729,18 +748,78 @@ class _GlobalSosCountdownSheetState extends State<_GlobalSosCountdownSheet>
       await ElderHelpService.sendNow(alertId: widget.alertId);
       _sosLog(
           'send-now submit success alertId=${widget.alertId} result=$result');
-      if (mounted) Navigator.of(context).pop(result);
+      if (mounted) {
+        Navigator.of(context).pop(result);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          unawaited(_launchPrimaryEmergencyContactDialer());
+        });
+      }
     } catch (e) {
       _sosLog(
           'send-now submit failed alertId=${widget.alertId} result=$result error=$e');
       _isSubmitting = false;
       if (!mounted) return;
+      _deadlineAt = DateTime.now().add(Duration(seconds: _secondsLeft));
       setState(() => _voicePhase = _VoiceWithdrawPhase.listening);
       _startCountdown();
       ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         SnackBar(content: Text(_friendlySubmitError('发送', e))),
       );
       unawaited(_startSpeechListening());
+    }
+  }
+
+  Future<void> _launchPrimaryEmergencyContactDialer() async {
+    try {
+      final elderPhone = AuthSession.elderPhone ?? '';
+      final contacts = await ElderEmergencyContactsService.fetchContacts(
+        elderPhone: elderPhone,
+      );
+      final callableContacts = contacts
+          .where((contact) => contact.phone.trim().isNotEmpty)
+          .toList();
+      if (callableContacts.isEmpty) {
+        _sosLog('dialer skipped: no emergency contact phone found');
+        debugPrint('未找到可拨打的紧急联系人电话');
+        return;
+      }
+      final primary = callableContacts.where((contact) => contact.isPrimary);
+      final selected = primary.isNotEmpty
+          ? primary.first
+          : callableContacts.first;
+      _sosLog(
+        'dialer selected emergency contact id=${selected.id} name=${selected.name} primary=${selected.isPrimary}',
+      );
+      await _launchPhoneDialer(selected.phone);
+    } catch (e) {
+      _sosLog('dialer contact lookup failed: $e');
+      debugPrint('未能获取紧急联系人电话');
+    }
+  }
+
+  Future<void> _launchPhoneDialer(String phoneNumber) async {
+    final normalized = phoneNumber.trim();
+    if (normalized.isEmpty) {
+      _sosLog('dialer skipped: phone number is empty');
+      return;
+    }
+    final uri = Uri(scheme: 'tel', path: normalized);
+    try {
+      final supported = await canLaunchUrl(uri);
+      if (!supported) {
+        _sosLog('dialer unsupported uri=$uri');
+        debugPrint('当前设备不支持拨打电话');
+        return;
+      }
+      final launched =
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+      _sosLog('dialer launch result=$launched phone=$normalized');
+      if (!launched) {
+        debugPrint('当前设备不支持拨打电话');
+      }
+    } catch (e) {
+      _sosLog('dialer launch failed phone=$normalized error=$e');
+      debugPrint('当前设备不支持拨打电话');
     }
   }
 

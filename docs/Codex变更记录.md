@@ -472,3 +472,106 @@ SOS 语音撤回已在真机跑通，需要给组员一份安全、可复制的�
 验证结果：
 
 文档新增，无代码变动。
+
+### SOS 发送成功后拉起系统拨号盘
+
+变动文件：
+
+```text
+mobile\lib\features\elder\presentation\elder_global_sos_overlay.dart
+mobile\android\app\src\main\AndroidManifest.xml
+```
+
+变动原因：
+
+倒计时结束或用户点击“立即发送”后，求助已经发给子女端，此时希望同步拉起系统原生拨号盘，预填紧急联系人手机号，方便老人继续电话联系。
+
+主要内容：
+
+- 引入 `url_launcher`
+- 新增 `_launchPhoneDialer(String phoneNumber)`
+- 使用 `Uri(scheme: 'tel', path: phoneNumber)` 构造拨号 URI
+- 通过 `canLaunchUrl` 做前置判断，设备不支持时记录“当前设备不支持拨打电话”
+- 在 `_submitSendNow` 后端发送成功后，先关闭 BottomSheet，再通过 `addPostFrameCallback` 拉起拨号盘
+- AndroidManifest `<queries>` 增加 `android.intent.action.DIAL` + `tel` scheme，适配 Android 11+ 包可见性限制
+- 当前测试号码临时写死为 `16079093831`
+
+验证结果：
+
+```powershell
+cd E:\SECP-frontend\mobile
+.\flutterw.cmd analyze lib\features\elder\presentation\elder_global_sos_overlay.dart
+```
+
+结果：
+
+```text
+No issues found!
+```
+
+### 修复 SOS 倒计时卡在最后 1 秒
+
+变动文件：
+
+```text
+mobile\lib\features\elder\presentation\elder_global_sos_overlay.dart
+```
+
+变动原因：
+
+真机测试发现用户不点击“确认撤回”或“立即发送”时，底部弹窗可能停在“1 秒内可撤回”，没有自动进入发送流程。
+
+主要内容：
+
+- 增加 `_deadlineAt`，倒计时改为基于绝对截止时间计算
+- UI 刷新 Timer 改为每 250ms 同步一次剩余秒数
+- 增加独立 `_timeoutTimer`，到截止时间后直接触发 `_submitSendNow(_SosSheetResult.timeout)`
+- `_stopCountdown()` 同时取消 UI 刷新 Timer 和超时 Timer
+- 发送/撤回失败恢复倒计时时，会用当前剩余秒数重建截止时间
+
+验证结果：
+
+```powershell
+cd E:\SECP-frontend\mobile
+.\flutterw.cmd analyze lib\features\elder\presentation\elder_global_sos_overlay.dart
+```
+
+结果：
+
+```text
+No issues found!
+```
+
+### SOS 拨号号码改为读取紧急联系人接口
+
+变动文件：
+
+```text
+mobile\lib\features\elder\presentation\elder_global_sos_overlay.dart
+```
+
+变动原因：
+
+上一版拨号盘号码按测试需求临时写死为 `16079093831`，无法保证和数据库中的紧急联系人一致。现在改为发送成功后实时读取老人端紧急联系人接口。
+
+主要内容：
+
+- 引入 `ElderEmergencyContactsService`
+- 新增 `_launchPrimaryEmergencyContactDialer()`
+- 发送成功并关闭 BottomSheet 后，调用 `/v1/elder/emergency-contacts/self` 获取当前登录老人紧急联系人
+- 优先选择 `isPrimary == true` 的联系人；没有主联系人时选择列表第一位有电话的联系人
+- 找不到可拨打电话时仅记录日志，不影响 SOS 已发送状态
+- `_launchPhoneDialer` 保持只负责打开系统拨号盘
+
+验证结果：
+
+```powershell
+cd E:\SECP-frontend\mobile
+.\flutterw.cmd analyze lib\features\elder\presentation\elder_global_sos_overlay.dart
+```
+
+结果：
+
+```text
+No issues found!
+```

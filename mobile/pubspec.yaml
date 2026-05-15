@@ -32,6 +32,7 @@ dependencies:
   record: ^6.2.0
   web_socket_channel: ^3.0.3
   crypto: ^3.0.7
+  url_launcher: ^6.3.2
 
 dev_dependencies:
   flutter_test:
