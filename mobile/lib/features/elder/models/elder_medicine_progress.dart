@@ -69,4 +69,3 @@ class ElderMedicineProgress {
     return DateTime.tryParse(raw)?.toLocal();
   }
 }
-

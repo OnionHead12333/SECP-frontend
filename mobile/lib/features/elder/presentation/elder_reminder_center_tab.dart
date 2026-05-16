@@ -46,7 +46,30 @@ class _ElderReminderCenterTabState extends State<ElderReminderCenterTab>
   bool _medicineDialogOpen = false;
   DateTime? _medicineLastPromptAt;
   int _medicineSnoozeCount = 0;
+
+  bool _exerciseDialogOpen = false;
+  DateTime? _exerciseLastPromptAt;
+
   Timer? _progressRefreshTimer;
+  Timer? _scheduleTickTimer;
+
+  AppLifecycleState _lifecycleState = AppLifecycleState.resumed;
+
+  String? _lastAutoMedicineKey;
+  String? _lastAutoWaterKey;
+  String? _lastAutoExerciseKey;
+
+  bool get _anyReminderDialogOpen => _medicineDialogOpen || _waterDialogOpen || _exerciseDialogOpen;
+
+  bool get _isAppForeground => _lifecycleState == AppLifecycleState.resumed;
+
+  String _twoDigits(int n) => n.toString().padLeft(2, '0');
+
+  String _formatLocalHm(DateTime? t) {
+    if (t == null) return '—';
+    final loc = t.toLocal();
+    return '${_twoDigits(loc.hour)}:${_twoDigits(loc.minute)}';
+  }
 
   int get _elderId {
     return AuthSession.elderId ?? 1;
@@ -54,11 +77,20 @@ class _ElderReminderCenterTabState extends State<ElderReminderCenterTab>
 
   @override
   void initState() {
-  super.initState();
-  WidgetsBinding.instance.addObserver(this);
-  _initTts();
-  _load();
-  _startProgressRefreshTimer();
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    final initialLifecycle = WidgetsBinding.instance.lifecycleState;
+    if (initialLifecycle != null) {
+      _lifecycleState = initialLifecycle;
+    }
+    _initTts();
+    _load();
+    _startProgressRefreshTimer();
+    _scheduleTickTimer?.cancel();
+    _scheduleTickTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      if (!_isAppForeground || !mounted) return;
+      _checkScheduledReminders();
+    });
   }
 
   Future<void> _initTts() async {
@@ -72,10 +104,11 @@ class _ElderReminderCenterTabState extends State<ElderReminderCenterTab>
 
   @override
   void dispose() {
-  WidgetsBinding.instance.removeObserver(this);
-  _progressRefreshTimer?.cancel();
-  _tts.stop();
-  super.dispose();
+    WidgetsBinding.instance.removeObserver(this);
+    _progressRefreshTimer?.cancel();
+    _scheduleTickTimer?.cancel();
+    _tts.stop();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -96,6 +129,7 @@ class _ElderReminderCenterTabState extends State<ElderReminderCenterTab>
         _medicine = medicine;
         _loading = false;
       });
+      _checkScheduledReminders();
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -106,19 +140,70 @@ class _ElderReminderCenterTabState extends State<ElderReminderCenterTab>
   }
 
   Future<void> _refreshReminderProgressSilently() async {
-  if (!mounted || _loading || _waterSubmitting || _medicineSubmitting || _exerciseSubmitting) {
-    return;
+    if (!mounted || _loading || _waterSubmitting || _medicineSubmitting || _exerciseSubmitting) {
+      return;
+    }
+    try {
+      final water = await ElderWaterReminderService.fetchTodayProgress(elderId: _elderId);
+      final medicine = await ElderMedicineReminderService.fetchTodayProgress(elderId: _elderId);
+      final exercise = await ElderExerciseReminderService.fetchTodayProgress(elderId: _elderId);
+      if (!mounted) return;
+      setState(() {
+        _water = water;
+        _medicine = medicine;
+        _exercise = exercise;
+      });
+      _checkScheduledReminders();
+    } catch (_) {}
   }
-  try {
-    final water = await ElderWaterReminderService.fetchTodayProgress(elderId: _elderId);
-    final medicine = await ElderMedicineReminderService.fetchTodayProgress(elderId: _elderId);
-    if (!mounted) return;
-    setState(() {
-      _water = water;
-      _medicine = medicine;
-    });
-  } catch (_) {}
-}
+
+  void _checkScheduledReminders() {
+    if (!_isAppForeground || !mounted) return;
+    if (_loading || _anyReminderDialogOpen) return;
+    if (_waterSubmitting || _medicineSubmitting || _exerciseSubmitting) return;
+
+    final now = DateTime.now();
+
+    void tryMedicine() {
+      final m = _medicine;
+      if (m == null || m.pendingCount <= 0 || m.activeReminderId <= 0) return;
+      final at = m.nextReminderAt;
+      if (at == null) return;
+      if (now.isBefore(at)) return;
+      final key = 'm_${m.activeReminderId}_${at.millisecondsSinceEpoch}';
+      if (_lastAutoMedicineKey == key) return;
+      _lastAutoMedicineKey = key;
+      unawaited(_simulateMedicineReminder());
+    }
+
+    void tryWater() {
+      final w = _water;
+      if (w == null || w.pendingCount <= 0 || w.activeReminderId <= 0) return;
+      final at = w.nextReminderAt;
+      if (at == null) return;
+      if (now.isBefore(at)) return;
+      final key = 'w_${w.activeReminderId}_${at.millisecondsSinceEpoch}';
+      if (_lastAutoWaterKey == key) return;
+      _lastAutoWaterKey = key;
+      unawaited(_simulateWaterReminder());
+    }
+
+    void tryExercise() {
+      final ex = _exercise;
+      if (ex == null || ex.pendingCount <= 0 || ex.activeReminderId <= 0) return;
+      final at = ex.nextReminderAt;
+      if (at == null) return;
+      if (now.isBefore(at)) return;
+      final key = 'e_${ex.activeReminderId}_${at.millisecondsSinceEpoch}';
+      if (_lastAutoExerciseKey == key) return;
+      _lastAutoExerciseKey = key;
+      unawaited(_simulateExerciseReminder());
+    }
+
+    tryMedicine();
+    tryWater();
+    tryExercise();
+  }
 
 void _startProgressRefreshTimer() {
   _progressRefreshTimer?.cancel();
@@ -130,6 +215,7 @@ void _startProgressRefreshTimer() {
 
 @override
 void didChangeAppLifecycleState(AppLifecycleState state) {
+  _lifecycleState = state;
   if (state == AppLifecycleState.resumed) {
     _refreshReminderProgressSilently();
   }
@@ -150,9 +236,16 @@ void didChangeAppLifecycleState(AppLifecycleState state) {
   }
 
   Future<void> _postponeWaterOnce() async {
-    final latest = await ElderWaterReminderService.postponeOnceMock();
-    if (!mounted) return;
-    setState(() => _water = latest);
+    final water = _water;
+    if (water == null || water.activeReminderId <= 0) return;
+    try {
+      final latest = await ElderWaterReminderService.snoozeWater(
+        elderId: _elderId,
+        reminderId: water.activeReminderId,
+      );
+      if (!mounted) return;
+      setState(() => _water = latest);
+    } catch (_) {}
   }
 
 
@@ -190,9 +283,16 @@ void didChangeAppLifecycleState(AppLifecycleState state) {
   }
 
   Future<void> _postponeMedicineOnce() async {
-    final latest = await ElderMedicineReminderService.postponeOnceMock();
-    if (!mounted) return;
-    setState(() => _medicine = latest);
+    final m = _medicine;
+    if (m == null || m.activeReminderId <= 0) return;
+    try {
+      final latest = await ElderMedicineReminderService.snoozeMedicine(
+        elderId: _elderId,
+        reminderId: m.activeReminderId,
+      );
+      if (!mounted) return;
+      setState(() => _medicine = latest);
+    } catch (_) {}
   }
 
   Future<void> _simulateMedicineReminder() async {
@@ -434,11 +534,17 @@ void didChangeAppLifecycleState(AppLifecycleState state) {
   }
 
   Future<void> _simulateExerciseReminder() async {
+    final now = DateTime.now();
+    if (_exerciseDialogOpen) return;
+    if (_exerciseLastPromptAt != null && now.difference(_exerciseLastPromptAt!) < const Duration(seconds: 2)) return;
     final ex = _exercise;
     if (ex == null) return;
+    _exerciseLastPromptAt = now;
+    _exerciseDialogOpen = true;
+    if (mounted) setState(() {});
     bool? res;
     try {
-      _playReminderCue();
+      _playReminderCue('该运动了，请量力活动身体。');
       res = await showDialog<bool>(
         context: context,
         builder: (context) {
@@ -455,6 +561,9 @@ void didChangeAppLifecycleState(AppLifecycleState state) {
     } catch (e) {
       _toast('提醒弹窗异常：${e.toString().replaceFirst('Exception: ', '')}');
       return;
+    } finally {
+      _exerciseDialogOpen = false;
+      if (mounted) setState(() {});
     }
     if (res != true || !mounted) return;
     await ElderExerciseReminderService.startExercise(elderId: _elderId, reminderId: ex.activeReminderId);
@@ -550,10 +659,15 @@ void didChangeAppLifecycleState(AppLifecycleState state) {
                     style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
                   ),
                   const SizedBox(height: 12),
+                  Text(
+                    '下次提醒（本地显示）：${_formatLocalHm(_medicine!.nextReminderAt)}',
+                    style: const TextStyle(fontSize: 16, color: Color(0xFF475569), fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 12),
                   Wrap(spacing: 10, runSpacing: 10, children: [
                     OutlinedButton(
                       onPressed: _simulateMedicineReminder,
-                      child: const Text('模拟触发提醒', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                      child: const Text('手动试听', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
                     ),
                   ]),
                 ]),
@@ -570,10 +684,15 @@ void didChangeAppLifecycleState(AppLifecycleState state) {
                     style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
                   ),
                   const SizedBox(height: 12),
+                  Text(
+                    '下次提醒（本地显示）：${_formatLocalHm(_water!.nextReminderAt)}',
+                    style: const TextStyle(fontSize: 16, color: Color(0xFF475569), fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 12),
                   Wrap(spacing: 10, runSpacing: 10, children: [
                     OutlinedButton(
                       onPressed: _simulateWaterReminder,
-                      child: const Text('模拟触发提醒', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                      child: const Text('手动试听', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
                     ),
                   ]),
                 ]),
@@ -590,10 +709,15 @@ void didChangeAppLifecycleState(AppLifecycleState state) {
                     style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
                   ),
                   const SizedBox(height: 12),
+                  Text(
+                    '下次提醒（本地显示）：${_formatLocalHm(_exercise!.nextReminderAt)}',
+                    style: const TextStyle(fontSize: 16, color: Color(0xFF475569), fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 12),
                   Wrap(spacing: 10, runSpacing: 10, children: [
                     OutlinedButton(
                       onPressed: _simulateExerciseReminder,
-                      child: const Text('模拟触发提醒', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                      child: const Text('手动试听', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
                     ),
                   ]),
                 ]),
@@ -606,9 +730,7 @@ void didChangeAppLifecycleState(AppLifecycleState state) {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _debugRow('elderId', '$_elderId'),
-              _debugRow('water', _debugWater()),
-              _debugRow('medicine', _debugMedicine()),
-              _debugRow('exercise', _debugExercise()),
+              ..._debugProgressRows(),
             ],
           ),
         ),
@@ -644,21 +766,42 @@ void didChangeAppLifecycleState(AppLifecycleState state) {
     );
   }
 
+  /// 三条进度都未写入时合并为一行说明，避免出现三行重复的「null」。
+  List<Widget> _debugProgressRows() {
+    final allMissing = _water == null && _medicine == null && _exercise == null;
+    if (allMissing) {
+      return [
+        const Padding(
+          padding: EdgeInsets.only(bottom: 8),
+          child: SelectableText(
+            '喝水/吃药/运动进度：均未加载（三条接口须全部成功才会写入；请查看页面上方红色报错）',
+            style: TextStyle(fontSize: 14, color: Color(0xFF0F172A)),
+          ),
+        ),
+      ];
+    }
+    return [
+      _debugRow('water', _debugWater()),
+      _debugRow('medicine', _debugMedicine()),
+      _debugRow('exercise', _debugExercise()),
+    ];
+  }
+
   String _debugWater() {
     final w = _water;
-    if (w == null) return 'null';
+    if (w == null) return '未加载';
     return 'planned=${w.plannedCount}, confirmed=${w.confirmedCount}, missed=${w.missedCount}, pending=${w.pendingCount}, activeReminderId=${w.activeReminderId}, lastConfirmedAt=${w.lastConfirmedAt}, nextReminderAt=${w.nextReminderAt}';
   }
 
   String _debugMedicine() {
     final m = _medicine;
-    if (m == null) return 'null';
+    if (m == null) return '未加载';
     return 'planned=${m.plannedCount}, confirmed=${m.confirmedCount}, missed=${m.missedCount}, pending=${m.pendingCount}, activeReminderId=${m.activeReminderId}, medicineName=${m.medicineName}, doseDesc=${m.doseDesc}, lastConfirmedAt=${m.lastConfirmedAt}, nextReminderAt=${m.nextReminderAt}';
   }
 
   String _debugExercise() {
     final e = _exercise;
-    if (e == null) return 'null';
-    return 'planned=${e.plannedCount}, completed=${e.completedCount}, missed=${e.missedCount}, pending=${e.pendingCount}, activeReminderId=${e.activeReminderId}, lastStatus=${e.lastCompletionStatus}, lastSource=${e.lastCompletionSource}, lastCompletedAt=${e.lastCompletedAt}';
+    if (e == null) return '未加载';
+    return 'planned=${e.plannedCount}, completed=${e.completedCount}, missed=${e.missedCount}, pending=${e.pendingCount}, activeReminderId=${e.activeReminderId}, nextReminderAt=${e.nextReminderAt}, lastStatus=${e.lastCompletionStatus}, lastSource=${e.lastCompletionSource}, lastCompletedAt=${e.lastCompletedAt}';
   }
 }

@@ -8,6 +8,7 @@ class ElderExerciseProgress {
     required this.lastCompletionSource,
     required this.activeReminderId,
     this.lastCompletedAt,
+    this.nextReminderAt,
   });
 
   final int plannedCount;
@@ -18,6 +19,7 @@ class ElderExerciseProgress {
   final String lastCompletionSource;
   final int activeReminderId;
   final DateTime? lastCompletedAt;
+  final DateTime? nextReminderAt;
 
   factory ElderExerciseProgress.fromJson(Map<String, dynamic> json) {
     return ElderExerciseProgress(
@@ -29,6 +31,7 @@ class ElderExerciseProgress {
       lastCompletionSource: json['lastCompletionSource']?.toString() ?? 'manual',
       activeReminderId: (json['activeReminderId'] as num?)?.toInt() ?? 0,
       lastCompletedAt: _parseDateTime(json['lastCompletedAt']?.toString()),
+      nextReminderAt: _parseDateTime(json['nextReminderAt']?.toString()),
     );
   }
 
@@ -41,6 +44,7 @@ class ElderExerciseProgress {
     String? lastCompletionSource,
     int? activeReminderId,
     DateTime? lastCompletedAt,
+    DateTime? nextReminderAt,
   }) {
     return ElderExerciseProgress(
       plannedCount: plannedCount ?? this.plannedCount,
@@ -51,6 +55,7 @@ class ElderExerciseProgress {
       lastCompletionSource: lastCompletionSource ?? this.lastCompletionSource,
       activeReminderId: activeReminderId ?? this.activeReminderId,
       lastCompletedAt: lastCompletedAt ?? this.lastCompletedAt,
+      nextReminderAt: nextReminderAt ?? this.nextReminderAt,
     );
   }
 

@@ -142,7 +142,7 @@ class _ChildWaterReminderPageState extends State<ChildWaterReminderPage> {
                 const SizedBox(height: 8),
                 DropdownButtonFormField<int>(
                   value: interval,
-                  items: const [30, 45, 60, 90, 120, 180].map((m) => DropdownMenuItem(value: m, child: Text('$m 分钟/次'))).toList(),
+                  items: const [1, 30, 45, 60, 90, 120, 180].map((m) => DropdownMenuItem(value: m, child: Text('$m 分钟/次'))).toList(),
                   decoration: const InputDecoration(labelText: '提醒间隔'),
                   onChanged: (v) => setDialog(() => interval = v ?? interval),
                 ),
@@ -224,110 +224,7 @@ class _ChildWaterReminderPageState extends State<ChildWaterReminderPage> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('保存失败：$e')));
-    } finally {
     }
-  }
-
-  Future<void> _editExampleRecord(_WaterReminderRecord r) async {
-    int target = r.dailyTargetMl;
-    int interval = r.intervalMinutes;
-    int sh = r.startHour ?? 8, sm = r.startMinute ?? 0, eh = r.endHour ?? 22, em = r.endMinute ?? 0;
-    final saved = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialog) => AlertDialog(
-          title: const Text('修改喝水提醒（示例）'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                DropdownButtonFormField<int>(
-                  value: target,
-                  items: const [800, 1000, 1200, 1500, 1800, 2000, 2500].map((ml) => DropdownMenuItem(value: ml, child: Text('$ml ml'))).toList(),
-                  decoration: const InputDecoration(labelText: '每日目标饮水量'),
-                  onChanged: (v) => setDialog(() => target = v ?? target),
-                ),
-                const SizedBox(height: 8),
-                DropdownButtonFormField<int>(
-                  value: interval,
-                  items: const [30, 45, 60, 90, 120, 180].map((m) => DropdownMenuItem(value: m, child: Text('$m 分钟/次'))).toList(),
-                  decoration: const InputDecoration(labelText: '提醒间隔'),
-                  onChanged: (v) => setDialog(() => interval = v ?? interval),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: DropdownButtonFormField<int>(
-                        value: sh,
-                        items: [for (var h = 0; h < 24; h++) DropdownMenuItem(value: h, child: Text(h.toString().padLeft(2, '0')))],
-                        decoration: const InputDecoration(labelText: '开始·小时'),
-                        onChanged: (v) => setDialog(() => sh = v ?? sh),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: DropdownButtonFormField<int>(
-                        value: sm,
-                        items: [for (var m = 0; m < 60; m++) DropdownMenuItem(value: m, child: Text(m.toString().padLeft(2, '0')))],
-                        decoration: const InputDecoration(labelText: '开始·分钟'),
-                        onChanged: (v) => setDialog(() => sm = v ?? sm),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: DropdownButtonFormField<int>(
-                        value: eh,
-                        items: [for (var h = 0; h < 24; h++) DropdownMenuItem(value: h, child: Text(h.toString().padLeft(2, '0')))],
-                        decoration: const InputDecoration(labelText: '结束·小时'),
-                        onChanged: (v) => setDialog(() => eh = v ?? eh),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: DropdownButtonFormField<int>(
-                        value: em,
-                        items: [for (var m = 0; m < 60; m++) DropdownMenuItem(value: m, child: Text(m.toString().padLeft(2, '0')))],
-                        decoration: const InputDecoration(labelText: '结束·分钟'),
-                        onChanged: (v) => setDialog(() => em = v ?? em),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('取消')),
-            FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('保存')),
-          ],
-        ),
-      ),
-    );
-    if (saved != true) return;
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('示例已模拟保存（未请求后端）')));
-  }
-
-  Future<void> _deleteExampleRecord() async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('删除提醒（示例）'),
-        content: const Text('这是示例数据，仅用于测试交互。确定要模拟删除吗？'),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('取消')),
-          FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('删除')),
-        ],
-      ),
-    );
-    if (ok != true) return;
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('示例已模拟删除（未请求后端）')));
   }
 
   Future<void> _submit() async {
@@ -390,7 +287,7 @@ class _ChildWaterReminderPageState extends State<ChildWaterReminderPage> {
     final minutes = List<int>.generate(60, (i) => i);
 
     final targetOptions = const [800, 1000, 1200, 1500, 1800, 2000, 2500];
-    final intervalOptions = const [30, 45, 60, 90, 120, 180];
+    final intervalOptions = const [1, 30, 45, 60, 90, 120, 180];
 
     return Scaffold(
       appBar: AppBar(title: const Text('喝水提醒')),
@@ -416,7 +313,7 @@ class _ChildWaterReminderPageState extends State<ChildWaterReminderPage> {
                       for (final e in elders)
                         DropdownMenuItem(
                           value: e.id,
-                          child: Text(e.accountHint == null || e.accountHint!.isEmpty ? e.displayName : '${e.displayName}（${e.accountHint}）'),
+                          child: Text(e.displayName),
                         ),
                     ],
                     decoration: const InputDecoration(
@@ -563,66 +460,9 @@ class _ChildWaterReminderPageState extends State<ChildWaterReminderPage> {
                     ],
                   ),
                   const SizedBox(height: 8),
-                  if (_records.isEmpty) ...[
-                    Text('暂无记录（示例）', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant)),
-                    const SizedBox(height: 8),
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: const Icon(Icons.water_drop_outlined),
-                      title: const Text('喝水提醒'),
-                      subtitle: Text('目标 1500ml · 间隔 60 分钟\n时段 ${_displayTime('08:00:00')} - ${_displayTime('22:00:00')}'),
-                      isThreeLine: true,
-                      trailing: Wrap(
-                        spacing: 6,
-                        children: [
-                          IconButton(
-                            tooltip: '修改',
-                            onPressed: () => _editExampleRecord(
-                              _WaterReminderRecord(
-                                id: -1,
-                                elderProfileId: _elderProfileIdOrNull() ?? 0,
-                                title: '喝水提醒',
-                                dailyTargetMl: 1500,
-                                intervalMinutes: 60,
-                                startTimeText: '08:00:00',
-                                endTimeText: '22:00:00',
-                              ),
-                            ),
-                            icon: const Icon(Icons.edit_outlined),
-                          ),
-                          IconButton(tooltip: '删除', onPressed: _deleteExampleRecord, icon: const Icon(Icons.delete_outline)),
-                        ],
-                      ),
-                    ),
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: const Icon(Icons.water_drop_outlined),
-                      title: const Text('喝水提醒'),
-                      subtitle: Text('目标 1800ml · 间隔 90 分钟\n时段 ${_displayTime('09:00:00')} - ${_displayTime('21:00:00')}'),
-                      isThreeLine: true,
-                      trailing: Wrap(
-                        spacing: 6,
-                        children: [
-                          IconButton(
-                            tooltip: '修改',
-                            onPressed: () => _editExampleRecord(
-                              _WaterReminderRecord(
-                                id: -2,
-                                elderProfileId: _elderProfileIdOrNull() ?? 0,
-                                title: '喝水提醒',
-                                dailyTargetMl: 1800,
-                                intervalMinutes: 90,
-                                startTimeText: '09:00:00',
-                                endTimeText: '21:00:00',
-                              ),
-                            ),
-                            icon: const Icon(Icons.edit_outlined),
-                          ),
-                          IconButton(tooltip: '删除', onPressed: _deleteExampleRecord, icon: const Icon(Icons.delete_outline)),
-                        ],
-                      ),
-                    ),
-                  ] else ...[
+                  if (_records.isEmpty)
+                    Text('暂无记录', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant))
+                  else ...[
                     for (final r in _records)
                       ListTile(
                         contentPadding: EdgeInsets.zero,

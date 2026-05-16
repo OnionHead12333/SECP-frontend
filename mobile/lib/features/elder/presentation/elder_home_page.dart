@@ -102,7 +102,7 @@ class _ElderHomePageState extends State<ElderHomePage> {
   String _elderBirthdayLabel() {
     final s = AuthSession.elderBirthday;
     if (s == null || s.isEmpty) return '未设置';
-    final d = DateTime.tryParse(s);
+    final d = DateTime.tryParse(s)?.toLocal();
     if (d == null) return s;
     return '${d.year}年${d.month}月${d.day}日';
   }

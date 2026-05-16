@@ -496,22 +496,9 @@ class _ChildExerciseReminderPageState extends State<ChildExerciseReminderPage> {
                     ],
                   ),
                   const SizedBox(height: 8),
-                  if (_records.isEmpty) ...[
-                    Text('暂无记录', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant)),
-                    const SizedBox(height: 8),
-                    _exampleTile(
-                      context,
-                      title: '散步锻炼',
-                      subtitle: '散步 · 每天 · 08:00 - 18:00',
-                      statusLabel: '老人已确认',
-                    ),
-                    _exampleTile(
-                      context,
-                      title: '太极锻炼',
-                      subtitle: '太极 · 每周 · 08:00 - 18:00',
-                      statusLabel: '待完成',
-                    ),
-                  ] else ...[
+                  if (_records.isEmpty)
+                    Text('暂无记录', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant))
+                  else ...[
                     for (final r in _records)
                       ListTile(
                         contentPadding: EdgeInsets.zero,
@@ -537,16 +524,6 @@ class _ChildExerciseReminderPageState extends State<ChildExerciseReminderPage> {
           ),
         ],
       ),
-    );
-  }
-
-  Widget _exampleTile(BuildContext context, {required String title, required String subtitle, required String statusLabel}) {
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      leading: const Icon(Icons.directions_run_outlined),
-      title: Text('$title（示例）'),
-      subtitle: Text('$subtitle\n状态：$statusLabel'),
-      isThreeLine: true,
     );
   }
 }
