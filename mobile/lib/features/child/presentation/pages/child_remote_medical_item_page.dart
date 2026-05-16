@@ -4,6 +4,14 @@ import '../../../../core/network/api_client.dart';
 import '../../../../core/models/api_response.dart';
 import '../../models/child_local_models.dart';
 
+/// 将「年月日 + 时分」按 **北京时间（UTC+8）** 解释，生成与后端 `instantToShanghaiWall` 一致的 UTC ISO 字符串。
+/// 避免子女手机非中国时区时，`remind_time` 落库日期与老人端「上海今天」差一天导致剩余 0 次。
+String _medicineRemindTimeIsoUtcForShanghai(DateTime dateOnly, int hour, int minute) {
+  final utc = DateTime.utc(dateOnly.year, dateOnly.month, dateOnly.day, hour, minute)
+      .subtract(const Duration(hours: 8));
+  return utc.toIso8601String();
+}
+
 final class ChildRemoteMedicalItemPage extends StatefulWidget {
   const ChildRemoteMedicalItemPage({
     super.key,
@@ -296,7 +304,7 @@ class _ChildRemoteMedicalItemPageState extends State<ChildRemoteMedicalItemPage>
           'dosage': dosageCtrl.text.trim().isEmpty ? null : dosageCtrl.text.trim(),
           'frequencyRule': freq.value,
           'repeatRule': repeat.value,
-          'remindTime': remindAt.toUtc().toIso8601String(),
+          'remindTime': _medicineRemindTimeIsoUtcForShanghai(DateTime(remindAt.year, remindAt.month, remindAt.day), hour, minute),
           'enabled': r.enabled,
         },
       );
@@ -347,7 +355,11 @@ class _ChildRemoteMedicalItemPageState extends State<ChildRemoteMedicalItemPage>
         final dosage = row.dosageCtrl.text.trim().isEmpty ? null : row.dosageCtrl.text.trim();
         final frequencyRule = row.frequencyCtrl.text.trim().isEmpty ? 'none' : row.frequencyCtrl.text.trim();
         final repeatRule = row.repeatRuleCtrl.text.trim().isEmpty ? 'none' : row.repeatRuleCtrl.text.trim();
-        final remindAt = DateTime(row.date.year, row.date.month, row.date.day, row.hour, row.minute);
+        final remindIso = _medicineRemindTimeIsoUtcForShanghai(
+          DateTime(row.date.year, row.date.month, row.date.day),
+          row.hour,
+          row.minute,
+        );
         try {
           final res = await ApiClient.dio.post<Map<String, dynamic>>(
             '/v1/child/medicine-reminders',
@@ -356,7 +368,7 @@ class _ChildRemoteMedicalItemPageState extends State<ChildRemoteMedicalItemPage>
               'title': med,
               'sourceType': 'child_remote',
               'relatedEventId': null,
-              'remindTime': remindAt.toUtc().toIso8601String(),
+              'remindTime': remindIso,
               'medicineName': med,
               'dosage': dosage,
               'frequencyRule': frequencyRule,
@@ -751,7 +763,7 @@ final class _MedicineReminderRecord {
     final remindRaw = (json['remindTime'] ?? json['remind_time'])?.toString();
     final remindTime = remindRaw == null ? DateTime.now() : DateTime.tryParse(remindRaw)?.toLocal() ?? DateTime.now();
     final en = json['enabled'];
-    final enabled = en is bool ? en : (en?.toString() == '1' || en?.toString().toLowerCase() == 'true');
+    final enabledParsed = en is bool ? en : (en?.toString() == '1' || en?.toString().toLowerCase() == 'true');
     return _MedicineReminderRecord(
       id: id,
       elderProfileId: elderProfileId,
@@ -761,7 +773,7 @@ final class _MedicineReminderRecord {
       dosage: json['dosage']?.toString(),
       frequencyRule: (json['frequencyRule'] ?? json['frequency_rule'])?.toString(),
       repeatRule: (json['repeatRule'] ?? json['repeat_rule'])?.toString(),
-      enabled: enabled || en == null,
+      enabled: enabledParsed || en == null,
     );
   }
 }

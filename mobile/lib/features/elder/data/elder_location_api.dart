@@ -113,7 +113,8 @@ final class ElderLocationApi {
       data: {
         'foregroundGranted': foregroundGranted,
         'backgroundGranted': backgroundGranted,
-        'permissionUpdatedAt': permissionUpdatedAt.toLocal().toIso8601String(),
+        // 与子女端提醒等接口一致：发往服务端的时间戳统一用 UTC ISO8601
+        'permissionUpdatedAt': permissionUpdatedAt.toUtc().toIso8601String(),
       },
     );
     final body = res.data;

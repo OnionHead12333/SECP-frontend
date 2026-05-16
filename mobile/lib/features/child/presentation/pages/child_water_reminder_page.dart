@@ -52,6 +52,21 @@ class _ChildWaterReminderPageState extends State<ChildWaterReminderPage> {
     return n;
   }
 
+  String _fmtHm(int h, int m) => '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}';
+
+  String _apiTime(int h, int m) {
+    if (h >= 24) return '23:59:59';
+    if (h < 0) return '00:00:00';
+    return '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}:00';
+  }
+
+  String _displayTime(String? raw) {
+    if (raw == null || raw.isEmpty) return '--';
+    if (raw == '24:00:00') return '23:59';
+    if (raw.length >= 5) return raw.substring(0, 5);
+    return raw;
+  }
+
   Future<void> _loadRecords() async {
     final elderProfileId = _elderProfileIdOrNull();
     if (elderProfileId == null) return;
@@ -132,7 +147,7 @@ class _ChildWaterReminderPageState extends State<ChildWaterReminderPage> {
                 const SizedBox(height: 8),
                 DropdownButtonFormField<int>(
                   value: interval,
-                  items: const [30, 45, 60, 90, 120, 180].map((m) => DropdownMenuItem(value: m, child: Text('$m 分钟/次'))).toList(),
+                  items: const [1, 30, 45, 60, 90, 120, 180].map((m) => DropdownMenuItem(value: m, child: Text('$m 分钟/次'))).toList(),
                   decoration: const InputDecoration(labelText: '提醒间隔'),
                   onChanged: (v) => setDialog(() => interval = v ?? interval),
                 ),
@@ -199,8 +214,8 @@ class _ChildWaterReminderPageState extends State<ChildWaterReminderPage> {
           'title': '喝水提醒',
           'dailyTargetMl': target,
           'intervalMinutes': interval,
-          'startTime': '${sh.toString().padLeft(2, '0')}:${sm.toString().padLeft(2, '0')}:00',
-          'endTime': '${eh.toString().padLeft(2, '0')}:${em.toString().padLeft(2, '0')}:00',
+          'startTime': _apiTime(sh, sm),
+          'endTime': _apiTime(eh, em),
         },
       );
       final body = res.data;
@@ -214,7 +229,6 @@ class _ChildWaterReminderPageState extends State<ChildWaterReminderPage> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('保存失败：$e')));
-    } finally {
     }
   }
 
@@ -278,7 +292,7 @@ class _ChildWaterReminderPageState extends State<ChildWaterReminderPage> {
     final minutes = List<int>.generate(60, (i) => i);
 
     final targetOptions = const [800, 1000, 1200, 1500, 1800, 2000, 2500];
-    final intervalOptions = const [30, 45, 60, 90, 120, 180];
+    final intervalOptions = const [1, 30, 45, 60, 90, 120, 180];
 
     return Scaffold(
       appBar: AppBar(title: const Text('喝水提醒')),
@@ -472,7 +486,7 @@ class _ChildWaterReminderPageState extends State<ChildWaterReminderPage> {
                         contentPadding: EdgeInsets.zero,
                         leading: const Icon(Icons.water_drop_outlined),
                         title: const Text('喝水提醒'),
-                        subtitle: Text('目标 ${r.dailyTargetMl}ml · 间隔 ${r.intervalMinutes} 分钟\n时段 ${r.startTimeText ?? '--'} - ${r.endTimeText ?? '--'}'),
+                        subtitle: Text('目标 ${r.dailyTargetMl}ml · 间隔 ${r.intervalMinutes} 分钟\n时段 ${_displayTime(r.startTimeText)} - ${_displayTime(r.endTimeText)}'),
                         isThreeLine: true,
                         trailing: Wrap(
                           spacing: 6,

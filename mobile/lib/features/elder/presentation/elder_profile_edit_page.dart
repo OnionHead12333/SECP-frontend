@@ -42,7 +42,7 @@ class _ElderProfileEditPageState extends State<ElderProfileEditPage> {
       _nameCtrl.text = p.name;
       _gender = p.gender == 'male' || p.gender == 'female' || p.gender == 'unknown' ? p.gender! : 'unknown';
       if (p.birthday != null && p.birthday!.isNotEmpty) {
-        _birthday = DateTime.tryParse(p.birthday!);
+        _birthday = DateTime.tryParse(p.birthday!)?.toLocal();
       } else {
         _birthday = null;
       }
@@ -51,7 +51,7 @@ class _ElderProfileEditPageState extends State<ElderProfileEditPage> {
       _nameCtrl.text = AuthSession.elderName ?? '';
       _gender = (AuthSession.elderGender == 'male' || AuthSession.elderGender == 'female') ? AuthSession.elderGender! : 'unknown';
       if (AuthSession.elderBirthday != null && AuthSession.elderBirthday!.isNotEmpty) {
-        _birthday = DateTime.tryParse(AuthSession.elderBirthday!);
+        _birthday = DateTime.tryParse(AuthSession.elderBirthday!)?.toLocal();
       }
       if (e is! DioException) {
         setState(() => _error = e.toString().replaceFirst('Exception: ', ''));

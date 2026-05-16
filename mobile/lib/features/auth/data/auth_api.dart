@@ -5,6 +5,7 @@ final class LoginResult {
   const LoginResult({
     required this.token,
     required this.role,
+    this.userId,
     this.name,
     this.phone,
     this.nickname,
@@ -16,6 +17,7 @@ final class LoginResult {
 
   final String token;
   final String role;
+  final int? userId;
   final String? name;
   final String? phone;
   final String? nickname;
@@ -74,6 +76,7 @@ final class AuthApi {
     return LoginResult(
       token: token,
       role: role,
+      userId: (data['userId'] as num?)?.toInt() ?? (data['id'] as num?)?.toInt(),
       name: data['name'] as String?,
       phone: data['phone'] as String?,
       nickname: data['nickname'] as String?,
