@@ -7,6 +7,19 @@ import '../../medical_ocr/data/medical_ocr_api.dart';
 import '../../../core/models/api_response.dart';
 import '../../../core/network/api_client.dart';
 
+int? _mapInt(Object? v) {
+  if (v is num) return v.toInt();
+  if (v is String) return int.tryParse(v);
+  return null;
+}
+
+String? _mapStr(Map<String, dynamic> m, String camel, String snake) {
+  final v = m[camel] ?? m[snake];
+  if (v == null) return null;
+  final s = v.toString().trim();
+  return s.isEmpty ? null : s;
+}
+
 final class ExtractedMedicalFields {
   ExtractedMedicalFields({
     required this.docCategory,
@@ -71,15 +84,21 @@ final class SuggestedCalendarEvent {
 final class MedicalSmartRecognitionResult {
   MedicalSmartRecognitionResult({
     required this.documentId,
+    required this.title,
     required this.ocr,
     required this.extractedFields,
     required this.suggestedCalendarEvents,
+    this.folderId,
+    this.folderName,
   });
 
   final int documentId;
+  final String? title;
   final MedicalOcrResult ocr;
   final ExtractedMedicalFields? extractedFields;
   final List<SuggestedCalendarEvent> suggestedCalendarEvents;
+  final int? folderId;
+  final String? folderName;
 
   static MedicalSmartRecognitionResult parse(Map<String, dynamic> data) {
     final ocrRaw = data['ocr'];
@@ -97,9 +116,12 @@ final class MedicalSmartRecognitionResult {
     }
     return MedicalSmartRecognitionResult(
       documentId: (data['documentId'] as num?)?.toInt() ?? 0,
+      title: _mapStr(Map<String, dynamic>.from(data), 'title', 'title'),
       ocr: MedicalOcrResult.fromApiData(Map<String, dynamic>.from(ocrRaw)),
       extractedFields: ext,
       suggestedCalendarEvents: sugs,
+      folderId: _mapInt(data['folderId'] ?? data['folder_id']),
+      folderName: _mapStr(Map<String, dynamic>.from(data), 'folderName', 'folder_name'),
     );
   }
 }
@@ -112,6 +134,8 @@ final class MedicalDocumentSummary {
     required this.docCategory,
     required this.routedSpecializedApi,
     required this.createdAt,
+    this.folderId,
+    this.folderName,
   });
 
   final int id;
@@ -120,21 +144,25 @@ final class MedicalDocumentSummary {
   final String? docCategory;
   final String? routedSpecializedApi;
   final DateTime createdAt;
+  final int? folderId;
+  final String? folderName;
 
   static MedicalDocumentSummary? tryParse(Object? raw) {
     if (raw is! Map) return null;
     final m = Map<String, dynamic>.from(raw);
-    final ca = m['createdAt'] as String?;
+    final ca = m['createdAt'] as String? ?? m['created_at'] as String?;
     if (ca == null) return null;
     final dt = DateTime.tryParse(ca);
     if (dt == null) return null;
     return MedicalDocumentSummary(
-      id: (m['id'] as num?)?.toInt() ?? 0,
-      elderProfileId: (m['elderProfileId'] as num?)?.toInt() ?? 0,
-      title: m['title'] as String?,
-      docCategory: m['docCategory'] as String?,
-      routedSpecializedApi: m['routedSpecializedApi'] as String?,
+      id: _mapInt(m['id']) ?? 0,
+      elderProfileId: _mapInt(m['elderProfileId'] ?? m['elder_profile_id']) ?? 0,
+      title: _mapStr(m, 'title', 'title'),
+      docCategory: _mapStr(m, 'docCategory', 'doc_category'),
+      routedSpecializedApi: _mapStr(m, 'routedSpecializedApi', 'routed_specialized_api'),
       createdAt: dt,
+      folderId: _mapInt(m['folderId'] ?? m['folder_id']),
+      folderName: _mapStr(m, 'folderName', 'folder_name'),
     );
   }
 }
@@ -155,11 +183,13 @@ final class MedicalArchiveFolder {
   static MedicalArchiveFolder? tryParse(Object? raw) {
     if (raw is! Map) return null;
     final m = Map<String, dynamic>.from(raw);
+    final name = _mapStr(m, 'name', 'name') ?? '';
+    if (name.isEmpty) return null;
     return MedicalArchiveFolder(
-      id: (m['id'] as num?)?.toInt() ?? 0,
-      elderProfileId: (m['elderProfileId'] as num?)?.toInt() ?? 0,
-      name: m['name'] as String? ?? '',
-      sortOrder: (m['sortOrder'] as num?)?.toInt() ?? 0,
+      id: _mapInt(m['id']) ?? 0,
+      elderProfileId: _mapInt(m['elderProfileId'] ?? m['elder_profile_id']) ?? 0,
+      name: name,
+      sortOrder: _mapInt(m['sortOrder'] ?? m['sort_order']) ?? 0,
     );
   }
 }
@@ -214,7 +244,11 @@ final class MedicalCalendarEventView {
 final class MedicalHubApi {
   MedicalHubApi._();
 
-  static Future<MedicalSmartRecognitionResult> smartRecognize(File imageFile, {int? elderProfileId}) async {
+  static Future<MedicalSmartRecognitionResult> smartRecognize(
+    File imageFile, {
+    int? elderProfileId,
+    int? folderId,
+  }) async {
     final map = <String, dynamic>{
       'file': await MultipartFile.fromFile(
         imageFile.path,
@@ -223,6 +257,9 @@ final class MedicalHubApi {
     };
     if (elderProfileId != null) {
       map['elderProfileId'] = elderProfileId;
+    }
+    if (folderId != null) {
+      map['folderId'] = folderId;
     }
     final formData = FormData.fromMap(map);
     final res = await ApiClient.dio.post<Map<String, dynamic>>(
@@ -391,19 +428,53 @@ final class MedicalHubApi {
     if (!api.isSuccess) throw Exception(api.displayMessage);
   }
 
-  static Future<void> patchDocument(
+  /// 将单据移入文件夹；[folderId] 为 null 时表示移出文件夹（需 [assignFolderId] 为 true）。
+  static Future<Map<String, dynamic>> moveDocumentToFolder(
+    int id, {
+    int? elderProfileId,
+    int? folderId,
+  }) {
+    return patchDocument(
+      id,
+      elderProfileId: elderProfileId,
+      folderId: folderId,
+      assignFolderId: true,
+    );
+  }
+
+  static Future<Map<String, dynamic>> patchDocument(
     int id, {
     int? elderProfileId,
     String? title,
+    String? fullText,
+    String? docCategory,
     int? folderId,
+    bool assignFolderId = false,
   }) async {
     final data = <String, dynamic>{};
     if (title != null) data['title'] = title;
-    if (folderId != null) data['folderId'] = folderId;
+    if (fullText != null) data['fullText'] = fullText;
+    if (docCategory != null) data['docCategory'] = docCategory;
+    if (assignFolderId) data['folderId'] = folderId;
     final res = await ApiClient.dio.patch<Map<String, dynamic>>(
       '/v1/medical/documents/$id',
       queryParameters: {if (elderProfileId != null) 'elderProfileId': elderProfileId},
       data: data,
+    );
+    final body = res.data;
+    if (body == null) throw Exception('空响应');
+    final api = ApiResponse.fromJson(
+      body,
+      (raw) => raw is Map<String, dynamic> ? raw : null,
+    );
+    if (!api.isSuccess) throw Exception(api.displayMessage);
+    return api.data ?? <String, dynamic>{};
+  }
+
+  static Future<void> deleteDocument(int id, {int? elderProfileId}) async {
+    final res = await ApiClient.dio.delete<Map<String, dynamic>>(
+      '/v1/medical/documents/$id',
+      queryParameters: {if (elderProfileId != null) 'elderProfileId': elderProfileId},
     );
     final body = res.data;
     if (body == null) throw Exception('空响应');
