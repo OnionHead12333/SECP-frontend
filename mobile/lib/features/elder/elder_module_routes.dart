@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'presentation/ai_medical_assistant_page.dart';
 import 'presentation/elder_binding_status_page.dart';
 import 'presentation/elder_emergency_contacts_page.dart';
 import 'presentation/elder_home_page.dart';
@@ -17,6 +18,7 @@ final class ElderModuleRoutes {
   static const String elderEmergencyContacts = '/elder/emergency-contacts';
   static const String elderLocationStatus = '/elder/location-status';
   static const String elderProfile = '/elder/profile';
+  static const String elderAiAssistant = '/elder/ai-assistant';
 
   static Map<String, WidgetBuilder> routes() {
     return {
@@ -26,6 +28,7 @@ final class ElderModuleRoutes {
       elderEmergencyContacts: (_) => const ElderEmergencyContactsPage(),
       elderLocationStatus: (_) => const ElderLocationStatusPage(),
       elderProfile: (_) => const ElderProfileEditPage(),
+      elderAiAssistant: (_) => const AiMedicalAssistantPage(),
     };
   }
 }
