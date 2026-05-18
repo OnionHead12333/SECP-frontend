@@ -76,7 +76,11 @@ final class AuthApi {
     return LoginResult(
       token: token,
       role: role,
-      userId: (data['userId'] as num?)?.toInt() ?? (data['id'] as num?)?.toInt(),
+      userId:
+          (data['userId'] as num?)?.toInt() ??
+          (data['elderlyId'] as num?)?.toInt() ??
+          (data['elderId'] as num?)?.toInt() ??
+          (data['id'] as num?)?.toInt(),
       name: data['name'] as String?,
       phone: data['phone'] as String?,
       nickname: data['nickname'] as String?,
