@@ -5,6 +5,7 @@ final class LoginResult {
   const LoginResult({
     required this.token,
     required this.role,
+    this.userId,
     this.name,
     this.phone,
     this.nickname,
@@ -16,6 +17,7 @@ final class LoginResult {
 
   final String token;
   final String role;
+  final int? userId;
   final String? name;
   final String? phone;
   final String? nickname;
@@ -61,7 +63,7 @@ final class AuthApi {
       body,
       (raw) => raw is Map<String, dynamic> ? raw : null,
     );
-    if (!api.isSuccess || api.data == null) throw Exception(api.message);
+    if (!api.isSuccess || api.data == null) throw Exception(api.displayMessage);
     final data = api.data!;
     final token = data['token'] as String?;
     if (token == null || token.isEmpty) {
@@ -74,6 +76,7 @@ final class AuthApi {
     return LoginResult(
       token: token,
       role: role,
+      userId: (data['userId'] as num?)?.toInt() ?? (data['id'] as num?)?.toInt(),
       name: data['name'] as String?,
       phone: data['phone'] as String?,
       nickname: data['nickname'] as String?,
@@ -109,7 +112,7 @@ final class AuthApi {
       body,
       (raw) => raw is Map<String, dynamic> ? raw : null,
     );
-    if (!api.isSuccess) throw Exception(api.message);
+    if (!api.isSuccess) throw Exception(api.displayMessage);
   }
 
   /// 子女注册并一次创建/绑定多个老人主体（按 `注册绑定流程设计.md` 首版设计）。
@@ -138,6 +141,6 @@ final class AuthApi {
       body,
       (raw) => raw is Map<String, dynamic> ? raw : null,
     );
-    if (!api.isSuccess) throw Exception(api.message);
+    if (!api.isSuccess) throw Exception(api.displayMessage);
   }
 }

@@ -44,3 +44,7 @@ mobile/packages/amap_flutter_location/example/
 mobile/packages/amap_flutter_map/doc/
 *.apk
 *.aab
+
+# Local ASCII cache paths for Windows accounts with non-ASCII usernames
+.pub-cache/
+.gradle-user-home/

@@ -14,7 +14,7 @@ final class ElderLocationApi {
       body,
       (raw) => raw is Map<String, dynamic> ? ElderLocationGuardSetting.fromJson(raw) : null,
     );
-    if (!api.isSuccess || api.data == null) throw Exception(api.message);
+    if (!api.isSuccess || api.data == null) throw Exception(api.displayMessage);
     return api.data!;
   }
 
@@ -45,7 +45,7 @@ final class ElderLocationApi {
       body,
       (raw) => raw is Map<String, dynamic> ? ElderLocationGuardSetting.fromJson(raw) : null,
     );
-    if (!api.isSuccess || api.data == null) throw Exception(api.message);
+    if (!api.isSuccess || api.data == null) throw Exception(api.displayMessage);
     return api.data!;
   }
 
@@ -57,7 +57,7 @@ final class ElderLocationApi {
       body,
       (raw) => raw is Map<String, dynamic> ? ElderLocationGuardSetting.fromJson(raw) : null,
     );
-    if (!api.isSuccess || api.data == null) throw Exception(api.message);
+    if (!api.isSuccess || api.data == null) throw Exception(api.displayMessage);
     return api.data!;
   }
 
@@ -80,7 +80,7 @@ final class ElderLocationApi {
       body,
       (raw) => raw is Map<String, dynamic> ? ElderLocationGuardSetting.fromJson(raw) : null,
     );
-    if (!api.isSuccess || api.data == null) throw Exception(api.message);
+    if (!api.isSuccess || api.data == null) throw Exception(api.displayMessage);
     return api.data!;
   }
 
@@ -99,7 +99,7 @@ final class ElderLocationApi {
       body,
       (raw) => raw is Map<String, dynamic> ? LocationPermissionSnapshot.fromJson(raw) : null,
     );
-    if (!api.isSuccess || api.data == null) throw Exception(api.message);
+    if (!api.isSuccess || api.data == null) throw Exception(api.displayMessage);
     return api.data!;
   }
 
@@ -113,7 +113,8 @@ final class ElderLocationApi {
       data: {
         'foregroundGranted': foregroundGranted,
         'backgroundGranted': backgroundGranted,
-        'permissionUpdatedAt': permissionUpdatedAt.toLocal().toIso8601String(),
+        // 与子女端提醒等接口一致：发往服务端的时间戳统一用 UTC ISO8601
+        'permissionUpdatedAt': permissionUpdatedAt.toUtc().toIso8601String(),
       },
     );
     final body = res.data;
@@ -122,7 +123,7 @@ final class ElderLocationApi {
       body,
       (raw) => raw is Map<String, dynamic> ? LocationPermissionSnapshot.fromJson(raw) : null,
     );
-    if (!api.isSuccess || api.data == null) throw Exception(api.message);
+    if (!api.isSuccess || api.data == null) throw Exception(api.displayMessage);
     return api.data!;
   }
 
@@ -149,7 +150,7 @@ final class ElderLocationApi {
       body,
       (raw) => raw is Map<String, dynamic> ? raw : null,
     );
-    if (!api.isSuccess || api.data == null) throw Exception(api.message);
+    if (!api.isSuccess || api.data == null) throw Exception(api.displayMessage);
     final locationId = api.data!['locationId'];
     if (locationId is int) return locationId;
     if (locationId is num) return locationId.toInt();
@@ -169,7 +170,7 @@ final class ElderLocationApi {
           ? raw.whereType<Map<String, dynamic>>().map(_pointFromJson).toList()
           : const <ElderLocationPoint>[],
     );
-    if (!api.isSuccess) throw Exception(api.message);
+    if (!api.isSuccess) throw Exception(api.displayMessage);
     return api.data ?? const <ElderLocationPoint>[];
   }
 

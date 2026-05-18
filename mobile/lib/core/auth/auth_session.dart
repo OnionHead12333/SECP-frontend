@@ -1,3 +1,6 @@
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+
 import 'app_role.dart';
 
 /// 简单登录态占位；后续可改为 secure_storage / riverpod 等。
@@ -18,8 +21,15 @@ final class AuthSession {
   static bool elderClaimed = false;
   static int elderFamilyCount = 0;
   static String? elderPhone;
+  static int? elderId;
+
+  static final ValueNotifier<int> sessionChanges = ValueNotifier<int>(0);
 
   static bool get isLoggedIn => token != null && token!.isNotEmpty;
+
+  static void _notifyChanged() {
+    sessionChanges.value += 1;
+  }
 
   static void saveElderState({
     required String name,
@@ -35,6 +45,7 @@ final class AuthSession {
     elderFamilyCount = familyCount;
     elderGender = gender;
     elderBirthday = birthday;
+    _notifyChanged();
   }
 
   static void clear() {
@@ -44,7 +55,9 @@ final class AuthSession {
     elderPhone = null;
     elderGender = null;
     elderBirthday = null;
+    elderId = null;
     elderClaimed = false;
     elderFamilyCount = 0;
+    _notifyChanged();
   }
 }

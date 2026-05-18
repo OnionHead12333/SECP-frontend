@@ -54,6 +54,19 @@ class _ChildWaterReminderPageState extends State<ChildWaterReminderPage> {
 
   String _fmtHm(int h, int m) => '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}';
 
+  String _apiTime(int h, int m) {
+    if (h >= 24) return '23:59:59';
+    if (h < 0) return '00:00:00';
+    return '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}:00';
+  }
+
+  String _displayTime(String? raw) {
+    if (raw == null || raw.isEmpty) return '--';
+    if (raw == '24:00:00') return '23:59';
+    if (raw.length >= 5) return raw.substring(0, 5);
+    return raw;
+  }
+
   Future<void> _loadRecords() async {
     final elderProfileId = _elderProfileIdOrNull();
     if (elderProfileId == null) return;
@@ -72,12 +85,17 @@ class _ChildWaterReminderPageState extends State<ChildWaterReminderPage> {
           return const <Map<String, dynamic>>[];
         },
       );
-      if (!api.isSuccess) throw Exception(api.message);
+      if (!api.isSuccess) throw Exception(api.displayMessage);
       final list = (api.data ?? const <Map<String, dynamic>>[]).map(_WaterReminderRecord.fromJson).toList();
       if (!mounted) return;
       setState(() => _records = list);
-    } catch (e) {
-      // 不向用户暴露后端错误；保留当前列表状态即可
+    } catch (e, st) {
+      debugPrint('water _loadRecords failed: $e\n$st');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('加载提醒列表失败，请检查网络与登录后点击刷新')),
+        );
+      }
     } finally {
       if (mounted) setState(() => _loadingRecords = false);
     }
@@ -129,7 +147,7 @@ class _ChildWaterReminderPageState extends State<ChildWaterReminderPage> {
                 const SizedBox(height: 8),
                 DropdownButtonFormField<int>(
                   value: interval,
-                  items: const [30, 45, 60, 90, 120, 180].map((m) => DropdownMenuItem(value: m, child: Text('$m 分钟/次'))).toList(),
+                  items: const [1, 30, 45, 60, 90, 120, 180].map((m) => DropdownMenuItem(value: m, child: Text('$m 分钟/次'))).toList(),
                   decoration: const InputDecoration(labelText: '提醒间隔'),
                   onChanged: (v) => setDialog(() => interval = v ?? interval),
                 ),
@@ -196,14 +214,14 @@ class _ChildWaterReminderPageState extends State<ChildWaterReminderPage> {
           'title': '喝水提醒',
           'dailyTargetMl': target,
           'intervalMinutes': interval,
-          'startTime': '${sh.toString().padLeft(2, '0')}:${sm.toString().padLeft(2, '0')}:00',
-          'endTime': '${eh.toString().padLeft(2, '0')}:${em.toString().padLeft(2, '0')}:00',
+          'startTime': _apiTime(sh, sm),
+          'endTime': _apiTime(eh, em),
         },
       );
       final body = res.data;
       if (body != null) {
         final api = ApiResponse.fromJson(body, (raw) => raw);
-        if (!api.isSuccess) throw Exception(api.message);
+        if (!api.isSuccess) throw Exception(api.displayMessage);
       }
       if (!mounted) return;
       await _loadRecords();
@@ -211,110 +229,7 @@ class _ChildWaterReminderPageState extends State<ChildWaterReminderPage> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('保存失败：$e')));
-    } finally {
     }
-  }
-
-  Future<void> _editExampleRecord(_WaterReminderRecord r) async {
-    int target = r.dailyTargetMl;
-    int interval = r.intervalMinutes;
-    int sh = r.startHour ?? 8, sm = r.startMinute ?? 0, eh = r.endHour ?? 22, em = r.endMinute ?? 0;
-    final saved = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialog) => AlertDialog(
-          title: const Text('修改喝水提醒（示例）'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                DropdownButtonFormField<int>(
-                  value: target,
-                  items: const [800, 1000, 1200, 1500, 1800, 2000, 2500].map((ml) => DropdownMenuItem(value: ml, child: Text('$ml ml'))).toList(),
-                  decoration: const InputDecoration(labelText: '每日目标饮水量'),
-                  onChanged: (v) => setDialog(() => target = v ?? target),
-                ),
-                const SizedBox(height: 8),
-                DropdownButtonFormField<int>(
-                  value: interval,
-                  items: const [30, 45, 60, 90, 120, 180].map((m) => DropdownMenuItem(value: m, child: Text('$m 分钟/次'))).toList(),
-                  decoration: const InputDecoration(labelText: '提醒间隔'),
-                  onChanged: (v) => setDialog(() => interval = v ?? interval),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: DropdownButtonFormField<int>(
-                        value: sh,
-                        items: [for (var h = 0; h < 24; h++) DropdownMenuItem(value: h, child: Text(h.toString().padLeft(2, '0')))],
-                        decoration: const InputDecoration(labelText: '开始·小时'),
-                        onChanged: (v) => setDialog(() => sh = v ?? sh),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: DropdownButtonFormField<int>(
-                        value: sm,
-                        items: [for (var m = 0; m < 60; m++) DropdownMenuItem(value: m, child: Text(m.toString().padLeft(2, '0')))],
-                        decoration: const InputDecoration(labelText: '开始·分钟'),
-                        onChanged: (v) => setDialog(() => sm = v ?? sm),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: DropdownButtonFormField<int>(
-                        value: eh,
-                        items: [for (var h = 0; h < 24; h++) DropdownMenuItem(value: h, child: Text(h.toString().padLeft(2, '0')))],
-                        decoration: const InputDecoration(labelText: '结束·小时'),
-                        onChanged: (v) => setDialog(() => eh = v ?? eh),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: DropdownButtonFormField<int>(
-                        value: em,
-                        items: [for (var m = 0; m < 60; m++) DropdownMenuItem(value: m, child: Text(m.toString().padLeft(2, '0')))],
-                        decoration: const InputDecoration(labelText: '结束·分钟'),
-                        onChanged: (v) => setDialog(() => em = v ?? em),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('取消')),
-            FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('保存')),
-          ],
-        ),
-      ),
-    );
-    if (saved != true) return;
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('示例已模拟保存（未请求后端）')));
-  }
-
-  Future<void> _deleteExampleRecord() async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('删除提醒（示例）'),
-        content: const Text('这是示例数据，仅用于测试交互。确定要模拟删除吗？'),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('取消')),
-          FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('删除')),
-        ],
-      ),
-    );
-    if (ok != true) return;
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('示例已模拟删除（未请求后端）')));
   }
 
   Future<void> _submit() async {
@@ -355,7 +270,7 @@ class _ChildWaterReminderPageState extends State<ChildWaterReminderPage> {
       final body = res.data;
       if (body == null) throw Exception('空响应');
       final api = ApiResponse.fromJson(body, (raw) => raw);
-      if (!api.isSuccess) throw Exception(api.message);
+      if (!api.isSuccess) throw Exception(api.displayMessage);
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('已创建喝水提醒')));
@@ -377,7 +292,7 @@ class _ChildWaterReminderPageState extends State<ChildWaterReminderPage> {
     final minutes = List<int>.generate(60, (i) => i);
 
     final targetOptions = const [800, 1000, 1200, 1500, 1800, 2000, 2500];
-    final intervalOptions = const [30, 45, 60, 90, 120, 180];
+    final intervalOptions = const [1, 30, 45, 60, 90, 120, 180];
 
     return Scaffold(
       appBar: AppBar(title: const Text('喝水提醒')),
@@ -403,14 +318,19 @@ class _ChildWaterReminderPageState extends State<ChildWaterReminderPage> {
                       for (final e in elders)
                         DropdownMenuItem(
                           value: e.id,
-                          child: Text(e.accountHint == null || e.accountHint!.isEmpty ? e.displayName : '${e.displayName}（${e.accountHint}）'),
+                          child: Text(e.displayName.trim().isEmpty ? '未命名' : e.displayName.trim()),
                         ),
                     ],
                     decoration: const InputDecoration(
                       labelText: '选择老人',
                       prefixIcon: Icon(Icons.person_outline),
                     ),
-                    onChanged: _submitting || elders.isEmpty ? null : (v) => setState(() => _selectedElderId = v),
+                    onChanged: _submitting || elders.isEmpty
+                        ? null
+                        : (v) {
+                            setState(() => _selectedElderId = v);
+                            _loadRecords();
+                          },
                     validator: (_) {
                       if (elders.isEmpty) return '请先到「设置」绑定老人';
                       if (_selectedElderId == null || _selectedElderId!.isEmpty) return '必选';
@@ -550,72 +470,23 @@ class _ChildWaterReminderPageState extends State<ChildWaterReminderPage> {
                     ],
                   ),
                   const SizedBox(height: 8),
-                  if (_records.isEmpty) ...[
-                    Text('暂无记录（示例）', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant)),
-                    const SizedBox(height: 8),
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: const Icon(Icons.water_drop_outlined),
-                      title: const Text('喝水提醒'),
-                      subtitle: const Text('目标 1500ml · 间隔 60 分钟\n时段 08:00 - 22:00'),
-                      isThreeLine: true,
-                      trailing: Wrap(
-                        spacing: 6,
-                        children: [
-                          IconButton(
-                            tooltip: '修改',
-                            onPressed: () => _editExampleRecord(
-                              _WaterReminderRecord(
-                                id: -1,
-                                elderProfileId: _elderProfileIdOrNull() ?? 0,
-                                title: '喝水提醒',
-                                dailyTargetMl: 1500,
-                                intervalMinutes: 60,
-                                startTimeText: '08:00:00',
-                                endTimeText: '22:00:00',
-                              ),
-                            ),
-                            icon: const Icon(Icons.edit_outlined),
-                          ),
-                          IconButton(tooltip: '删除', onPressed: _deleteExampleRecord, icon: const Icon(Icons.delete_outline)),
-                        ],
+                  if (_records.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      child: Text(
+                        _loadingRecords
+                            ? '正在加载…'
+                            : '暂无喝水提醒记录。创建后将显示在此处；切换老人后请点击刷新。',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
                       ),
-                    ),
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: const Icon(Icons.water_drop_outlined),
-                      title: const Text('喝水提醒'),
-                      subtitle: const Text('目标 1800ml · 间隔 90 分钟\n时段 09:00 - 21:00'),
-                      isThreeLine: true,
-                      trailing: Wrap(
-                        spacing: 6,
-                        children: [
-                          IconButton(
-                            tooltip: '修改',
-                            onPressed: () => _editExampleRecord(
-                              _WaterReminderRecord(
-                                id: -2,
-                                elderProfileId: _elderProfileIdOrNull() ?? 0,
-                                title: '喝水提醒',
-                                dailyTargetMl: 1800,
-                                intervalMinutes: 90,
-                                startTimeText: '09:00:00',
-                                endTimeText: '21:00:00',
-                              ),
-                            ),
-                            icon: const Icon(Icons.edit_outlined),
-                          ),
-                          IconButton(tooltip: '删除', onPressed: _deleteExampleRecord, icon: const Icon(Icons.delete_outline)),
-                        ],
-                      ),
-                    ),
-                  ] else ...[
+                    )
+                  else ...[
                     for (final r in _records)
                       ListTile(
                         contentPadding: EdgeInsets.zero,
                         leading: const Icon(Icons.water_drop_outlined),
                         title: const Text('喝水提醒'),
-                        subtitle: Text('目标 ${r.dailyTargetMl}ml · 间隔 ${r.intervalMinutes} 分钟\n时段 ${r.startTimeText ?? '--'} - ${r.endTimeText ?? '--'}'),
+                        subtitle: Text('目标 ${r.dailyTargetMl}ml · 间隔 ${r.intervalMinutes} 分钟\n时段 ${_displayTime(r.startTimeText)} - ${_displayTime(r.endTimeText)}'),
                         isThreeLine: true,
                         trailing: Wrap(
                           spacing: 6,

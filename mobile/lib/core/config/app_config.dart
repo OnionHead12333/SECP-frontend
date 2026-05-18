@@ -2,37 +2,34 @@
 ///
 /// 常用启动命令，后面可以直接复制：
 ///
-/// 1. Android 模拟器访问电脑本机后端：
-/// `flutter run --dart-define=API_BASE=http://10.0.2.2:8080/api`
-///
-/// 2. Android 真机 + 电脑 WLAN 当前校园/局域网 IP：
-/// `flutter run --dart-define=API_BASE=http://10.61.195.102:8080/api`
-///
-/// 3. Android 真机 + 手机热点时电脑旧 IP 示例：
+/// 当前真机 + 电脑 WLAN IPv4：
 /// `flutter run --dart-define=API_BASE=http://172.20.10.3:8080/api`
+/// `flutter run --dart-define=API_BASE=http://10.61.251.148:8080/api`
 ///
-/// 4. Android 真机 + Windows 移动热点/共享网络网卡：
-/// `flutter run --dart-define=API_BASE=http://192.168.137.1:8080/api`
-///
-/// 6. Flutter Windows 桌面端或电脑浏览器访问本机后端：
-/// `flutter run -d windows --dart-define=API_BASE=http://localhost:8080/api`
+/// 其他环境备用地址（不用时保持注释）：
+/// - Android 模拟器访问电脑本机后端：
+///   `flutter run --dart-define=API_BASE=http://10.0.2.2:8080/api`
+/// - Android 真机 + Windows 移动热点/共享网络网卡：
+///   `flutter run --dart-define=API_BASE=http://192.168.137.1:8080/api`
+/// - Flutter Windows 桌面端或电脑浏览器访问本机后端：
+///   `flutter run -d windows --dart-define=API_BASE=http://localhost:8080/api`
 ///
 /// 选择规则：
+/// - 跑 Android 真机且后端在电脑：用电脑当前 WLAN IPv4，例如 `10.61.251.148`。
 /// - 跑 Android 模拟器：用 `10.0.2.2`。
-/// - 跑 USB 真机但后端在电脑：用电脑当前 WLAN IPv4，例如 `10.61.195.102`。
-/// - 电脑连接手机热点后 IP 会变，重新执行 `ipconfig`，看 WLAN 的 IPv4。
+/// - 换 WiFi / 手机热点后 IP 可能变化，重新执行 `ipconfig`，看 WLAN 的 IPv4。
 /// - 后端配置了 `/api` 上下文路径，所以这里保留 `/api`。
 class AppConfig {
   AppConfig._();
 
   static const String apiBase = String.fromEnvironment(
     'API_BASE',
-    defaultValue: 'http://10.0.2.2:8080/api',
+    defaultValue: 'http://192.168.43.253:8080/api',
   );
 
   static const String amapAndroidKey = String.fromEnvironment(
     'AMAP_ANDROID_KEY',
-    defaultValue: '55f733fae7a326ac12009b17dde876a4',
+    defaultValue: '84f7b71fbfea73f06252e2b06685934c',
   );
 
   static const String amapIosKey = String.fromEnvironment(
@@ -45,6 +42,28 @@ class AppConfig {
   static const bool useMockSos = bool.fromEnvironment(
     'USE_MOCK_SOS',
     defaultValue: false,
+  );
+
+  /// 本机 / 模拟器调试语音撤回链路用：不调用系统 SpeechRecognizer，
+  /// 在进入监听态后自动模拟识别到“撤回”。真实设备联调保持 false。
+  static const bool useMockStt = bool.fromEnvironment(
+    'USE_MOCK_STT',
+    defaultValue: false,
+  );
+
+  static const String xfyunIatAppId =
+      String.fromEnvironment('XFYUN_IAT_APP_ID');
+  static const String xfyunIatApiKey =
+      String.fromEnvironment('XFYUN_IAT_API_KEY');
+  static const String xfyunIatApiSecret =
+      String.fromEnvironment('XFYUN_IAT_API_SECRET');
+  static const String xfyunIatHost = String.fromEnvironment(
+    'XFYUN_IAT_HOST',
+    defaultValue: 'iat-api.xfyun.cn',
+  );
+  static const String xfyunIatPath = String.fromEnvironment(
+    'XFYUN_IAT_PATH',
+    defaultValue: '/v2/iat',
   );
 
   /// 当前紧急联系人功能默认保留前端本地联调能力；
@@ -60,14 +79,5 @@ class AppConfig {
   static const bool useMockLocation = bool.fromEnvironment(
     'USE_MOCK_LOCATION',
     defaultValue: false,
-  );
-
-  /// 喝水/用药/运动/外出提醒等接口后端未实现时，必须与「是否用真实高德」解耦：
-  /// 否则 `USE_MOCK_LOCATION=false` 时会去请求不存在的 `/v1/elder/.../today-progress`，
-  /// 服务端打出 `No static resource ...`，易误以为是 SOS 或子女登录问题。
-  /// 需要联调真实提醒 API 时再 `--dart-define=USE_MOCK_REMINDERS=false`。
-  static const bool useMockReminders = bool.fromEnvironment(
-    'USE_MOCK_REMINDERS',
-    defaultValue: true,
   );
 }

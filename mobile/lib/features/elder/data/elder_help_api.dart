@@ -19,7 +19,7 @@ final class ElderHelpApi {
       body,
       (raw) => raw is Map<String, dynamic> ? raw : null,
     );
-    if (!api.isSuccess || api.data == null) throw Exception(api.message);
+    if (!api.isSuccess || api.data == null) throw Exception(api.displayMessage);
     return ElderHelpRequest.fromJson(api.data!);
   }
 
@@ -37,7 +37,7 @@ final class ElderHelpApi {
       body,
       (raw) => raw is Map<String, dynamic> ? raw : null,
     );
-    if (!api.isSuccess || api.data == null) throw Exception(api.message);
+    if (!api.isSuccess || api.data == null) throw Exception(api.displayMessage);
     return ElderHelpRequest.fromJson(api.data!);
   }
 
@@ -52,7 +52,7 @@ final class ElderHelpApi {
       body,
       (raw) => raw is Map<String, dynamic> ? raw : null,
     );
-    if (!api.isSuccess || api.data == null) throw Exception(api.message);
+    if (!api.isSuccess || api.data == null) throw Exception(api.displayMessage);
     return ElderHelpRequest.fromJson(api.data!);
   }
 
@@ -64,7 +64,7 @@ final class ElderHelpApi {
       body,
       (raw) => raw is Map<String, dynamic> ? raw : null,
     );
-    if (!api.isSuccess || api.data == null) throw Exception(api.message);
+    if (!api.isSuccess || api.data == null) throw Exception(api.displayMessage);
     return ElderHelpRequest.fromJson(api.data!);
   }
 }

@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../../medical_hub/presentation/medical_archive_page.dart';
+import '../../../medical_hub/presentation/medical_calendar_page.dart';
+import '../../../medical_hub/presentation/medical_smart_hub_page.dart';
 import '../../models/child_local_models.dart';
 import '../pages/child_remote_medical_item_page.dart';
 
@@ -15,6 +18,7 @@ class ChildMedicalTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final items = [
+      (Icons.document_scanner_outlined, '拍照识别单据', '拍摄或上传处方、检查单等'),
       (Icons.add_task_outlined, '远程添加医疗事项', '创建用药、复诊等提醒'),
       (Icons.calendar_month_outlined, '医疗日历', '按日历查看医疗安排'),
       (Icons.folder_open_outlined, '医疗档案', '病历与报告摘要'),
@@ -35,6 +39,30 @@ class ChildMedicalTab extends StatelessWidget {
             subtitle: Text(it.$3),
             trailing: const Icon(Icons.chevron_right),
             onTap: () {
+              if (it.$2 == '拍照识别单据') {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => MedicalSmartHubPage(elders: elders),
+                  ),
+                );
+                return;
+              }
+              if (it.$2 == '医疗日历') {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => MedicalCalendarPage(elders: elders),
+                  ),
+                );
+                return;
+              }
+              if (it.$2 == '医疗档案') {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => MedicalArchivePage(elders: elders),
+                  ),
+                );
+                return;
+              }
               if (it.$2 == '远程添加医疗事项') {
                 Navigator.of(context).push(
                   MaterialPageRoute(

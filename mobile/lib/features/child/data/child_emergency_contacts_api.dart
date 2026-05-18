@@ -19,7 +19,7 @@ final class ChildEmergencyContactsApi {
         return raw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
       },
     );
-    if (!api.isSuccess) throw Exception(api.message);
+    if (!api.isSuccess) throw Exception(api.displayMessage);
     final list = api.data ?? const <Map<String, dynamic>>[];
     return list.map(_fromRow).toList();
   }
@@ -54,7 +54,7 @@ final class ChildEmergencyContactsApi {
     final body = res.data;
     if (body == null) throw Exception('空响应');
     final api = ApiResponse.fromJson(body, (raw) => raw);
-    if (!api.isSuccess) throw Exception(api.message);
+    if (!api.isSuccess) throw Exception(api.displayMessage);
   }
 
   static Future<void> update({
@@ -77,7 +77,7 @@ final class ChildEmergencyContactsApi {
     final body = res.data;
     if (body == null) throw Exception('空响应');
     final api = ApiResponse.fromJson(body, (raw) => raw);
-    if (!api.isSuccess) throw Exception(api.message);
+    if (!api.isSuccess) throw Exception(api.displayMessage);
   }
 
   static Future<void> delete({required int elderId, required int contactId}) async {
@@ -85,6 +85,6 @@ final class ChildEmergencyContactsApi {
     final body = res.data;
     if (body == null) throw Exception('空响应');
     final api = ApiResponse.fromJson(body, (raw) => raw);
-    if (!api.isSuccess) throw Exception(api.message);
+    if (!api.isSuccess) throw Exception(api.displayMessage);
   }
 }
