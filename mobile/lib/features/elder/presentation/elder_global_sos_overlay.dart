@@ -201,43 +201,47 @@ class _GlobalSosButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: const Color(0xFFFEF2F2),
+      color: const Color(0xFFFEF2F2).withValues(alpha: 0.42),
       shape: const CircleBorder(),
-      elevation: 10,
-      shadowColor: const Color(0xFF991B1B).withValues(alpha: 0.3),
+      elevation: 3,
+      shadowColor: const Color(0xFF991B1B).withValues(alpha: 0.18),
       child: InkWell(
         customBorder: const CircleBorder(),
         onTap: onTap,
+        splashColor: const Color(0xFFEF4444).withValues(alpha: 0.12),
+        highlightColor: const Color(0xFFEF4444).withValues(alpha: 0.08),
         child: Container(
           width: 88,
           height: 88,
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            border: Border.all(color: const Color(0xFFEF4444), width: 2),
+            border: Border.all(color: const Color(0xFFEF4444).withValues(alpha: 0.72), width: 2),
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               if (busy)
-                const SizedBox(
+                SizedBox(
                   width: 24,
                   height: 24,
                   child: CircularProgressIndicator(
-                      strokeWidth: 3, color: Color(0xFFDC2626)),
+                    strokeWidth: 3,
+                    color: const Color(0xFFDC2626).withValues(alpha: 0.9),
+                  ),
                 )
               else
-                const Icon(Icons.sos_outlined,
-                    color: Color(0xFFDC2626), size: 26),
+                Icon(Icons.sos_outlined, color: const Color(0xFFDC2626).withValues(alpha: 0.92), size: 26),
               const SizedBox(height: 5),
-              const Text(
+              Text(
                 '紧急\n求助',
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w900,
-                    color: Color(0xFF991B1B),
-                    height: 1.1),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w900,
+                  color: const Color(0xFF991B1B).withValues(alpha: 0.92),
+                  height: 1.1,
+                ),
               ),
             ],
           ),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../interest_community/presentation/child_interest_community_preview_page.dart';
 import '../../models/child_local_models.dart';
 import '../widgets/child_location_map.dart';
 
@@ -130,6 +131,35 @@ class ChildOverviewTab extends StatelessWidget {
                 ),
               ],
             ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Card(
+          child: ListTile(
+            leading: Icon(Icons.groups_outlined, color: scheme.primary),
+            title: Text('父母兴趣社群', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+            subtitle: Text(
+              elders.isEmpty
+                  ? '绑定老人后可预览其加入的兴趣群'
+                  : elders.length > 1
+                      ? '可切换查看各位老人在兴趣群里的发言'
+                      : '查看 ${currentElder!.displayName} 在太极、书法等群里的最近发言',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: elders.isEmpty
+                ? null
+                : () {
+                    final target = currentElder ?? elders.first;
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => ChildInterestCommunityPreviewPage(
+                          elders: elders,
+                          initialElderId: target.id,
+                        ),
+                      ),
+                    );
+                  },
           ),
         ),
         const SizedBox(height: 12),

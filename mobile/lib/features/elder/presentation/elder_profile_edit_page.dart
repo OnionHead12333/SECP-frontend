@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/auth/auth_session.dart';
+import '../../interest_community/presentation/widgets/elder_avatar_picker_tile.dart';
 import '../data/elder_user_profile_api.dart';
 
 class ElderProfileEditPage extends StatefulWidget {
@@ -173,6 +174,10 @@ class _ElderProfileEditPageState extends State<ElderProfileEditPage> {
                   Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 14)),
                   const SizedBox(height: 12),
                 ],
+                const Center(
+                  child: ElderAvatarPickerTile(size: 96, caption: '点击头像从相册选择'),
+                ),
+                const SizedBox(height: 24),
                 TextField(
                   controller: _nameCtrl,
                   textInputAction: TextInputAction.next,
