@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/config/app_config.dart';
 import '../../../interest_community/presentation/child_interest_community_preview_page.dart';
+import '../../../interest_community/presentation/interest_community_list_page.dart';
+import '../../../interest_community/models/community_message.dart';
 import '../../models/child_local_models.dart';
 import '../widgets/child_location_map.dart';
 
@@ -95,6 +97,47 @@ class ChildOverviewTab extends StatelessWidget {
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
                 ),
               ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Material(
+          color: scheme.surfaceContainerHighest.withValues(alpha: 0.45),
+          borderRadius: BorderRadius.circular(16),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: () => Navigator.of(context).push<void>(
+              MaterialPageRoute<void>(
+                builder: (_) => const InterestCommunityListPage(
+                  audience: InterestCommunityAudience.child,
+                ),
+              ),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Row(
+                children: [
+                  Icon(Icons.record_voice_over_outlined, color: scheme.primary, size: 30),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '父母兴趣社群（演示）',
+                          style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          '讯飞语音转文字；本地会话不写后端',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(Icons.chevron_right_rounded, color: scheme.outline),
+                ],
+              ),
             ),
           ),
         ),

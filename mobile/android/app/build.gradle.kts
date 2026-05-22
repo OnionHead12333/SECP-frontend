@@ -47,8 +47,17 @@ android {
     buildTypes {
         release {
             signingConfig = signingConfigs.getByName("debug")
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
     }
+}
+
+dependencies {
+    // amap_flutter_map 插件内原为 compileOnly，release 不会打进 APK，需由 app 显式引入
+    implementation("com.amap.api:3dmap:8.1.0")
 }
 
 flutter {

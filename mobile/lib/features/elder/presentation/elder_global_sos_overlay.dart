@@ -1,12 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:crypto/crypto.dart';
 import 'package:record/record.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:web_socket_channel/status.dart' as ws_status;
@@ -15,6 +13,7 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 import '../../../core/auth/app_role.dart';
 import '../../../core/auth/auth_session.dart';
 import '../../../core/config/app_config.dart';
+import '../../../core/voice/xfyun_iat_stream_helpers.dart';
 import '../data/elder_emergency_contacts_service.dart';
 import '../data/elder_help_service.dart';
 import '../models/elder_help_request.dart';
@@ -427,7 +426,7 @@ class _GlobalSosCountdownSheetState extends State<_GlobalSosCountdownSheet>
         _setVoiceUnavailable('麦克风权限未开启');
         return;
       }
-      final uri = _buildXfyunIatUri();
+      final uri = XfyunIatStreamHelpers.defaultIatWsUriFromConfig();
       final channel = WebSocketChannel.connect(uri);
       _xfChannel = channel;
       _xfIatClosed = false;
@@ -553,49 +552,14 @@ class _GlobalSosCountdownSheetState extends State<_GlobalSosCountdownSheet>
     return '讯飞语音启动失败：$raw';
   }
 
-  Uri _buildXfyunIatUri() {
-    final host = AppConfig.xfyunIatHost;
-    final path = AppConfig.xfyunIatPath;
-    final date = HttpDate.format(DateTime.now().toUtc());
-    final signatureOrigin = 'host: $host\ndate: $date\nGET $path HTTP/1.1';
-    final signature = base64Encode(
-      Hmac(sha256, utf8.encode(AppConfig.xfyunIatApiSecret))
-          .convert(utf8.encode(signatureOrigin))
-          .bytes,
-    );
-    final authorizationOrigin =
-        'api_key="${AppConfig.xfyunIatApiKey}", algorithm="hmac-sha256", headers="host date request-line", signature="$signature"';
-    final authorization = base64Encode(utf8.encode(authorizationOrigin));
-    final query = [
-      'authorization=${Uri.encodeComponent(authorization)}',
-      'date=${Uri.encodeComponent(date)}',
-      'host=${Uri.encodeComponent(host)}',
-    ].join('&');
-    return Uri.parse('wss://$host$path?$query');
-  }
-
   void _sendXfyunAudioChunk(Uint8List chunk) {
     final channel = _xfChannel;
     if (channel == null || _xfIatClosed || _isSubmitting || chunk.isEmpty) {
       return;
     }
-    final status = _xfFrameStatus == 0 ? 0 : 1;
-    final frame = <String, dynamic>{
-      if (status == 0) 'common': {'app_id': AppConfig.xfyunIatAppId},
-      if (status == 0)
-        'business': {
-          'language': 'zh_cn',
-          'domain': 'iat',
-          'accent': 'mandarin',
-          'vad_eos': 3000,
-        },
-      'data': {
-        'status': status,
-        'format': 'audio/L16;rate=16000',
-        'encoding': 'raw',
-        'audio': base64Encode(chunk),
-      },
-    };
+    final isFirst = _xfFrameStatus == 0;
+    final Map<String, dynamic> frame =
+        isFirst ? XfyunIatStreamHelpers.firstAudioFramePayload(chunk: chunk) : XfyunIatStreamHelpers.continuationAudioFramePayload(chunk: chunk);
     channel.sink.add(jsonEncode(frame));
     _xfFrameStatus = 1;
   }
@@ -603,14 +567,7 @@ class _GlobalSosCountdownSheetState extends State<_GlobalSosCountdownSheet>
   void _sendXfyunFinalFrame() {
     final channel = _xfChannel;
     if (channel == null || _xfIatClosed) return;
-    channel.sink.add(jsonEncode({
-      'data': {
-        'status': 2,
-        'format': 'audio/L16;rate=16000',
-        'encoding': 'raw',
-        'audio': '',
-      },
-    }));
+    channel.sink.add(jsonEncode(XfyunIatStreamHelpers.closingAudioPayload()));
     _xfIatClosed = true;
     _sosLog('xfyun final frame sent alertId=${widget.alertId}');
   }
@@ -640,7 +597,7 @@ class _GlobalSosCountdownSheetState extends State<_GlobalSosCountdownSheet>
       }
       final data = payload['data'] as Map<String, dynamic>?;
       final result = data?['result'] as Map<String, dynamic>?;
-      final words = _extractXfyunWords(result);
+      final words = XfyunIatStreamHelpers.extractWords(result);
       if (words.isNotEmpty) {
         _handleRecognizedWords(words, finalResult: data?['status'] == 2);
       }
@@ -652,25 +609,6 @@ class _GlobalSosCountdownSheetState extends State<_GlobalSosCountdownSheet>
       _sosLog(
           'xfyun result parse failed alertId=${widget.alertId}: $e raw=$message');
     }
-  }
-
-  String _extractXfyunWords(Map<String, dynamic>? result) {
-    if (result == null) return '';
-    final buffer = StringBuffer();
-    final ws = result['ws'];
-    if (ws is List) {
-      for (final item in ws) {
-        if (item is! Map) continue;
-        final cw = item['cw'];
-        if (cw is! List) continue;
-        for (final candidate in cw) {
-          if (candidate is Map && candidate['w'] is String) {
-            buffer.write(candidate['w'] as String);
-          }
-        }
-      }
-    }
-    return buffer.toString();
   }
 
   Future<void> _stopXfyunIat({required bool sendFinalFrame}) async {

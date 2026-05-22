@@ -113,6 +113,8 @@ class _ElderHomePageState extends State<ElderHomePage> {
         onBindingTap: () => Navigator.of(context).pushNamed(ElderModuleRoutes.elderBinding),
         onOpenReminders: () => setState(() => _index = 2),
         onOpenAiAssistant: () => Navigator.of(context).pushNamed(ElderModuleRoutes.elderAiAssistant),
+        onOpenInterestCommunity: () =>
+            Navigator.of(context).pushNamed(ElderModuleRoutes.elderInterestCommunity),
       ),
       const ElderCommunityTab(),
       ElderReminderCenterTab(
@@ -168,6 +170,7 @@ class _HomeTab extends StatelessWidget {
     required this.onBindingTap,
     required this.onOpenReminders,
     required this.onOpenAiAssistant,
+    required this.onOpenInterestCommunity,
   });
 
   final String name;
@@ -179,6 +182,7 @@ class _HomeTab extends StatelessWidget {
   final VoidCallback onBindingTap;
   final VoidCallback onOpenReminders;
   final VoidCallback onOpenAiAssistant;
+  final VoidCallback onOpenInterestCommunity;
 
   @override
   Widget build(BuildContext context) {
@@ -217,6 +221,13 @@ class _HomeTab extends StatelessWidget {
                 title: 'AI 医疗助手',
                 value: '身体不舒服时先问一问，支持风险提示和家属同步',
                 onTap: onOpenAiAssistant,
+              ),
+              const Divider(height: 24),
+              _SimpleRow(
+                icon: Icons.groups_outlined,
+                title: '兴趣社群',
+                value: '太极、书法等语音群 · 按住说话交朋友',
+                onTap: onOpenInterestCommunity,
               ),
               const Divider(height: 24),
               _SimpleRow(
