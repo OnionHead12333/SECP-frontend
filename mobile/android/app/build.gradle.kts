@@ -18,7 +18,7 @@ fun resolveAmapKey(): String {
     return (project.findProperty("AMAP_ANDROID_KEY") as String?)
         ?: System.getenv("AMAP_ANDROID_KEY")
         ?: localProperties.getProperty("AMAP_ANDROID_KEY")
-        ?: "55f733fae7a326ac12009b17dde876a4"
+    ?: "498e435f3491aca3cb199364e1bec6c5"
 }
 
 android {

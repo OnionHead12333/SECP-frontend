@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/config/app_config.dart';
 import '../../models/child_local_models.dart';
 import '../widgets/child_location_map.dart';
 
@@ -29,6 +30,10 @@ class ChildSafetyTab extends StatelessWidget {
   }
 
   String _two(int n) => n.toString().padLeft(2, '0');
+
+  String _mapModeLabel() {
+    return AppConfig.useMockLocation ? '本地自绘兜底' : '高德地图';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -78,9 +83,80 @@ class ChildSafetyTab extends StatelessWidget {
                         track: mapTrack,
                         route: mapRoute,
                         height: 232,
-                        useOfflinePainter: true,
+                        useOfflinePainter: AppConfig.useMockLocation,
                       ),
                       const SizedBox(height: 12),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppConfig.useMockLocation ? const Color(0xFFF8FAFC) : const Color(0xFFF0FDF4),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: AppConfig.useMockLocation ? const Color(0xFFE2E8F0) : const Color(0xFFBBF7D0),
+                          ),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              width: 34,
+                              height: 34,
+                              decoration: BoxDecoration(
+                                color: scheme.primary.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Icon(
+                                AppConfig.useMockLocation ? Icons.brush_outlined : Icons.map_outlined,
+                                size: 18,
+                                color: scheme.primary,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Text(
+                                        '地图模式',
+                                        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                                              color: scheme.onSurfaceVariant,
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: AppConfig.useMockLocation ? const Color(0xFFE2E8F0) : const Color(0xFFDCFCE7),
+                                          borderRadius: BorderRadius.circular(999),
+                                        ),
+                                        child: Text(
+                                          _mapModeLabel(),
+                                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                                color: AppConfig.useMockLocation ? const Color(0xFF475569) : const Color(0xFF166534),
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    '数据源：最新定位摘要 + 家围栏参考线',
+                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                          color: scheme.onSurfaceVariant,
+                                        ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 8),
                       Text(loc.address, style: Theme.of(context).textTheme.bodyLarge),
                       const SizedBox(height: 6),
                       Text(

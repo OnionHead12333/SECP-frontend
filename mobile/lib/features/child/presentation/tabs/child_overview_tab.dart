@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/config/app_config.dart';
 import '../../../interest_community/presentation/child_interest_community_preview_page.dart';
 import '../../models/child_local_models.dart';
 import '../widgets/child_location_map.dart';
@@ -115,7 +116,7 @@ class ChildOverviewTab extends StatelessWidget {
                     ),
                     latitude: loc.latitude,
                     longitude: loc.longitude,
-                    useOfflinePainter: true,
+                    useOfflinePainter: AppConfig.useMockLocation,
                   ),
                   const SizedBox(height: 10),
                   Text(loc.address, style: Theme.of(context).textTheme.bodyMedium),
