@@ -268,20 +268,15 @@ class _InterestCommunityVoiceChatPageState extends State<InterestCommunityVoiceC
 
   Future<void> _addFriendFromMessage(InterestCommunityVoiceMessage m) async {
     final scope = widget.membershipScopeKey ?? CommunityScope.forCurrentElder();
-    final candidate = FriendDiscoverCatalog.byScopeKey(m.senderScopeKey) ??
+    final catalog = FriendDiscoverCatalog.byScopeKey(m.senderScopeKey);
+    final candidate = catalog ??
         ElderFriendCandidate(
           scopeKey: m.senderScopeKey,
           displayName: m.senderDisplay,
           phone: '',
           hint: '来自「${widget.community.name}」',
-          emoji: '👤',
+          emoji: _emojiForMessage(m) ?? '👤',
         );
-    if (candidate.phone.isEmpty && FriendDiscoverCatalog.byScopeKey(m.senderScopeKey) == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请前往「我的好友」通过手机号添加该朋友')),
-      );
-      return;
-    }
     await CommunityFriendRepository.addFriend(ownerScopeKey: scope, candidate: candidate);
     if (!mounted) return;
     setState(() => _friendScopeKeys = {..._friendScopeKeys, candidate.scopeKey});
