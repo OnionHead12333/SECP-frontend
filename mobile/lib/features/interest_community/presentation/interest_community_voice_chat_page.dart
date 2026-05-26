@@ -11,7 +11,6 @@ import '../data/community_friend_repository.dart';
 import '../data/community_group_chat_service.dart';
 import '../data/community_media_cache.dart';
 import '../data/elder_avatar_repository.dart';
-import '../data/friend_discover_catalog.dart';
 import '../data/community_membership_repository.dart';
 import '../data/community_scope.dart';
 import '../data/community_voice_duration.dart';
@@ -21,6 +20,7 @@ import '../models/community_friend.dart';
 import '../models/community_message.dart';
 import 'community_direct_chat_page.dart';
 import 'widgets/community_chat_image.dart';
+import 'widgets/community_chat_scroll.dart';
 import 'widgets/community_member_avatar.dart';
 
 /// 群内语音会话：按住说话 · 保存本地语音 · 点击播放。
@@ -113,9 +113,8 @@ class _InterestCommunityVoiceChatPageState extends State<InterestCommunityVoiceC
   void _onScroll() {
     if (!_scroll.hasClients) return;
     final pos = _scroll.position;
-    // reverse ListView：pixels≈0 为底部（最新消息）
-    _stickToBottom = pos.pixels <= 96;
-    if (pos.pixels >= pos.maxScrollExtent - 140 && !_loadingMore && _hasMore) {
+    _stickToBottom = CommunityChatScroll.isNearBottom(pos);
+    if (CommunityChatScroll.isNearTop(pos) && !_loadingMore && _hasMore) {
       unawaited(_loadOlder());
     }
   }
@@ -250,7 +249,7 @@ class _InterestCommunityVoiceChatPageState extends State<InterestCommunityVoiceC
       setState(() => _initialLoading = false);
       _stickToBottom = true;
       unawaited(_refreshAvatarsAndFriends());
-      _anchorToLatest(animated: false);
+      CommunityChatScroll.anchorToLatest(_scroll, animated: false);
     } catch (e) {
       if (!mounted) return;
       setState(() => _initialLoading = false);
@@ -282,17 +281,11 @@ class _InterestCommunityVoiceChatPageState extends State<InterestCommunityVoiceC
         nextBefore: page.nextBefore,
       );
       setState(() {});
-      if (_scroll.hasClients) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!_scroll.hasClients || !mounted) return;
-          if (oldPixels <= 96) {
-            _scroll.jumpTo(0);
-          } else {
-            final delta = _scroll.position.maxScrollExtent - oldMax;
-            _scroll.jumpTo((oldPixels + delta).clamp(0.0, _scroll.position.maxScrollExtent));
-          }
-        });
-      }
+      CommunityChatScroll.preserveAfterPrepend(
+        controller: _scroll,
+        oldPixels: oldPixels,
+        oldMax: oldMax,
+      );
       unawaited(_refreshAvatarsAndFriends());
     } catch (e) {
       if (!mounted) return;
@@ -321,7 +314,7 @@ class _InterestCommunityVoiceChatPageState extends State<InterestCommunityVoiceC
       CommunityVoiceDuration.evictNotIn(ids);
       setState(() {});
       unawaited(_refreshAvatarsAndFriends());
-      if (shouldScroll) _anchorToLatest(animated: scrollToBottom);
+      if (shouldScroll) CommunityChatScroll.anchorToLatest(_scroll, animated: scrollToBottom);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -461,49 +454,30 @@ class _InterestCommunityVoiceChatPageState extends State<InterestCommunityVoiceC
 
   Future<void> _addFriendFromMessage(InterestCommunityVoiceMessage m) async {
     final scope = widget.membershipScopeKey ?? CommunityScope.forCurrentElder();
-    final catalog = FriendDiscoverCatalog.byScopeKey(m.senderScopeKey);
-    final candidate = catalog ??
-        ElderFriendCandidate(
-          scopeKey: m.senderScopeKey,
-          displayName: m.senderDisplay,
-          phone: '',
-          hint: '来自「${widget.community.name}」',
-          emoji: _emojiForMessage(m) ?? '👤',
-        );
-    await CommunityFriendRepository.addFriend(ownerScopeKey: scope, candidate: candidate);
-    if (!mounted) return;
-    setState(() => _friendScopeKeys = {..._friendScopeKeys, candidate.scopeKey});
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('已添加好友「${candidate.displayName}」')),
-    );
+    if (m.senderScopeKey.isEmpty) return;
+    try {
+      final candidate = ElderFriendCandidate(
+        scopeKey: m.senderScopeKey,
+        displayName: m.senderDisplay,
+        phone: '',
+        hint: '来自「${widget.community.name}」',
+        emoji: _emojiForMessage(m) ?? '👤',
+      );
+      await CommunityFriendRepository.addFriend(ownerScopeKey: scope, candidate: candidate);
+      if (!mounted) return;
+      setState(() => _friendScopeKeys = {..._friendScopeKeys, m.senderScopeKey});
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('已添加好友「${m.senderDisplay}」')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+      );
+    }
   }
 
   /// reverse ListView 下锚定到最新消息（列表底部，pixels → 0）。
-  void _anchorToLatest({bool animated = true}) {
-    if (!_scroll.hasClients) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _anchorToLatest(animated: animated));
-      return;
-    }
-    void jump() {
-      if (!_scroll.hasClients || !mounted) return;
-      const target = 0.0;
-      if (animated) {
-        _scroll.animateTo(
-          target,
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOut,
-        );
-      } else {
-        _scroll.jumpTo(target);
-      }
-    }
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      jump();
-      WidgetsBinding.instance.addPostFrameCallback((_) => jump());
-    });
-  }
-
   bool _isMineMessage(InterestCommunityVoiceMessage m) {
     if (m.mine != null) return m.mine!;
     final selfScope = _selfScopeKey;
@@ -895,35 +869,31 @@ class _InterestCommunityVoiceChatPageState extends State<InterestCommunityVoiceC
                         )
                       : ListView.builder(
                       controller: _scroll,
-                      reverse: true,
                       physics: const AlwaysScrollableScrollPhysics(),
                       cacheExtent: 800,
-                      padding: const EdgeInsets.fromLTRB(16, 120, 16, 8),
-                      itemCount: _entries.length + (_holdingMic ? 1 : 0) + (_loadingMore ? 1 : 0),
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
+                      itemCount: _entries.length +
+                          (_holdingMic ? 1 : 0) +
+                          (_loadingMore ? 1 : 0),
                       itemBuilder: (context, i) {
-                        final total = _entries.length + (_holdingMic ? 1 : 0) + (_loadingMore ? 1 : 0);
-                        // reverse：最大 index 在顶部，用于加载更早消息
-                        if (_loadingMore && i == total - 1) {
-                          return const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 10),
-                            child: Center(
-                              child: SizedBox(
-                                width: 22,
-                                height: 22,
-                                child: CircularProgressIndicator(strokeWidth: 2.2),
+                        var index = i;
+                        if (_loadingMore) {
+                          if (index == 0) {
+                            return const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 10),
+                              child: Center(
+                                child: SizedBox(
+                                  width: 22,
+                                  height: 22,
+                                  child: CircularProgressIndicator(strokeWidth: 2.2),
+                                ),
                               ),
-                            ),
-                          );
+                            );
+                          }
+                          index--;
                         }
-                        if (_holdingMic && i == 0) {
-                          return _RecordingBubble(elderHuge: _elderUi);
-                        }
-                        var messageSlot = i;
-                        if (_holdingMic) messageSlot--;
-                        if (messageSlot < 0 || messageSlot >= _entries.length) {
-                          return const SizedBox.shrink();
-                        }
-                        final entry = _entries[_entries.length - 1 - messageSlot];
+                        if (index < _entries.length) {
+                          final entry = _entries[index];
                         if (entry.dateLabel != null) {
                           return _DateDivider(label: entry.dateLabel!, elderHuge: _elderUi);
                         }
@@ -978,6 +948,11 @@ class _InterestCommunityVoiceChatPageState extends State<InterestCommunityVoiceC
                               ? () => unawaited(_onAvatarTap(m))
                               : null,
                         );
+                        }
+                        if (_holdingMic && index == _entries.length) {
+                          return _RecordingBubble(elderHuge: _elderUi);
+                        }
+                        return const SizedBox.shrink();
                       },
                     ),
             ),

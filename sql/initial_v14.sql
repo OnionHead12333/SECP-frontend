@@ -1,6 +1,8 @@
 -- ======================================================
 -- 数据库初始数据（V14）
--- 对齐 table_v14.sql；在 V13 种子基础上适配群聊 image、软清空表
+-- 对齐 sql/table_v14.sql；在 V13 种子基础上适配：
+--   · 群聊 message_kind 含 image、interest_community_chat_clear
+--   · 私聊 direct_messages 含 image_url、direct_message_clear
 -- 不包含 ai_medical_qa_knowledge 全量数据（请用 CSV 等方式单独导入）
 -- 所有用户密码均为 'password'（BCrypt 占位哈希，生产请替换）
 -- 新建库：在 table_v14.sql 之后执行本脚本
@@ -10,6 +12,7 @@ USE elder;
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
 
+TRUNCATE TABLE direct_message_clear;
 TRUNCATE TABLE direct_messages;
 TRUNCATE TABLE direct_message_threads;
 TRUNCATE TABLE elder_friends;
@@ -308,7 +311,7 @@ LEFT JOIN (
 ) latest ON latest.elder_profile_id = ep.id;
 
 
--- ---------- 兴趣社群（对齐前端 CommunityCatalog / 群聊 / 好友 / 私聊）----------
+-- ---------- 兴趣社群（对齐 CommunityCatalog / 群聊 / 好友 / 私聊 API）----------
 INSERT INTO interest_communities (id, name, short_description, preview_icon, member_hint, sort_order, is_active, created_at, updated_at) VALUES
 ('taiji', '太极晨练群', '一起练站桩、步法与呼吸节律，互相提醒出门时间。', '🥋', '约 328 人在练', 1, 1, NOW(), NOW()),
 ('calligraphy', '书法兴趣班', '晒作品、聊聊笔墨纸砚，零基础也能练字。', '🖌️', '约 241 人在写', 2, 1, NOW(), NOW()),
@@ -340,14 +343,24 @@ INSERT INTO interest_community_messages (
 ('welcome_travel', 'travel', 'system', NULL, '群助手', 'elder', 'text', '欢迎来到慢旅游分享！可按住说话、点键盘输入文字，或点 + 发送图片。', NULL, NULL, 0, '2026-04-05 14:25:00.000'),
 ('demo_peer_taiji_1', 'taiji', 'demo_peer_wang', NULL, '王阿姨', 'elder', 'text', '大家明天照常去公园练太极，记得带水杯。', NULL, NULL, 0, TIMESTAMP(DATE_SUB(CURDATE(), INTERVAL 1 DAY), '09:20:00')),
 ('demo_peer_taiji_2', 'taiji', 'demo_peer_li', NULL, '李叔叔', 'elder', 'text', '收到，我上午也过去，咱们老地方见。', NULL, NULL, 0, TIMESTAMP(DATE_SUB(CURDATE(), INTERVAL 1 DAY), '14:35:00')),
-('demo_peer_calligraphy_1', 'calligraphy', 'demo_peer_wang', NULL, '王阿姨', 'elder', 'text', '大家明天照常去公园练太极，记得带水杯。', NULL, NULL, 0, TIMESTAMP(DATE_SUB(CURDATE(), INTERVAL 1 DAY), '09:20:00')),
-('demo_peer_calligraphy_2', 'calligraphy', 'demo_peer_li', NULL, '李叔叔', 'elder', 'text', '收到，我上午也过去，咱们老地方见。', NULL, NULL, 0, TIMESTAMP(DATE_SUB(CURDATE(), INTERVAL 1 DAY), '14:35:00')),
-('demo_peer_fitness_1', 'fitness', 'demo_peer_wang', NULL, '王阿姨', 'elder', 'text', '大家明天照常去公园练太极，记得带水杯。', NULL, NULL, 0, TIMESTAMP(DATE_SUB(CURDATE(), INTERVAL 1 DAY), '09:20:00')),
-('demo_peer_fitness_2', 'fitness', 'demo_peer_li', NULL, '李叔叔', 'elder', 'text', '收到，我上午也过去，咱们老地方见。', NULL, NULL, 0, TIMESTAMP(DATE_SUB(CURDATE(), INTERVAL 1 DAY), '14:35:00')),
-('demo_peer_travel_1', 'travel', 'demo_peer_wang', NULL, '王阿姨', 'elder', 'text', '大家明天照常去公园练太极，记得带水杯。', NULL, NULL, 0, TIMESTAMP(DATE_SUB(CURDATE(), INTERVAL 1 DAY), '09:20:00')),
-('demo_peer_travel_2', 'travel', 'demo_peer_li', NULL, '李叔叔', 'elder', 'text', '收到，我上午也过去，咱们老地方见。', NULL, NULL, 0, TIMESTAMP(DATE_SUB(CURDATE(), INTERVAL 1 DAY), '14:35:00')),
+('demo_peer_calligraphy_1', 'calligraphy', 'demo_peer_zhang', NULL, '张大姐', 'elder', 'text', '今天临了颜体几页，笔锋还行，大家看看。', NULL, NULL, 0, TIMESTAMP(DATE_SUB(CURDATE(), INTERVAL 1 DAY), '09:20:00')),
+('demo_peer_calligraphy_2', 'calligraphy', 'demo_peer_wang', NULL, '王阿姨', 'elder', 'text', '写得真好，我明天也带宣纸过去。', NULL, NULL, 0, TIMESTAMP(DATE_SUB(CURDATE(), INTERVAL 1 DAY), '14:35:00')),
+('demo_peer_fitness_1', 'fitness', 'demo_peer_zhao', NULL, '赵师傅', 'elder', 'text', '今天散步三圈，膝盖还行，大家量力而行。', NULL, NULL, 0, TIMESTAMP(DATE_SUB(CURDATE(), INTERVAL 1 DAY), '09:20:00')),
+('demo_peer_fitness_2', 'fitness', 'demo_peer_wang', NULL, '王阿姨', 'elder', 'text', '收到，我晚饭后也出去走走。', NULL, NULL, 0, TIMESTAMP(DATE_SUB(CURDATE(), INTERVAL 1 DAY), '14:35:00')),
+('demo_peer_travel_1', 'travel', 'demo_peer_sun', NULL, '孙奶奶', 'elder', 'text', '周末周边古镇不错，记得穿防滑鞋。', NULL, NULL, 0, TIMESTAMP(DATE_SUB(CURDATE(), INTERVAL 1 DAY), '09:20:00')),
+('demo_peer_travel_2', 'travel', 'demo_peer_wang', NULL, '王阿姨', 'elder', 'text', '好主意，我和老伴也想去看看。', NULL, NULL, 0, TIMESTAMP(DATE_SUB(CURDATE(), INTERVAL 1 DAY), '14:35:00')),
+('text_taiji_elder1_1', 'taiji', 'phone_13800138001', 1, '张建国', 'elder', 'text', '明天晨练见，大家记得带太极剑。', NULL, NULL, 0, '2026-04-10 07:45:00.000'),
 ('voice_taiji_elder1_1', 'taiji', 'phone_13800138001', 1, '张建国', 'elder', 'voice', NULL, '/uploads/community_voice/taiji_elder1_20260410.m4a', NULL, 4200, '2026-04-10 07:50:00.000'),
-('voice_calligraphy_elder2_1', 'calligraphy', 'phone_13800138002', 2, '李秀英', 'elder', 'voice', NULL, '/uploads/community_voice/calligraphy_elder2_20260409.m4a', NULL, 5600, '2026-04-09 15:20:00.000');
+('img_calligraphy_peer_1', 'calligraphy', 'demo_peer_zhang', NULL, '张大姐', 'elder', 'image', NULL, NULL, '/uploads/community_image/demo_calligraphy_20260409.jpg', 0, '2026-04-09 15:10:00.000'),
+('voice_calligraphy_elder2_1', 'calligraphy', 'phone_13800138002', 2, '李秀英', 'elder', 'voice', NULL, '/uploads/community_voice/calligraphy_elder2_20260409.m4a', NULL, 5600, '2026-04-09 15:20:00.000'),
+('text_fitness_elder3_1', 'fitness', 'phone_13800138003', 3, '王德明', 'elder', 'text', '今天散步三圈，膝盖还行。', NULL, NULL, 0, '2026-04-11 09:00:00.000');
+
+-- 群聊软清空演示：李秀英清空书法群 4 月 9 日 12:00 之前的消息（仍保留库中数据，仅对她不可见）
+INSERT INTO interest_community_chat_clear (
+  viewer_scope_key, viewer_user_id, elder_profile_id, community_id, clear_before_millis, updated_at
+) VALUES (
+  'phone_13800138002', 2, 2, 'calligraphy', UNIX_TIMESTAMP('2026-04-09 12:00:00') * 1000, NOW(3)
+);
 
 INSERT INTO community_peer_seed_log (community_id, seeded_at) VALUES
 ('taiji', NOW()),
@@ -372,7 +385,15 @@ INSERT INTO direct_messages (
   message_kind, text_content, audio_url, image_url, duration_ms, created_at
 ) VALUES
 ('direct_1_wang_voice', 1, 'demo_peer_wang', NULL, '王阿姨', 'elder', 'voice', NULL, '/uploads/community_voice/direct_wang_20260408.m4a', NULL, 3800, '2026-04-08 11:06:00.000'),
+('direct_1_elder1_text', 1, 'phone_13800138001', 1, '张建国', 'elder', 'text', '王阿姨，明天公园见。', NULL, NULL, 0, '2026-04-09 10:30:00.000'),
 ('direct_1_elder1_voice', 1, 'phone_13800138001', 1, '张建国', 'elder', 'voice', NULL, '/uploads/community_voice/direct_elder1_20260410.m4a', NULL, 5100, '2026-04-10 08:12:00.000');
+
+-- 私聊软清空演示：张建国清空与王阿姨会话中 4 月 9 日 12:00 之前的消息（对方仍可见全部历史）
+INSERT INTO direct_message_clear (
+  thread_id, scope_key, elder_profile_id, clear_before_millis, updated_at
+) VALUES (
+  1, 'phone_13800138001', 1, UNIX_TIMESTAMP('2026-04-09 12:00:00') * 1000, NOW(3)
+);
 
 
 SET FOREIGN_KEY_CHECKS = 1;

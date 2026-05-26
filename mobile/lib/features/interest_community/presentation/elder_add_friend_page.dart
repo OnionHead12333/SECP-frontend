@@ -4,10 +4,9 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/auth/auth_session.dart';
 import '../data/community_friend_repository.dart';
-import '../data/friend_discover_catalog.dart';
 import '../models/community_friend.dart';
 
-/// 老人端：添加好友（手机号 / 同群推荐）。
+/// 老人端：添加好友（手机号 / 同群推荐，后端 discover + POST）。
 final class ElderAddFriendPage extends StatefulWidget {
   const ElderAddFriendPage({super.key, required this.ownerScopeKey});
 
@@ -20,6 +19,7 @@ final class ElderAddFriendPage extends StatefulWidget {
 class _ElderAddFriendPageState extends State<ElderAddFriendPage> {
   final _phoneCtrl = TextEditingController();
   Set<String> _friendScopeKeys = {};
+  List<ElderFriendCandidate> _recommendations = [];
   bool _loading = true;
   bool _submitting = false;
 
@@ -39,12 +39,23 @@ class _ElderAddFriendPageState extends State<ElderAddFriendPage> {
 
   Future<void> _reload() async {
     setState(() => _loading = true);
-    final keys = await CommunityFriendRepository.loadFriendScopeKeys(widget.ownerScopeKey);
-    if (!mounted) return;
-    setState(() {
-      _friendScopeKeys = keys;
-      _loading = false;
-    });
+    try {
+      final keys = await CommunityFriendRepository.loadFriendScopeKeys(widget.ownerScopeKey);
+      final discover = await CommunityFriendRepository.discover();
+      if (!mounted) return;
+      setState(() {
+        _friendScopeKeys = keys;
+        _recommendations =
+            discover.where((c) => !keys.contains(c.scopeKey)).toList(growable: false);
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+      );
+    }
   }
 
   String? get _selfPhone => AuthSession.elderPhone?.trim();
@@ -73,6 +84,11 @@ class _ElderAddFriendPageState extends State<ElderAddFriendPage> {
         SnackBar(content: Text('已添加好友「${candidate.displayName}」')),
       );
       Navigator.of(context).pop(true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+      );
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -99,22 +115,35 @@ class _ElderAddFriendPageState extends State<ElderAddFriendPage> {
       return;
     }
 
-    final known = FriendDiscoverCatalog.byPhone(phone);
-    final candidate = known ??
-        ElderFriendCandidate(
-          scopeKey: 'phone_$phone',
-          displayName: '手机尾号${phone.substring(phone.length - 4)}',
-          phone: phone,
-          hint: '通过手机号添加',
-          emoji: '👤',
-        );
-    await _addCandidate(candidate);
-  }
-
-  List<ElderFriendCandidate> get _recommendations {
-    return FriendDiscoverCatalog.all
-        .where((c) => !_friendScopeKeys.contains(c.scopeKey))
-        .toList();
+    setState(() => _submitting = true);
+    try {
+      final hits = await CommunityFriendRepository.discover(phone: phone);
+      final candidate = hits.isNotEmpty
+          ? hits.first
+          : ElderFriendCandidate(
+              scopeKey: 'phone_$phone',
+              displayName: '手机尾号${phone.substring(phone.length - 4)}',
+              phone: phone,
+              hint: '通过手机号添加',
+              emoji: '👤',
+            );
+      await CommunityFriendRepository.addFriend(
+        ownerScopeKey: widget.ownerScopeKey,
+        candidate: candidate,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('已添加好友「${candidate.displayName}」')),
+      );
+      Navigator.of(context).pop(true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+      );
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
   }
 
   @override

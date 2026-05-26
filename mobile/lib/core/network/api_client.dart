@@ -45,10 +45,23 @@ final class ApiClient {
   static String _extractMessage(DioException e) {
     final data = e.response?.data;
     String raw;
-    if (data is Map && data['message'] is String) {
-      raw = data['message'] as String;
+    if (data is Map) {
+      final msg = data['message'];
+      if (msg is String && msg.isNotEmpty) {
+        raw = msg;
+      } else {
+        raw = e.message ?? '请求失败';
+      }
+      final code = data['code'];
+      if (code != null && code != 0 && raw == (e.message ?? '')) {
+        raw = '$raw (code=$code)';
+      }
     } else {
       raw = e.message ?? '请求失败';
+    }
+    final status = e.response?.statusCode;
+    if (status != null && status >= 400 && !raw.contains('$status')) {
+      raw = '$raw (HTTP $status)';
     }
     return userFacingApiMessage(raw);
   }

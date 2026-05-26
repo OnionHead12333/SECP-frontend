@@ -74,7 +74,7 @@ class _ElderFriendSectionState extends State<ElderFriendSection> {
       builder: (ctx) => AlertDialog(
         title: const Text('删除好友？', style: TextStyle(fontSize: 20)),
         content: Text(
-          '确定将「${friend.displayName}」从好友列表移除？\n对方不会收到通知（当前为本地演示）。',
+          '确定将「${friend.displayName}」从好友列表移除？\n对方不会收到通知。',
           style: const TextStyle(fontSize: 17, height: 1.5),
         ),
         actions: [

@@ -17,6 +17,7 @@ SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
 
 -- 先删兴趣社群子表
+DROP TABLE IF EXISTS direct_message_clear;
 DROP TABLE IF EXISTS direct_messages;
 DROP TABLE IF EXISTS direct_message_threads;
 DROP TABLE IF EXISTS elder_friends;
@@ -805,6 +806,18 @@ CREATE TABLE direct_messages (
   KEY idx_direct_msg_sender_scope (sender_scope_key)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='老人一对一私聊消息表';
 
+-- 16.7.1 私聊清空记录（DELETE .../messages 软清空，按查看者 scope 隐藏历史）
+CREATE TABLE direct_message_clear (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '清空记录ID',
+  thread_id BIGINT NOT NULL COMMENT '线程ID（逻辑关联 direct_message_threads.id）',
+  scope_key VARCHAR(64) NOT NULL COMMENT '执行清空的用户 scopeKey',
+  elder_profile_id BIGINT DEFAULT NULL COMMENT '执行清空的老人档案ID',
+  clear_before_millis BIGINT NOT NULL COMMENT '清空该时刻及前的消息（毫秒时间戳）',
+  updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3) COMMENT '最近清空时间',
+  UNIQUE KEY uk_thread_scope (thread_id, scope_key),
+  KEY idx_updated_at (updated_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='老人一对一私聊清空记录（按用户视角，不删消息行）';
+
 SET FOREIGN_KEY_CHECKS = 1;
 
 -- ======================================================
@@ -832,3 +845,14 @@ SET FOREIGN_KEY_CHECKS = 1;
 -- ALTER TABLE direct_messages
 --   MODIFY message_kind ENUM('voice','text','image') NOT NULL DEFAULT 'voice' COMMENT '消息类型',
 --   ADD COLUMN image_url VARCHAR(512) DEFAULT NULL COMMENT '图片 URL' AFTER audio_url;
+--
+-- CREATE TABLE IF NOT EXISTS direct_message_clear (
+--   id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '清空记录ID',
+--   thread_id BIGINT NOT NULL COMMENT '线程ID',
+--   scope_key VARCHAR(64) NOT NULL COMMENT '执行清空的用户 scopeKey',
+--   elder_profile_id BIGINT DEFAULT NULL COMMENT '执行清空的老人档案ID',
+--   clear_before_millis BIGINT NOT NULL COMMENT '清空该时刻及前的消息（毫秒时间戳）',
+--   updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+--   UNIQUE KEY uk_thread_scope (thread_id, scope_key),
+--   KEY idx_updated_at (updated_at)
+-- ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='老人一对一私聊清空记录';

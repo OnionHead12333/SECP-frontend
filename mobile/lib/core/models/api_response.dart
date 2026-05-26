@@ -21,8 +21,17 @@ class ApiResponse<T> {
     Map<String, dynamic> json,
     T? Function(Object? json)? dataFromJson,
   ) {
+    final rawCode = json['code'];
+    int code = -1;
+    if (rawCode is int) {
+      code = rawCode;
+    } else if (rawCode is num) {
+      code = rawCode.toInt();
+    } else if (rawCode != null) {
+      code = int.tryParse('$rawCode') ?? -1;
+    }
     return ApiResponse<T>(
-      code: json['code'] as int? ?? -1,
+      code: code,
       message: json['message'] as String? ?? '',
       data: dataFromJson != null ? dataFromJson(json['data']) : json['data'] as T?,
     );

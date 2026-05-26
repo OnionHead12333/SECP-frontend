@@ -1,18 +1,23 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
-import '../../../../core/auth/auth_session.dart';
-import '../data/community_direct_repository.dart';
+import '../data/community_avatar_resolver.dart';
+import '../data/community_direct_chat_service.dart';
+import '../data/community_media_cache.dart';
 import '../data/community_scope.dart';
+import '../data/community_voice_duration.dart';
 import '../data/community_voice_playback.dart';
 import '../data/community_voice_recorder.dart';
-import '../data/elder_avatar_repository.dart';
-import '../data/friend_discover_catalog.dart';
 import '../models/community_message.dart';
+import 'widgets/community_chat_image.dart';
+import 'widgets/community_chat_message_widgets.dart';
+import 'widgets/community_chat_scroll.dart';
 import 'widgets/community_member_avatar.dart';
 
-/// 老人与好友的一对一语音私聊（本机演示）。
+/// 老人与好友的一对一私聊（对接后端 API）。
 final class CommunityDirectChatPage extends StatefulWidget {
   const CommunityDirectChatPage({
     super.key,
@@ -40,21 +45,44 @@ final class _DirectListEntry {
 class _CommunityDirectChatPageState extends State<CommunityDirectChatPage> {
   final ScrollController _scroll = ScrollController();
   final CommunityVoiceRecorder _recorder = CommunityVoiceRecorder();
+  final TextEditingController _textCtrl = TextEditingController();
+  final FocusNode _textFocus = FocusNode();
+  final ImagePicker _imagePicker = ImagePicker();
+
   List<_DirectListEntry> _entries = [];
-  String? _selfAvatarPath;
-  String? _peerAvatarPath;
-  bool _loading = true;
+  List<InterestCommunityVoiceMessage> _rawMessages = [];
+  Map<String, String> _avatarPaths = {};
+  bool _initialLoading = true;
+  bool _loadingMore = false;
+  bool _hasMore = false;
+  String? _nextBefore;
+  bool _stickToBottom = true;
   bool _holdingMic = false;
   bool _sendingHold = false;
+  bool _sendingImage = false;
+  bool _sendingText = false;
+  bool _voiceInputMode = true;
   String? _holdErrorText;
 
   String get _ownerScope => CommunityScope.forCurrentElder();
+
+  String? get _peerEmoji => widget.peerEmoji;
 
   @override
   void initState() {
     super.initState();
     CommunityVoicePlayback.playingMessageId.addListener(_onPlaybackChanged);
-    unawaited(_reload());
+    _scroll.addListener(_onScroll);
+    unawaited(_loadInitial());
+  }
+
+  void _onScroll() {
+    if (!_scroll.hasClients) return;
+    final pos = _scroll.position;
+    _stickToBottom = CommunityChatScroll.isNearBottom(pos);
+    if (CommunityChatScroll.isNearTop(pos) && !_loadingMore && _hasMore) {
+      unawaited(_loadOlder());
+    }
   }
 
   void _onPlaybackChanged() {
@@ -85,39 +113,177 @@ class _CommunityDirectChatPageState extends State<CommunityDirectChatPage> {
     return '${day.month}月${day.day}日';
   }
 
-  Future<void> _reload() async {
-    setState(() => _loading = true);
-    final list = await CommunityDirectRepository.loadThread(
-      ownerScope: _ownerScope,
-      peerScope: widget.peerScopeKey,
+  static String _formatMessageTime(int millis) {
+    final dt = DateTime.fromMillisecondsSinceEpoch(millis).toLocal();
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final day = DateTime(dt.year, dt.month, dt.day);
+    final hm =
+        '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+    if (day == today) return hm;
+    final yesterday = today.subtract(const Duration(days: 1));
+    if (day == yesterday) return '昨天 $hm';
+    return '${dt.month}/${dt.day} $hm';
+  }
+
+  void _applyMessages(
+    List<InterestCommunityVoiceMessage> incoming, {
+    required bool prepend,
+    required bool hasMore,
+    String? nextBefore,
+  }) {
+    if (prepend) {
+      final existing = _rawMessages.map((e) => e.id).toSet();
+      final older = incoming.where((m) => !existing.contains(m.id)).toList();
+      _rawMessages = [...older, ..._rawMessages];
+    } else {
+      _rawMessages = List.of(incoming);
+    }
+    _rawMessages.sort((a, b) => a.createdAtMillis.compareTo(b.createdAtMillis));
+    _hasMore = hasMore;
+    _nextBefore = nextBefore;
+    _entries = _buildEntries(_rawMessages);
+  }
+
+  Future<void> _refreshAvatars() async {
+    final scopeKeys = <String>{_ownerScope, widget.peerScopeKey};
+    final remoteAvatarUrls = <String, String>{};
+    for (final m in _rawMessages) {
+      if (m.senderScopeKey.isNotEmpty) scopeKeys.add(m.senderScopeKey);
+      final url = m.senderAvatarUrl;
+      if (m.senderScopeKey.isNotEmpty && url != null && url.isNotEmpty) {
+        remoteAvatarUrls[m.senderScopeKey] = url;
+      }
+    }
+    final paths = await CommunityAvatarResolver.loadPathsForScopes(
+      scopeKeys,
+      remoteAvatarUrlsByScope: remoteAvatarUrls,
     );
-    final selfAvatar = await ElderAvatarRepository.loadPath(_ownerScope);
-    final peerAvatar = await ElderAvatarRepository.loadPath(widget.peerScopeKey);
     if (!mounted) return;
-    setState(() {
-      _entries = _buildEntries(list);
-      _selfAvatarPath = selfAvatar;
-      _peerAvatarPath = peerAvatar;
-      _loading = false;
-    });
-    _scrollToBottom();
+    setState(() => _avatarPaths = paths);
   }
 
-  void _scrollToBottom() {
-    if (!_scroll.hasClients) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      Future<void>.delayed(const Duration(milliseconds: 120), () {
-        if (!_scroll.hasClients || !mounted) return;
-        _scroll.animateTo(
-          _scroll.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 280),
-          curve: Curves.easeOut,
+  Future<void> _loadInitial() async {
+    setState(() => _initialLoading = true);
+    try {
+      final list = await CommunityDirectChatService.loadMessages(
+        peerScopeKey: widget.peerScopeKey,
+      );
+      if (!mounted) return;
+      _applyMessages(list, prepend: false, hasMore: false, nextBefore: null);
+      final ids = _rawMessages.map((m) => m.id);
+      CommunityMediaCache.evictNotIn(ids);
+      CommunityVoiceDuration.evictNotIn(ids);
+      setState(() => _initialLoading = false);
+      _stickToBottom = true;
+      unawaited(_refreshAvatars());
+      CommunityChatScroll.anchorToLatest(_scroll, animated: false);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _initialLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+      );
+    }
+  }
+
+  Future<void> _loadOlder({bool silent = false}) async {
+    if (_loadingMore || !_hasMore) return;
+    final before = _nextBefore;
+    if (before == null || before.isEmpty) return;
+    if (!silent) setState(() => _loadingMore = true);
+    final oldPixels = _scroll.hasClients ? _scroll.position.pixels : 0.0;
+    final oldMax = _scroll.hasClients ? _scroll.position.maxScrollExtent : 0.0;
+    try {
+      final page = await CommunityDirectChatService.loadMessagesPage(
+        peerScopeKey: widget.peerScopeKey,
+        before: before,
+      );
+      if (!mounted) return;
+      _applyMessages(
+        page.items,
+        prepend: true,
+        hasMore: page.hasMore,
+        nextBefore: page.nextBefore,
+      );
+      setState(() {});
+      CommunityChatScroll.preserveAfterPrepend(
+        controller: _scroll,
+        oldPixels: oldPixels,
+        oldMax: oldMax,
+      );
+      unawaited(_refreshAvatars());
+    } catch (e) {
+      if (!mounted) return;
+      if (!silent) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
         );
-      });
-    });
+      }
+    } finally {
+      if (mounted && !silent) setState(() => _loadingMore = false);
+    }
   }
 
-  bool _isMine(InterestCommunityVoiceMessage m) => m.senderScopeKey == _ownerScope;
+  Future<void> _reload({bool scrollToBottom = false}) async {
+    final shouldScroll = scrollToBottom || _stickToBottom;
+    try {
+      final list = await CommunityDirectChatService.loadMessages(
+        peerScopeKey: widget.peerScopeKey,
+      );
+      if (!mounted) return;
+      _applyMessages(list, prepend: false, hasMore: false, nextBefore: null);
+      final ids = _rawMessages.map((m) => m.id);
+      CommunityMediaCache.evictNotIn(ids);
+      CommunityVoiceDuration.evictNotIn(ids);
+      setState(() {});
+      unawaited(_refreshAvatars());
+      if (shouldScroll) CommunityChatScroll.anchorToLatest(_scroll, animated: scrollToBottom);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+      );
+    }
+  }
+
+  bool _isMine(InterestCommunityVoiceMessage m) =>
+      m.mine ?? (m.senderScopeKey == _ownerScope);
+
+  String? _avatarPathForMessage(InterestCommunityVoiceMessage m) {
+    final key = m.senderScopeKey;
+    if (key.isEmpty) return null;
+    return _avatarPaths[key];
+  }
+
+  String? _emojiForMessage(InterestCommunityVoiceMessage m) {
+    if (m.senderEmoji != null && m.senderEmoji!.isNotEmpty) return m.senderEmoji;
+    if (m.senderScopeKey == widget.peerScopeKey) return _peerEmoji;
+    return CommunityAvatarResolver.emojiForScope(m.senderScopeKey);
+  }
+
+  Future<void> _toggleVoicePlay(InterestCommunityVoiceMessage message) async {
+    final ok = await CommunityVoicePlayback.toggleMessage(message);
+    if (!ok && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('媒体不可用')),
+      );
+    }
+  }
+
+  void _previewImage(InterestCommunityVoiceMessage message) {
+    showDialog<void>(
+      context: context,
+      barrierColor: Colors.black87,
+      builder: (ctx) => GestureDetector(
+        onTap: () => Navigator.pop(ctx),
+        child: Scaffold(
+          backgroundColor: Colors.transparent,
+          body: Center(child: CommunityChatImagePreview(message: message)),
+        ),
+      ),
+    );
+  }
 
   Future<void> _onHoldStart() async {
     if (_sendingHold) return;
@@ -166,23 +332,21 @@ class _CommunityDirectChatPageState extends State<CommunityDirectChatPage> {
         );
         return;
       }
-      final msg = InterestCommunityVoiceMessage(
-        id: '${DateTime.now().millisecondsSinceEpoch}_direct',
-        communityId: 'direct',
-        role: CommunitySenderRole.elder,
-        senderDisplay: AuthSession.elderName ?? '我',
-        senderScopeKey: _ownerScope,
-        kind: CommunityMessageKind.voice,
-        audioPath: result.path,
+      final sent = await CommunityDirectChatService.sendVoice(
+        peerScopeKey: widget.peerScopeKey,
+        file: File(result.path),
         durationMs: result.durationMs,
-        createdAtMillis: DateTime.now().millisecondsSinceEpoch,
       );
-      await CommunityDirectRepository.appendMessage(
-        ownerScope: _ownerScope,
-        peerScope: widget.peerScopeKey,
-        message: msg,
+      CommunityVoiceDuration.remember(
+        sent.id,
+        sent.durationMs > 0 ? sent.durationMs : result.durationMs,
       );
-      await _reload();
+      await _reload(scrollToBottom: true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('发送失败：${e.toString().replaceFirst('Exception: ', '')}')),
+      );
     } finally {
       if (mounted) setState(() => _sendingHold = false);
     }
@@ -197,11 +361,175 @@ class _CommunityDirectChatPageState extends State<CommunityDirectChatPage> {
     });
   }
 
+  void _toggleInputMode() {
+    if (_voiceInputMode) {
+      setState(() => _voiceInputMode = false);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _textFocus.requestFocus();
+      });
+    } else {
+      _textFocus.unfocus();
+      setState(() => _voiceInputMode = true);
+    }
+  }
+
+  Future<void> _sendText() async {
+    final text = _textCtrl.text.trim();
+    if (text.isEmpty || _sendingText || _sendingHold || _sendingImage) return;
+    setState(() => _sendingText = true);
+    try {
+      await CommunityDirectChatService.sendText(
+        peerScopeKey: widget.peerScopeKey,
+        textContent: text,
+      );
+      _textCtrl.clear();
+      await _reload(scrollToBottom: true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('发送失败：${e.toString().replaceFirst('Exception: ', '')}')),
+      );
+    } finally {
+      if (mounted) setState(() => _sendingText = false);
+    }
+  }
+
+  void _showAttachSheet() {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              CommunityChatAttachAction(
+                icon: Icons.photo_camera_outlined,
+                label: '拍照',
+                onTap: () {
+                  Navigator.pop(ctx);
+                  unawaited(_pickAndSendImage(ImageSource.camera));
+                },
+              ),
+              CommunityChatAttachAction(
+                icon: Icons.photo_library_outlined,
+                label: '相册',
+                onTap: () {
+                  Navigator.pop(ctx);
+                  unawaited(_pickAndSendImage(ImageSource.gallery));
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickAndSendImage(ImageSource source) async {
+    if (_sendingImage || _sendingHold) return;
+    final xfile = await _imagePicker.pickImage(source: source, maxWidth: 2400, imageQuality: 88);
+    if (xfile == null || !mounted) return;
+
+    final file = File(xfile.path);
+    // 防止设备/系统相册返回了非图片文件（例如音频），导致后端 MIME 校验失败。
+    final ok = await _isProbablyImageFile(file);
+    if (!ok) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('图片发送失败：请选择图片文件（非音频）')),
+      );
+      return;
+    }
+
+    setState(() => _sendingImage = true);
+    try {
+      await CommunityDirectChatService.sendImage(
+        peerScopeKey: widget.peerScopeKey,
+        file: file,
+      );
+      await _reload(scrollToBottom: true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('图片发送失败：${e.toString().replaceFirst('Exception: ', '')}')),
+      );
+    } finally {
+      if (mounted) setState(() => _sendingImage = false);
+    }
+  }
+
+  Future<bool> _isProbablyImageFile(File file) async {
+    if (!await file.exists()) return false;
+    final lower = file.path.toLowerCase();
+    final extOk = lower.endsWith('.png') ||
+        lower.endsWith('.jpg') ||
+        lower.endsWith('.jpeg') ||
+        lower.endsWith('.webp') ||
+        lower.endsWith('.bmp');
+    if (!extOk) return false;
+
+    // 轻量识别文件头，避免仅靠后缀。
+    try {
+      final len = await file.length();
+      if (len < 12) return false;
+      final raf = file.openRead(0, 32);
+      final chunk = await raf.reduce((a, b) => a..addAll(b));
+      final bytes = chunk;
+
+      // JPEG: FF D8 FF
+      if (bytes.length >= 3 && bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF) {
+        return true;
+      }
+      // PNG: 89 50 4E 47 0D 0A 1A 0A
+      if (bytes.length >= 8 &&
+          bytes[0] == 0x89 &&
+          bytes[1] == 0x50 &&
+          bytes[2] == 0x4E &&
+          bytes[3] == 0x47 &&
+          bytes[4] == 0x0D &&
+          bytes[5] == 0x0A &&
+          bytes[6] == 0x1A &&
+          bytes[7] == 0x0A) {
+        return true;
+      }
+      // WEBP: RIFF....WEBP
+      if (bytes.length >= 12 &&
+          bytes[0] == 'R'.codeUnitAt(0) &&
+          bytes[1] == 'I'.codeUnitAt(0) &&
+          bytes[2] == 'F'.codeUnitAt(0) &&
+          bytes[3] == 'F'.codeUnitAt(0) &&
+          bytes[8] == 'W'.codeUnitAt(0) &&
+          bytes[9] == 'E'.codeUnitAt(0) &&
+          bytes[10] == 'B'.codeUnitAt(0) &&
+          bytes[11] == 'P'.codeUnitAt(0)) {
+        return true;
+      }
+      // BMP: 'BM'
+      if (bytes.length >= 2 &&
+          bytes[0] == 'B'.codeUnitAt(0) &&
+          bytes[1] == 'M'.codeUnitAt(0)) {
+        return true;
+      }
+    } catch (_) {
+      return false;
+    }
+    // 如果文件头识别失败，但后缀看起来像图片，也允许上传（兼容某些奇怪格式）。
+    return extOk;
+  }
+
   @override
   void dispose() {
+    _scroll.removeListener(_onScroll);
     CommunityVoicePlayback.playingMessageId.removeListener(_onPlaybackChanged);
     unawaited(CommunityVoicePlayback.stop());
     unawaited(_recorder.dispose());
+    final ids = _rawMessages.map((m) => m.id);
+    CommunityMediaCache.evictNotIn(ids);
+    CommunityVoiceDuration.evictNotIn(ids);
+    _textCtrl.dispose();
+    _textFocus.dispose();
     _scroll.dispose();
     super.dispose();
   }
@@ -210,419 +538,149 @@ class _CommunityDirectChatPageState extends State<CommunityDirectChatPage> {
   Widget build(BuildContext context) {
     final bubbleMe = Theme.of(context).colorScheme.primary;
     const bubbleThem = Color(0xFFE2E8F0);
-    final peerEmoji = widget.peerEmoji ?? FriendDiscoverCatalog.byScopeKey(widget.peerScopeKey)?.emoji;
+    final peerAvatarPath = _avatarPaths[widget.peerScopeKey];
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F8FC),
+      backgroundColor: const Color(0xFFEDEDED),
       appBar: AppBar(
+        backgroundColor: const Color(0xFFF7F8FC),
+        foregroundColor: const Color(0xFF0F172A),
+        elevation: 0,
+        scrolledUnderElevation: 0.5,
         title: Row(
           children: [
             CommunityMemberAvatar(
               displayName: widget.peerDisplayName,
-              imagePath: _peerAvatarPath,
-              emoji: peerEmoji,
+              imagePath: peerAvatarPath,
+              emoji: _peerEmoji,
               size: 36,
             ),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
                 widget.peerDisplayName,
-                style: const TextStyle(fontSize: 20),
+                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
           ],
         ),
       ),
-      body: SafeArea(
-        child: Column(
-          children: [
+      body: Column(
+        children: [
+          if (_holdErrorText != null)
             Padding(
-              padding: const EdgeInsets.fromLTRB(22, 4, 22, 6),
+              padding: const EdgeInsets.symmetric(horizontal: 18),
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
-                  '与「${widget.peerDisplayName}」的私聊。按住底部按钮说话，松手发送。',
-                  style: const TextStyle(fontSize: 16, color: Color(0xFF64748B), height: 1.52),
+                  _holdErrorText!,
+                  style: const TextStyle(fontSize: 15, color: Color(0xFFB45309)),
                 ),
               ),
             ),
-            if (_holdErrorText != null)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 18),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    _holdErrorText!,
-                    style: const TextStyle(fontSize: 15, color: Color(0xFFB45309)),
-                  ),
-                ),
+          if (_loadingMore)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(strokeWidth: 2),
               ),
-            Expanded(
-              child: _loading
-                  ? const Center(child: CircularProgressIndicator())
-                  : ListView.builder(
-                      controller: _scroll,
-                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 120),
-                      itemCount: _entries.length + (_holdingMic ? 1 : 0),
-                      itemBuilder: (context, i) {
-                        if (_holdingMic && i == _entries.length) {
-                          return _RecordingBubble(selfAvatarPath: _selfAvatarPath);
-                        }
-                        if (i >= _entries.length) return const SizedBox.shrink();
-                        final entry = _entries[i];
-                        if (entry.dateLabel != null) {
-                          return _DateDivider(label: entry.dateLabel!);
-                        }
-                        final m = entry.message!;
-                        final mine = _isMine(m);
-                        final avatarPath = mine ? _selfAvatarPath : _peerAvatarPath;
-                        final emoji = mine ? null : peerEmoji;
-                        if (m.isVoice) {
-                          return _VoiceRow(
-                            mine: mine,
-                            message: m,
-                            avatarPath: avatarPath,
-                            emoji: emoji,
-                            bubbleMe: bubbleMe,
-                            bubbleThem: bubbleThem,
-                            playing: CommunityVoicePlayback.playingMessageId.value == m.id,
-                            onTogglePlay: () => unawaited(
-                              CommunityVoicePlayback.toggle(m.id, m.audioPath!),
+            ),
+          Expanded(
+            child: _initialLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _entries.isEmpty && !_holdingMic
+                    ? const Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(24),
+                          child: Text(
+                            '暂无消息\n按住说话、点键盘输入文字，或点 + 发送图片',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: Color(0xFF64748B),
+                              height: 1.5,
                             ),
-                          );
-                        }
-                        return _TextRow(
-                          mine: mine,
-                          name: m.senderDisplay,
-                          text: m.textContent,
-                          avatarPath: avatarPath,
-                          emoji: emoji,
-                          bubbleMe: bubbleMe,
-                          bubbleThem: bubbleThem,
-                        );
-                      },
-                    ),
-            ),
-            _MicBar(
-              holding: _holdingMic,
-              busy: _sendingHold && !_holdingMic,
-              onHoldStart: () => unawaited(_onHoldStart()),
-              onHoldEnd: () => unawaited(_onHoldEnd()),
-              onHoldCancel: () => unawaited(_abortHoldSilently()),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _DateDivider extends StatelessWidget {
-  const _DateDivider({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Center(
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-          decoration: BoxDecoration(
-            color: const Color(0xFFE2E8F0).withValues(alpha: 0.65),
-            borderRadius: BorderRadius.circular(999),
-          ),
-          child: Text(
-            label,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF64748B)),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _VoiceRow extends StatelessWidget {
-  const _VoiceRow({
-    required this.mine,
-    required this.message,
-    required this.avatarPath,
-    required this.emoji,
-    required this.bubbleMe,
-    required this.bubbleThem,
-    required this.playing,
-    required this.onTogglePlay,
-  });
-
-  final bool mine;
-  final InterestCommunityVoiceMessage message;
-  final String? avatarPath;
-  final String? emoji;
-  final Color bubbleMe;
-  final Color bubbleThem;
-  final bool playing;
-  final VoidCallback onTogglePlay;
-
-  @override
-  Widget build(BuildContext context) {
-    final fg = mine ? Colors.white : const Color(0xFF0F172A);
-    final bg = mine ? bubbleMe : bubbleThem;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        mainAxisAlignment: mine ? MainAxisAlignment.end : MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (!mine) ...[
-            CommunityMemberAvatar(displayName: message.senderDisplay, imagePath: avatarPath, emoji: emoji, size: 40),
-            const SizedBox(width: 8),
-          ],
-          Flexible(
-            child: Column(
-              crossAxisAlignment: mine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.only(left: 4, right: 4, bottom: 4),
-                  child: Text(
-                    message.senderDisplay,
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF64748B)),
-                  ),
-                ),
-                Material(
-                  color: bg,
-                  borderRadius: BorderRadius.only(
-                    topLeft: const Radius.circular(18),
-                    topRight: const Radius.circular(18),
-                    bottomLeft: Radius.circular(mine ? 18 : 4),
-                    bottomRight: Radius.circular(mine ? 4 : 18),
-                  ),
-                  child: InkWell(
-                    borderRadius: BorderRadius.only(
-                      topLeft: const Radius.circular(18),
-                      topRight: const Radius.circular(18),
-                      bottomLeft: Radius.circular(mine ? 18 : 4),
-                      bottomRight: Radius.circular(mine ? 4 : 18),
-                    ),
-                    onTap: onTogglePlay,
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            playing ? Icons.pause_circle_filled : Icons.play_circle_fill,
-                            size: 36,
-                            color: fg,
                           ),
-                          const SizedBox(width: 12),
-                          Icon(Icons.graphic_eq_rounded, size: 28, color: fg.withValues(alpha: 0.85)),
-                          const SizedBox(width: 10),
-                          Text(
-                            message.displaySummary,
-                            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: fg),
-                          ),
-                        ],
+                        ),
+                      )
+                    : ListView.builder(
+                        controller: _scroll,
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        cacheExtent: 800,
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
+                        itemCount: _entries.length + (_holdingMic ? 1 : 0),
+                        itemBuilder: (context, i) {
+                          if (i < _entries.length) {
+                            final entry = _entries[i];
+                            if (entry.dateLabel != null) {
+                              return CommunityChatDateDivider(label: entry.dateLabel!);
+                            }
+                            final m = entry.message!;
+                            final mine = _isMine(m);
+                            final timeLabel = _formatMessageTime(m.createdAtMillis);
+                            final avatarPath = _avatarPathForMessage(m);
+                            final emoji = _emojiForMessage(m);
+                            if (m.isImage) {
+                              return CommunityChatImageBubble(
+                                key: ValueKey('img_${m.id}'),
+                                mine: mine,
+                                message: m,
+                                timeLabel: timeLabel,
+                                avatarPath: avatarPath,
+                                emoji: emoji,
+                                onImageTap: () => _previewImage(m),
+                              );
+                            }
+                            if (m.isVoice) {
+                              return CommunityChatVoiceBubble(
+                                key: ValueKey('voice_${m.id}'),
+                                mine: mine,
+                                message: m,
+                                timeLabel: timeLabel,
+                                bubbleMe: bubbleMe,
+                                bubbleThem: bubbleThem,
+                                playing: CommunityVoicePlayback.playingMessageId.value == m.id,
+                                onTogglePlay: () => unawaited(_toggleVoicePlay(m)),
+                                avatarPath: avatarPath,
+                                emoji: emoji,
+                              );
+                            }
+                            return CommunityChatTextBubble(
+                              key: ValueKey('text_${m.id}'),
+                              mine: mine,
+                              name: m.senderDisplay,
+                              text: m.textContent,
+                              timeLabel: timeLabel,
+                              bubbleMe: bubbleMe,
+                              bubbleThem: bubbleThem,
+                              avatarPath: avatarPath,
+                              emoji: emoji,
+                            );
+                          }
+                          if (_holdingMic && i == _entries.length) {
+                            return const CommunityChatRecordingBubble();
+                          }
+                          return const SizedBox.shrink();
+                        },
                       ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
           ),
-          if (mine) ...[
-            const SizedBox(width: 8),
-            CommunityMemberAvatar(displayName: message.senderDisplay, imagePath: avatarPath, size: 40),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _TextRow extends StatelessWidget {
-  const _TextRow({
-    required this.mine,
-    required this.name,
-    required this.text,
-    required this.avatarPath,
-    required this.emoji,
-    required this.bubbleMe,
-    required this.bubbleThem,
-  });
-
-  final bool mine;
-  final String name;
-  final String text;
-  final String? avatarPath;
-  final String? emoji;
-  final Color bubbleMe;
-  final Color bubbleThem;
-
-  @override
-  Widget build(BuildContext context) {
-    final fg = mine ? Colors.white : const Color(0xFF0F172A);
-    final bg = mine ? bubbleMe : bubbleThem;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        mainAxisAlignment: mine ? MainAxisAlignment.end : MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (!mine) ...[
-            CommunityMemberAvatar(displayName: name, imagePath: avatarPath, emoji: emoji, size: 40),
-            const SizedBox(width: 8),
-          ],
-          Flexible(
-            child: Column(
-              crossAxisAlignment: mine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.only(left: 4, right: 4, bottom: 4),
-                  child: Text(
-                    name,
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF64748B)),
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: bg,
-                    borderRadius: BorderRadius.only(
-                      topLeft: const Radius.circular(18),
-                      topRight: const Radius.circular(18),
-                      bottomLeft: Radius.circular(mine ? 18 : 4),
-                      bottomRight: Radius.circular(mine ? 4 : 18),
-                    ),
-                  ),
-                  child: Text(
-                    text,
-                    style: TextStyle(fontSize: 20, height: 1.5, fontWeight: FontWeight.w600, color: fg),
-                  ),
-                ),
-              ],
-            ),
+          CommunityChatInputBar(
+            voiceInputMode: _voiceInputMode,
+            holding: _holdingMic,
+            busy: (_sendingHold && !_holdingMic) || _sendingImage || _sendingText,
+            textController: _textCtrl,
+            textFocusNode: _textFocus,
+            onToggleInputMode: _toggleInputMode,
+            onAttach: _showAttachSheet,
+            onSendText: () => unawaited(_sendText()),
+            onHoldStart: () => unawaited(_onHoldStart()),
+            onHoldEnd: () => unawaited(_onHoldEnd()),
+            onHoldCancel: () => unawaited(_abortHoldSilently()),
           ),
-          if (mine) ...[
-            const SizedBox(width: 8),
-            CommunityMemberAvatar(displayName: name, imagePath: avatarPath, size: 40),
-          ],
         ],
-      ),
-    );
-  }
-}
-
-class _RecordingBubble extends StatelessWidget {
-  const _RecordingBubble({this.selfAvatarPath});
-
-  final String? selfAvatarPath;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.end,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: const Color(0xFFD1FAE5),
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: const Color(0xFF10B981)),
-            ),
-            child: const Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.mic_rounded, size: 28, color: Color(0xFF047857)),
-                SizedBox(width: 10),
-                Text('正在录音…', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Color(0xFF065F46))),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          CommunityMemberAvatar(displayName: '我', imagePath: selfAvatarPath, size: 40),
-        ],
-      ),
-    );
-  }
-}
-
-class _MicBar extends StatelessWidget {
-  const _MicBar({
-    required this.holding,
-    required this.busy,
-    required this.onHoldStart,
-    required this.onHoldEnd,
-    required this.onHoldCancel,
-  });
-
-  final bool holding;
-  final bool busy;
-  final VoidCallback onHoldStart;
-  final VoidCallback onHoldEnd;
-  final VoidCallback onHoldCancel;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      elevation: holding ? 8 : 0,
-      shadowColor: const Color(0xFF065F46).withValues(alpha: 0.3),
-      color: Colors.white,
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(20, 12, 20, 16 + MediaQuery.paddingOf(context).bottom * 0.2),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              holding ? '松手即可发送语音…' : (busy ? '正在发送语音…' : '按住下方的「按住说话」'),
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: Color(0xFF0F766E)),
-            ),
-            const SizedBox(height: 12),
-            Center(
-              child: Listener(
-                behavior: HitTestBehavior.opaque,
-                onPointerDown: (_) => onHoldStart(),
-                onPointerUp: (_) => onHoldEnd(),
-                onPointerCancel: (_) => onHoldCancel(),
-                child: AnimatedScale(
-                  scale: holding ? 1.06 : 1,
-                  duration: const Duration(milliseconds: 180),
-                  child: SizedBox(
-                    width: 220,
-                    height: 84,
-                    child: Material(
-                      color: holding ? const Color(0xFF047857) : const Color(0xFF10B981),
-                      borderRadius: BorderRadius.circular(999),
-                      child: Center(
-                        child: busy && !holding
-                            ? const SizedBox(
-                                width: 28,
-                                height: 28,
-                                child: CircularProgressIndicator(strokeWidth: 3, color: Colors.white),
-                              )
-                            : const Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.mic_rounded, size: 34, color: Colors.white),
-                                  SizedBox(width: 12),
-                                  Text('按住说话', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Colors.white)),
-                                ],
-                              ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

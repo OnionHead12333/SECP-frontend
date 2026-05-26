@@ -6,16 +6,20 @@ import 'package:dio/dio.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/models/api_response.dart';
 import '../../../core/network/api_client.dart';
+import '../models/community_friend.dart';
 import '../models/community_join_result.dart';
 import '../models/community_message.dart';
 import '../models/community_message_page.dart';
+import 'community_api_util.dart';
 import 'community_media_downloader.dart';
+import 'community_message_upload.dart';
 
 /// 兴趣社群群聊 / 入群 — 对接 docs/兴趣社群-老人端群聊-OpenAPI.md
 final class InterestCommunityApi {
   InterestCommunityApi._();
 
   static const String _elderPrefix = '/v1/elder/interest-communities';
+  static const String _friendsPrefix = '/v1/elder/friends';
 
   static String _childPrefix(int elderProfileId) =>
       '/v1/child/elders/$elderProfileId/interest-communities';
@@ -29,15 +33,9 @@ final class InterestCommunityApi {
     return path.startsWith('/') ? '$origin$path' : '$origin/$path';
   }
 
-  static void _throwIfFail(ApiResponse<dynamic> api) {
-    if (!api.isSuccess) throw Exception(api.displayMessage);
-  }
+  static void _throwIfFail(ApiResponse<dynamic> api) => CommunityApiUtil.throwIfFail(api);
 
-  static Map<String, dynamic> _asMap(Object? raw) {
-    if (raw is Map<String, dynamic>) return raw;
-    if (raw is Map) return Map<String, dynamic>.from(raw);
-    return {};
-  }
+  static Map<String, dynamic> _asMap(Object? raw) => CommunityApiUtil.asMap(raw);
 
   // —— 老人端：目录 / 成员 ——
 
@@ -74,10 +72,10 @@ final class InterestCommunityApi {
     );
     final body = res.data;
     if (body == null) throw Exception('空响应');
-    final api = ApiResponse.fromJson(body, (raw) => raw is Map<String, dynamic> ? raw : null);
+    final api = CommunityApiUtil.parseEnvelope(body);
     _throwIfFail(api);
-    final data = api.data;
-    if (data is Map<String, dynamic>) {
+    final data = api.data ?? _asMap(body['data']);
+    if (data.isNotEmpty) {
       return CommunityJoinResult.fromJson(data);
     }
     return CommunityJoinResult(communityId: communityId);
@@ -154,7 +152,8 @@ final class InterestCommunityApi {
   }) async {
     final res = await ApiClient.dio.post<Map<String, dynamic>>(
       '$_elderPrefix/$communityId/messages',
-      data: {'kind': 'text', 'textContent': textContent},
+      data: CommunityApiUtil.textMessageBody(textContent),
+      options: Options(headers: const {'Accept': 'application/json'}),
     );
     return _parseSingleMessage(res.data);
   }
@@ -164,21 +163,10 @@ final class InterestCommunityApi {
     required File file,
     int? durationMs,
   }) async {
-    final formData = FormData.fromMap({
-      'kind': 'voice',
-      if (durationMs != null && durationMs > 0) 'durationMs': durationMs,
-      'file': await MultipartFile.fromFile(
-        file.path,
-        filename: file.path.split(Platform.pathSeparator).last,
-      ),
-    });
     final res = await ApiClient.dio.post<Map<String, dynamic>>(
       '$_elderPrefix/$communityId/messages',
-      data: formData,
-      options: Options(
-        sendTimeout: const Duration(seconds: 120),
-        receiveTimeout: const Duration(seconds: 120),
-      ),
+      data: await CommunityMessageUpload.voiceFormData(file, durationMs: durationMs),
+      options: CommunityMessageUpload.uploadOptions,
     );
     return _parseSingleMessage(res.data);
   }
@@ -187,20 +175,10 @@ final class InterestCommunityApi {
     String communityId, {
     required File file,
   }) async {
-    final formData = FormData.fromMap({
-      'kind': 'image',
-      'file': await MultipartFile.fromFile(
-        file.path,
-        filename: file.path.split(Platform.pathSeparator).last,
-      ),
-    });
     final res = await ApiClient.dio.post<Map<String, dynamic>>(
       '$_elderPrefix/$communityId/messages',
-      data: formData,
-      options: Options(
-        sendTimeout: const Duration(seconds: 120),
-        receiveTimeout: const Duration(seconds: 120),
-      ),
+      data: await CommunityMessageUpload.imageFormData(file),
+      options: CommunityMessageUpload.uploadOptions,
     );
     return _parseSingleMessage(res.data);
   }
@@ -313,6 +291,66 @@ final class InterestCommunityApi {
     _throwIfFail(api);
   }
 
+  // —— 老人端：好友 ——
+
+  static Future<List<ElderFriend>> listFriends() async {
+    final res = await ApiClient.dio.get<Map<String, dynamic>>(_friendsPrefix);
+    final body = res.data;
+    if (body == null) throw Exception('空响应');
+    final api = ApiResponse.fromJson(body, (raw) => raw);
+    _throwIfFail(api);
+    final list = api.data;
+    if (list is! List) return [];
+    final result = list
+        .map((e) => ElderFriend.fromJson(_asMap(e)))
+        .where((f) => f.scopeKey.isNotEmpty)
+        .toList();
+    result.sort((a, b) => b.addedAtMillis.compareTo(a.addedAtMillis));
+    return result;
+  }
+
+  static Future<List<ElderFriendCandidate>> discoverFriends({String? phone}) async {
+    final res = await ApiClient.dio.get<Map<String, dynamic>>(
+      '$_friendsPrefix/discover',
+      queryParameters: {
+        if (phone != null && phone.isNotEmpty) 'phone': phone,
+      },
+    );
+    final body = res.data;
+    if (body == null) throw Exception('空响应');
+    final api = ApiResponse.fromJson(body, (raw) => raw);
+    _throwIfFail(api);
+    final list = api.data;
+    if (list is! List) return [];
+    return list
+        .map((e) => ElderFriendCandidate.fromJson(_asMap(e)))
+        .where((c) => c.scopeKey.isNotEmpty)
+        .toList();
+  }
+
+  static Future<ElderFriend> addFriend({
+    String? phone,
+    String? scopeKey,
+  }) async {
+    final data = <String, dynamic>{};
+    if (phone != null && phone.isNotEmpty) data['phone'] = phone;
+    if (scopeKey != null && scopeKey.isNotEmpty) data['scopeKey'] = scopeKey;
+    if (data.isEmpty) throw Exception('请提供手机号或 scopeKey');
+    final res = await ApiClient.dio.post<Map<String, dynamic>>(_friendsPrefix, data: data);
+    final friendData = CommunityApiUtil.requireMessageData(res.data);
+    return ElderFriend.fromJson(friendData);
+  }
+
+  static Future<void> removeFriend(String friendScopeKey) async {
+    final res = await ApiClient.dio.delete<Map<String, dynamic>>(
+      '$_friendsPrefix/${Uri.encodeComponent(friendScopeKey)}',
+    );
+    final body = res.data;
+    if (body == null) throw Exception('空响应');
+    final api = ApiResponse.fromJson(body, (raw) => raw);
+    _throwIfFail(api);
+  }
+
   // —— 媒体下载 ——
 
   static Future<Uint8List> downloadVoiceBytes(String messageId) =>
@@ -323,10 +361,10 @@ final class InterestCommunityApi {
 
   static CommunityMessagePage _parseMessagePageResult(Map<String, dynamic>? body) {
     if (body == null) throw Exception('空响应');
-    final api = ApiResponse.fromJson(body, (raw) => raw is Map<String, dynamic> ? raw : null);
+    final api = CommunityApiUtil.parseEnvelope(body);
     _throwIfFail(api);
-    final data = api.data;
-    if (data == null) {
+    final data = api.data ?? _asMap(body['data']);
+    if (data.isEmpty) {
       return const CommunityMessagePage(items: [], hasMore: false);
     }
     final itemsRaw = data['items'];
@@ -345,11 +383,7 @@ final class InterestCommunityApi {
   }
 
   static InterestCommunityVoiceMessage _parseSingleMessage(Map<String, dynamic>? body) {
-    if (body == null) throw Exception('空响应');
-    final api = ApiResponse.fromJson(body, (raw) => raw is Map<String, dynamic> ? raw : null);
-    _throwIfFail(api);
-    final data = api.data;
-    if (data == null) throw Exception('发送失败');
+    final data = CommunityApiUtil.requireMessageData(body);
     return InterestCommunityVoiceMessage.fromJson(data);
   }
 }

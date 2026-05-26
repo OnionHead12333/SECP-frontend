@@ -1,16 +1,14 @@
 import 'elder_avatar_repository.dart';
-import 'friend_discover_catalog.dart';
 
-/// 解析群成员头像：本机图片或演示 emoji。
+/// 解析群成员头像：远端 URL 缓存或本地上传缓存路径。
 abstract final class CommunityAvatarResolver {
   static Future<String?> imagePathForScope(String scopeKey) {
     if (scopeKey.isEmpty || scopeKey == 'system') return Future.value(null);
     return ElderAvatarRepository.loadPath(scopeKey);
   }
 
-  static String? emojiForScope(String scopeKey) {
-    return FriendDiscoverCatalog.byScopeKey(scopeKey)?.emoji;
-  }
+  /// emoji 由消息/好友接口 `senderEmoji` 字段提供，此处不再读本地目录。
+  static String? emojiForScope(String scopeKey) => null;
 
   static Future<Map<String, String>> loadPathsForScopes(
     Iterable<String> scopes, {

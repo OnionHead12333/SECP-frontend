@@ -1,4 +1,4 @@
-/// 可添加的好友候选（演示数据，后续可接后端搜索）。
+/// 可添加的好友候选（`GET /v1/elder/friends/discover`）。
 final class ElderFriendCandidate {
   const ElderFriendCandidate({
     required this.scopeKey,
@@ -13,6 +13,16 @@ final class ElderFriendCandidate {
   final String phone;
   final String hint;
   final String emoji;
+
+  factory ElderFriendCandidate.fromJson(Map<String, dynamic> json) {
+    return ElderFriendCandidate(
+      scopeKey: '${json['scopeKey'] ?? json['scope_key'] ?? json['friendScopeKey'] ?? ''}',
+      displayName: '${json['displayName'] ?? json['display_name'] ?? ''}',
+      phone: '${json['phone'] ?? ''}',
+      hint: '${json['hint'] ?? ''}',
+      emoji: '${json['emoji'] ?? json['senderEmoji'] ?? json['sender_emoji'] ?? '👤'}',
+    );
+  }
 }
 
 /// 已添加的好友。
@@ -34,13 +44,23 @@ final class ElderFriend {
   final String emoji;
 
   factory ElderFriend.fromJson(Map<String, dynamic> json) {
+    var addedAtMillis = 0;
+    final rawMs = json['addedAtMillis'] ?? json['added_at_millis'];
+    if (rawMs is num) {
+      addedAtMillis = rawMs.toInt();
+    } else {
+      final rawAt = json['addedAt'] ?? json['added_at'];
+      if (rawAt != null) {
+        addedAtMillis = DateTime.tryParse('$rawAt')?.millisecondsSinceEpoch ?? 0;
+      }
+    }
     return ElderFriend(
-      scopeKey: '${json['scopeKey']}',
-      displayName: '${json['displayName']}',
-      phone: '${json['phone']}',
-      addedAtMillis: (json['addedAtMillis'] as num?)?.toInt() ?? 0,
+      scopeKey: '${json['scopeKey'] ?? json['scope_key'] ?? json['friendScopeKey'] ?? json['friend_scope_key'] ?? ''}',
+      displayName: '${json['displayName'] ?? json['display_name'] ?? ''}',
+      phone: '${json['phone'] ?? ''}',
+      addedAtMillis: addedAtMillis,
       hint: json['hint'] != null ? '${json['hint']}' : '',
-      emoji: json['emoji'] != null ? '${json['emoji']}' : '👤',
+      emoji: '${json['emoji'] ?? '👤'}',
     );
   }
 
