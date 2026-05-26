@@ -1,7 +1,10 @@
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 
-/// 群内语音播放：同时只播放一条。
+import '../models/community_message.dart';
+import 'community_media_cache.dart';
+
+/// 群内语音播放：同时只播放一条；优先本机缓存文件。
 final class CommunityVoicePlayback {
   CommunityVoicePlayback._();
 
@@ -15,6 +18,19 @@ final class CommunityVoicePlayback {
     _player.onPlayerComplete.listen((_) {
       playingMessageId.value = null;
     });
+  }
+
+  /// 开始/停止播放；无法加载媒体时返回 `false`。
+  static Future<bool> toggleMessage(InterestCommunityVoiceMessage message) async {
+    _ensureHooked();
+    if (playingMessageId.value == message.id) {
+      await stop();
+      return true;
+    }
+    final path = await CommunityMediaCache.ensureVoiceFile(message);
+    if (path == null || path.isEmpty) return false;
+    await toggle(message.id, path);
+    return true;
   }
 
   static Future<void> toggle(String messageId, String path) async {

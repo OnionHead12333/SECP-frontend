@@ -124,12 +124,12 @@ class ChildOverviewTab extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          '父母兴趣社群（演示）',
+                          '父母兴趣社群',
                           style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          '讯飞语音转文字；本地会话不写后端',
+                          '查看老人已加入的兴趣群及最近发言',
                           style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
                         ),
                       ],

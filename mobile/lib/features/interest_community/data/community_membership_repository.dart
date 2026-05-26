@@ -1,53 +1,25 @@
-import 'dart:convert';
+import '../models/community_join_result.dart';
+import 'interest_community_api.dart';
 
-import 'package:shared_preferences/shared_preferences.dart';
-
-import 'community_demo_repository.dart';
-
-/// 前端演示：记录老人加入了哪些兴趣群（按 scope 区分不同老人账号）。
+/// 老人兴趣社群入群状态（后端 API）。
 abstract final class CommunityMembershipRepository {
-  static const String _prefsKeyPrefix = 'interest_comm_joined_v1_';
-
-  static String _bucket(String scopeKey) => '$_prefsKeyPrefix$scopeKey';
-
   static Future<Set<String>> loadJoinedIds(String scopeKey) async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_bucket(scopeKey));
-    if (raw == null || raw.isEmpty) return {};
-    try {
-      final decoded = jsonDecode(raw);
-      if (decoded is! List) return {};
-      return decoded.map((e) => '$e').where((e) => e.isNotEmpty).toSet();
-    } catch (_) {
-      return {};
-    }
+    return InterestCommunityApi.loadJoinedCommunityIds();
   }
 
   static Future<bool> isJoined(String scopeKey, String communityId) async {
-    final joined = await loadJoinedIds(scopeKey);
-    return joined.contains(communityId);
+    return InterestCommunityApi.isJoined(communityId);
   }
 
-  static Future<void> join({
+  static Future<CommunityJoinResult> join({
     required String scopeKey,
     required String communityId,
     required String communityName,
   }) async {
-    final joined = await loadJoinedIds(scopeKey);
-    if (joined.contains(communityId)) return;
-    joined.add(communityId);
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_bucket(scopeKey), jsonEncode(joined.toList()));
-    await CommunityDemoRepository.ensureWelcomeSeed(
-      communityId: communityId,
-      communityName: communityName,
-    );
+    return InterestCommunityApi.joinCommunity(communityId);
   }
 
   static Future<void> leave(String scopeKey, String communityId) async {
-    final joined = await loadJoinedIds(scopeKey);
-    if (!joined.remove(communityId)) return;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_bucket(scopeKey), jsonEncode(joined.toList()));
+    await InterestCommunityApi.leaveCommunity(communityId);
   }
 }

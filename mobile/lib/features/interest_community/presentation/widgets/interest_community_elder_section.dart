@@ -3,11 +3,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../../core/auth/auth_session.dart';
-import '../../data/community_catalog.dart';
 import '../../data/community_membership_repository.dart';
+import '../../data/interest_community_api.dart';
 import '../../data/community_scope.dart';
+import '../../models/community_join_result.dart';
 import '../../models/community_message.dart';
 import '../interest_community_voice_chat_page.dart';
+import 'community_welcome_dialog.dart';
 
 /// 老人端兴趣社群列表（可嵌入 Tab，无独立 AppBar）。
 final class InterestCommunityElderSection extends StatefulWidget {
@@ -18,10 +20,13 @@ final class InterestCommunityElderSection extends StatefulWidget {
 }
 
 class _InterestCommunityElderSectionState extends State<InterestCommunityElderSection> {
-  Set<String> _joinedIds = {};
+  List<InterestCommunityBrief> _communities = [];
   bool _loading = true;
+  String? _error;
 
   String get _scopeKey => CommunityScope.forCurrentElder();
+
+  int get _joinedCount => _communities.where((c) => c.joined).length;
 
   @override
   void initState() {
@@ -30,17 +35,28 @@ class _InterestCommunityElderSectionState extends State<InterestCommunityElderSe
   }
 
   Future<void> _reload() async {
-    setState(() => _loading = true);
-    final joined = await CommunityMembershipRepository.loadJoinedIds(_scopeKey);
-    if (!mounted) return;
     setState(() {
-      _joinedIds = joined;
-      _loading = false;
+      _loading = true;
+      _error = null;
     });
+    try {
+      final list = await InterestCommunityApi.listCommunities();
+      if (!mounted) return;
+      setState(() {
+        _communities = list;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString().replaceFirst('Exception: ', '');
+        _loading = false;
+      });
+    }
   }
 
   Future<void> _openCommunity(InterestCommunityBrief community) async {
-    final joined = _joinedIds.contains(community.id);
+    final joined = community.joined;
     if (joined) {
       await _pushChat(community);
       return;
@@ -60,14 +76,32 @@ class _InterestCommunityElderSectionState extends State<InterestCommunityElderSe
       ),
     );
     if (yes != true || !mounted) return;
-    await CommunityMembershipRepository.join(
-      scopeKey: _scopeKey,
-      communityId: community.id,
-      communityName: community.name,
-    );
+    CommunityJoinResult joinResult;
+    try {
+      joinResult = await CommunityMembershipRepository.join(
+        scopeKey: _scopeKey,
+        communityId: community.id,
+        communityName: community.name,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+      );
+      return;
+    }
+    final welcome = joinResult.welcomeMessage;
+    if (!mounted) return;
+    if (welcome != null && welcome.isNotEmpty) {
+      await CommunityWelcomeDialog.show(
+        context,
+        communityName: community.name,
+        message: welcome,
+      );
+    }
     await _reload();
     if (!mounted) return;
-    await _pushChat(community);
+    await _pushChat(community, joinWelcomeMessage: welcome);
   }
 
   Future<void> _leaveCommunity(InterestCommunityBrief community) async {
@@ -76,7 +110,7 @@ class _InterestCommunityElderSectionState extends State<InterestCommunityElderSe
       builder: (ctx) => AlertDialog(
         title: Text('退出「${community.name}」？', style: const TextStyle(fontSize: 20)),
         content: const Text(
-          '退出后仍可重新加入，本机演示消息会保留在群里供其他成员查看。',
+          '退出后仍可重新加入，历史群聊记录仍保留在服务器。',
           style: TextStyle(fontSize: 17, height: 1.5),
         ),
         actions: [
@@ -92,13 +126,17 @@ class _InterestCommunityElderSectionState extends State<InterestCommunityElderSe
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('已退出「${community.name}」')));
   }
 
-  Future<void> _pushChat(InterestCommunityBrief community) async {
+  Future<void> _pushChat(
+    InterestCommunityBrief community, {
+    String? joinWelcomeMessage,
+  }) async {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => InterestCommunityVoiceChatPage(
           community: community,
           audience: InterestCommunityAudience.elder,
           membershipScopeKey: _scopeKey,
+          joinWelcomeMessage: joinWelcomeMessage,
         ),
       ),
     );
@@ -111,6 +149,21 @@ class _InterestCommunityElderSectionState extends State<InterestCommunityElderSe
     if (_loading) {
       return const Center(child: CircularProgressIndicator());
     }
+    if (_error != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(_error!, textAlign: TextAlign.center),
+              const SizedBox(height: 12),
+              FilledButton(onPressed: () => unawaited(_reload()), child: const Text('重试')),
+            ],
+          ),
+        ),
+      );
+    }
 
     return RefreshIndicator(
       onRefresh: _reload,
@@ -122,24 +175,24 @@ class _InterestCommunityElderSectionState extends State<InterestCommunityElderSe
             '选择感兴趣的群加入，按住说话即可交流。点头像可加好友或发私聊。',
             style: TextStyle(fontSize: 16, color: Color(0xFF475569), height: 1.55),
           ),
-          if (_joinedIds.isNotEmpty) ...[
+          if (_joinedCount > 0) ...[
             const SizedBox(height: 12),
-            _JoinedSummaryBanner(count: _joinedIds.length),
+            _JoinedSummaryBanner(count: _joinedCount),
           ],
           const SizedBox(height: 14),
-          ...CommunityCatalog.all.map(
+          ..._communities.map(
             (c) => Padding(
               padding: const EdgeInsets.only(bottom: 14),
               child: _CommunityCard(
                 community: c,
-                joined: _joinedIds.contains(c.id),
+                joined: c.joined,
                 onOpen: () => unawaited(_openCommunity(c)),
-                onLeave: _joinedIds.contains(c.id) ? () => unawaited(_leaveCommunity(c)) : null,
+                onLeave: c.joined ? () => unawaited(_leaveCommunity(c)) : null,
               ),
             ),
           ),
           Text(
-            '当前登录：老人端 ${AuthSession.elderPhone ?? '-'} · 已加入 ${_joinedIds.length} 个群',
+            '当前登录：老人端 ${AuthSession.elderPhone ?? '-'} · 已加入 $_joinedCount 个群',
             style: const TextStyle(fontSize: 14, color: Color(0xFF94A3B8)),
           ),
         ],

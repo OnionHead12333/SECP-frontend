@@ -50,11 +50,18 @@ class _ElderAvatarPickerTileState extends State<ElderAvatarPickerTile> {
   Future<void> _pickFromGallery() async {
     final picked = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 85);
     if (picked == null) return;
-    final saved = await ElderAvatarRepository.saveFromFile(scopeKey: _scope, sourcePath: picked.path);
-    if (!mounted) return;
-    setState(() => _avatarPath = saved);
-    widget.onChanged?.call();
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('头像已更新')));
+    try {
+      final saved = await ElderAvatarRepository.saveFromFile(scopeKey: _scope, sourcePath: picked.path);
+      if (!mounted) return;
+      setState(() => _avatarPath = saved);
+      widget.onChanged?.call();
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('头像已更新')));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+      );
+    }
   }
 
   @override

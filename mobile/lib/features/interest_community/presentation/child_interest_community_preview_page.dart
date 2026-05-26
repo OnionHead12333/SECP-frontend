@@ -3,9 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../child/models/child_local_models.dart';
-import '../data/community_catalog.dart';
-import '../data/community_demo_repository.dart';
-import '../data/community_membership_repository.dart';
+import '../data/interest_community_api.dart';
 import '../data/community_scope.dart';
 import '../models/community_message.dart';
 import 'interest_community_voice_chat_page.dart';
@@ -72,14 +70,35 @@ class _ChildInterestCommunityPreviewPageState extends State<ChildInterestCommuni
       return;
     }
     setState(() => _loading = true);
-    final joinedIds = await CommunityMembershipRepository.loadJoinedIds(_scopeKey);
-    final items = <_JoinedCommunityPreview>[];
-    for (final id in joinedIds) {
-      final community = CommunityCatalog.byId(id);
-      if (community == null) continue;
-      final latest = await CommunityDemoRepository.latestMessage(id);
-      items.add(_JoinedCommunityPreview(community: community, latestMessage: latest));
+    final elderProfileId = int.tryParse(elder.id);
+    if (elderProfileId == null || elderProfileId <= 0) {
+      if (!mounted) return;
+      setState(() {
+        _items = const [];
+        _loading = false;
+      });
+      return;
     }
+    List<ChildCommunityOverviewItem> overview;
+    try {
+      overview = await InterestCommunityApi.listChildOverview(elderProfileId);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+      );
+      setState(() => _loading = false);
+      return;
+    }
+    final items = overview
+        .where((e) => e.joined)
+        .map(
+          (e) => _JoinedCommunityPreview(
+            community: e.community,
+            latestMessage: e.latestMessage,
+          ),
+        )
+        .toList();
     items.sort((a, b) {
       final ta = a.latestMessage?.createdAtMillis ?? 0;
       final tb = b.latestMessage?.createdAtMillis ?? 0;
@@ -153,6 +172,7 @@ class _ChildInterestCommunityPreviewPageState extends State<ChildInterestCommuni
           readOnly: true,
           viewingElderScopeKey: _scopeKey,
           viewingElderName: elder.displayName,
+          elderProfileId: int.tryParse(elder.id),
         ),
       ),
     );
@@ -277,7 +297,7 @@ class _ChildInterestCommunityPreviewPageState extends State<ChildInterestCommuni
                               ),
                               const SizedBox(height: 12),
                               Text(
-                                '与老人端聊天记录完全一致。父母发言在右侧，群友在左侧；进入群聊后可清空记录。',
+                                '预览父母群聊；清空记录仅对你隐藏历史，不影响父母与其他群友。',
                                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                       color: scheme.onSurfaceVariant,
                                       height: 1.45,

@@ -3,11 +3,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../../core/auth/auth_session.dart';
-import '../data/community_catalog.dart';
 import '../data/community_membership_repository.dart';
+import '../data/interest_community_api.dart';
 import '../data/community_scope.dart';
+import '../models/community_join_result.dart';
 import '../models/community_message.dart';
 import 'interest_community_voice_chat_page.dart';
+import 'widgets/community_welcome_dialog.dart';
 import 'widgets/interest_community_elder_section.dart';
 
 /// 兴趣社群首页：老人端大号布局；子女端更紧凑列表。
@@ -21,7 +23,8 @@ final class InterestCommunityListPage extends StatefulWidget {
 }
 
 class _InterestCommunityListPageState extends State<InterestCommunityListPage> {
-  Set<String> _joinedIds = {};
+  List<InterestCommunityBrief> _communities = [];
+  String? _error;
   bool _loading = true;
 
   bool get _elderUi => widget.audience == InterestCommunityAudience.elder;
@@ -35,14 +38,28 @@ class _InterestCommunityListPageState extends State<InterestCommunityListPage> {
   }
 
   Future<void> _reload() async {
-    setState(() => _loading = true);
-    final joined = await CommunityMembershipRepository.loadJoinedIds(_scopeKey);
-    if (!mounted) return;
     setState(() {
-      _joinedIds = joined;
-      _loading = false;
+      _loading = true;
+      _error = null;
     });
+    try {
+      final list = await InterestCommunityApi.listCommunities();
+      if (!mounted) return;
+      setState(() {
+        _communities = list;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString().replaceFirst('Exception: ', '');
+        _loading = false;
+      });
+    }
   }
+
+  Set<String> get _joinedIds =>
+      _communities.where((c) => c.joined).map((c) => c.id).toSet();
 
   Future<void> _openCommunity(InterestCommunityBrief community) async {
     final joined = _joinedIds.contains(community.id);
@@ -69,14 +86,32 @@ class _InterestCommunityListPageState extends State<InterestCommunityListPage> {
       ),
     );
     if (yes != true || !mounted) return;
-    await CommunityMembershipRepository.join(
-      scopeKey: _scopeKey,
-      communityId: community.id,
-      communityName: community.name,
-    );
+    CommunityJoinResult joinResult;
+    try {
+      joinResult = await CommunityMembershipRepository.join(
+        scopeKey: _scopeKey,
+        communityId: community.id,
+        communityName: community.name,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+      );
+      return;
+    }
+    final welcome = joinResult.welcomeMessage;
+    if (!mounted) return;
+    if (welcome != null && welcome.isNotEmpty) {
+      await CommunityWelcomeDialog.show(
+        context,
+        communityName: community.name,
+        message: welcome,
+      );
+    }
     await _reload();
     if (!mounted) return;
-    await _pushChat(community);
+    await _pushChat(community, joinWelcomeMessage: welcome);
   }
 
   Future<void> _leaveCommunity(InterestCommunityBrief community) async {
@@ -85,7 +120,7 @@ class _InterestCommunityListPageState extends State<InterestCommunityListPage> {
       builder: (ctx) => AlertDialog(
         title: Text('退出「${community.name}」？', style: TextStyle(fontSize: _elderUi ? 20 : 18)),
         content: Text(
-          '退出后仍可重新加入，本机演示消息会保留在群里供其他成员查看。',
+          '退出后仍可重新加入，历史群聊记录仍保留在服务器。',
           style: TextStyle(fontSize: _elderUi ? 17 : 15, height: 1.5),
         ),
         actions: [
@@ -101,13 +136,17 @@ class _InterestCommunityListPageState extends State<InterestCommunityListPage> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('已退出「${community.name}」')));
   }
 
-  Future<void> _pushChat(InterestCommunityBrief community) async {
+  Future<void> _pushChat(
+    InterestCommunityBrief community, {
+    String? joinWelcomeMessage,
+  }) async {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => InterestCommunityVoiceChatPage(
           community: community,
           audience: widget.audience,
           membershipScopeKey: _scopeKey,
+          joinWelcomeMessage: joinWelcomeMessage,
         ),
       ),
     );
@@ -157,21 +196,29 @@ class _InterestCommunityListPageState extends State<InterestCommunityListPage> {
                     _JoinedSummaryBanner(count: _joinedIds.length, elderHuge: _elderUi),
                   ],
                   const SizedBox(height: 14),
-                  if (CommunityCatalog.all.isEmpty)
+                  if (_error != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Text(
+                        _error!,
+                        style: TextStyle(fontSize: _elderUi ? 16 : 14, color: const Color(0xFFB91C1C)),
+                      ),
+                    ),
+                  if (_communities.isEmpty && _error == null)
                     Text(
                       '暂时没有开放社群。',
                       style: TextStyle(fontSize: _elderUi ? 18 : 15),
                     )
                   else
-                    ...CommunityCatalog.all.map(
+                    ..._communities.map(
                       (c) => Padding(
                         padding: const EdgeInsets.only(bottom: 14),
                         child: _CommunityCard(
                           community: c,
                           elderHuge: _elderUi,
-                          joined: _joinedIds.contains(c.id),
+                          joined: c.joined,
                           onOpen: () => unawaited(_openCommunity(c)),
-                          onLeave: _elderUi && _joinedIds.contains(c.id)
+                          onLeave: _elderUi && c.joined
                               ? () => unawaited(_leaveCommunity(c))
                               : null,
                         ),
@@ -183,7 +230,7 @@ class _InterestCommunityListPageState extends State<InterestCommunityListPage> {
                         ? ''
                         : (_elderUi
                             ? '当前登录：老人端 ${AuthSession.elderPhone ?? '-'} · 已加入 ${_joinedIds.length} 个群'
-                            : '当前登录：子女端 · 群内记录保存在本机演示数据'),
+                            : '当前登录：子女端 · 请从首页选择老人预览已加入的群聊'),
                     style: TextStyle(
                       fontSize: _elderUi ? 14 : 12,
                       color: const Color(0xFF94A3B8),

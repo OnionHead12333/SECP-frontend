@@ -24,7 +24,8 @@ class AppConfig {
 
   static const String apiBase = String.fromEnvironment(
     'API_BASE',
-    defaultValue: 'http://192.168.43.253:8080/api',
+    //defaultValue: 'http://192.168.43.253:8080/api',
+    defaultValue: 'http://192.168.1.20:8080/api',
   );
 
   static const String amapAndroidKey = String.fromEnvironment(

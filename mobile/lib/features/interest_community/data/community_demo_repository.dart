@@ -1,8 +1,8 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'community_chat_visibility_repository.dart';
 import '../models/community_message.dart';
 
 /// 前端演示：不写后端接口，仅用本机存储模拟「群内语音消息」会话。
@@ -15,6 +15,26 @@ abstract final class CommunityDemoRepository {
   static String _peerSeedFlag(String communityId) => '$_peerSeedFlagPrefix$communityId';
 
   static Future<List<InterestCommunityVoiceMessage>> loadMessages(
+    String communityId,
+  ) async {
+    return _loadAllMessages(communityId);
+  }
+
+  /// 按查看者 scope 过滤已「清空」的历史（仅自己不可见，群数据仍保留）。
+  static Future<List<InterestCommunityVoiceMessage>> loadMessagesForViewer({
+    required String communityId,
+    required String viewerScopeKey,
+  }) async {
+    final all = await _loadAllMessages(communityId);
+    final clearBefore = await CommunityChatVisibilityRepository.loadClearBeforeMillis(
+      viewerScopeKey,
+      communityId,
+    );
+    if (clearBefore == null) return all;
+    return all.where((m) => m.createdAtMillis > clearBefore).toList();
+  }
+
+  static Future<List<InterestCommunityVoiceMessage>> _loadAllMessages(
     String communityId,
   ) async {
     final prefs = await SharedPreferences.getInstance();
@@ -47,14 +67,26 @@ abstract final class CommunityDemoRepository {
   }
 
   static Future<void> appendMessage(InterestCommunityVoiceMessage message) async {
-    final list = await loadMessages(message.communityId);
+    final list = await _loadAllMessages(message.communityId);
     list.add(message);
     final trimmed = list.length > 200 ? list.sublist(list.length - 200) : list;
     await _saveAll(message.communityId, trimmed);
   }
 
   static Future<InterestCommunityVoiceMessage?> latestMessage(String communityId) async {
-    final list = await loadMessages(communityId);
+    final list = await _loadAllMessages(communityId);
+    if (list.isEmpty) return null;
+    return list.last;
+  }
+
+  static Future<InterestCommunityVoiceMessage?> latestMessageForViewer({
+    required String communityId,
+    required String viewerScopeKey,
+  }) async {
+    final list = await loadMessagesForViewer(
+      communityId: communityId,
+      viewerScopeKey: viewerScopeKey,
+    );
     if (list.isEmpty) return null;
     return list.last;
   }
@@ -63,7 +95,7 @@ abstract final class CommunityDemoRepository {
     required String communityId,
     required String communityName,
   }) async {
-    final list = await loadMessages(communityId);
+    final list = await _loadAllMessages(communityId);
     if (list.isNotEmpty) return;
     await appendMessage(
       InterestCommunityVoiceMessage(
@@ -73,7 +105,7 @@ abstract final class CommunityDemoRepository {
         senderDisplay: '群助手',
         senderScopeKey: 'system',
         kind: CommunityMessageKind.text,
-        textContent: '欢迎来到$communityName！按住底部绿色按钮即可发送语音消息。',
+        textContent: '欢迎来到$communityName！可按住说话、点键盘图标输入文字，或点 + 发送图片。',
         createdAtMillis: DateTime.now().millisecondsSinceEpoch,
       ),
     );
@@ -111,25 +143,21 @@ abstract final class CommunityDemoRepository {
       ),
     ];
 
-    final list = await loadMessages(communityId);
+    final list = await _loadAllMessages(communityId);
     list.addAll(peers);
     list.sort((a, b) => a.createdAtMillis.compareTo(b.createdAtMillis));
     await _saveAll(communityId, list);
     await prefs.setBool(_peerSeedFlag(communityId), true);
   }
 
-  /// 清空本群全部聊天记录（老人端与子女端同步生效）。
-  static Future<void> clearMessages(String communityId) async {
-    final list = await loadMessages(communityId);
-    for (final msg in list) {
-      final path = msg.audioPath;
-      if (path == null || path.isEmpty) continue;
-      try {
-        final file = File(path);
-        if (file.existsSync()) file.deleteSync();
-      } catch (_) {}
-    }
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_bucket(communityId));
+  /// 当前用户在本群清空聊天记录：仅对自己隐藏此前消息，不删除群共享数据与媒体文件。
+  static Future<void> hideHistoryForViewer({
+    required String communityId,
+    required String viewerScopeKey,
+  }) async {
+    await CommunityChatVisibilityRepository.hideHistoryBeforeNow(
+      viewerScopeKey,
+      communityId,
+    );
   }
 }

@@ -12,11 +12,22 @@ abstract final class CommunityAvatarResolver {
     return FriendDiscoverCatalog.byScopeKey(scopeKey)?.emoji;
   }
 
-  static Future<Map<String, String>> loadPathsForScopes(Iterable<String> scopes) async {
+  static Future<Map<String, String>> loadPathsForScopes(
+    Iterable<String> scopes, {
+    Map<String, String>? remoteAvatarUrlsByScope,
+  }) async {
     final map = <String, String>{};
     for (final s in scopes.toSet()) {
       if (s.isEmpty || s == 'system') continue;
-      final path = await ElderAvatarRepository.loadPath(s);
+      final remote = remoteAvatarUrlsByScope?[s];
+      String? path;
+      if (remote != null && remote.isNotEmpty) {
+        path = await ElderAvatarRepository.ensureCachedFromUrl(
+          scopeKey: s,
+          avatarUrl: remote,
+        );
+      }
+      path ??= await ElderAvatarRepository.loadPath(s);
       if (path != null) map[s] = path;
     }
     return map;
