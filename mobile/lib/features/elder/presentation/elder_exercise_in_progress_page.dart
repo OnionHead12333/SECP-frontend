@@ -18,12 +18,20 @@ class ElderExerciseInProgressPage extends StatefulWidget {
   final Future<void> Function() onCompleted;
 
   @override
-  State<ElderExerciseInProgressPage> createState() => _ElderExerciseInProgressPageState();
+  State<ElderExerciseInProgressPage> createState() =>
+      _ElderExerciseInProgressPageState();
 }
 
-class _ElderExerciseInProgressPageState extends State<ElderExerciseInProgressPage> {
+@visibleForTesting
+int resolveExerciseElderIdForRequest() {
+  return AuthSession.elderId ?? 1;
+}
+
+class _ElderExerciseInProgressPageState
+    extends State<ElderExerciseInProgressPage> {
   static const double _motionThreshold = 0.8;
   static const int _requiredActiveSeconds = 8;
+  static const int _manualFallbackSeconds = 12;
 
   Timer? _timer;
   StreamSubscription<AccelerometerEvent>? _accelerometerSubscription;
@@ -42,19 +50,15 @@ class _ElderExerciseInProgressPageState extends State<ElderExerciseInProgressPag
   String? _sensorError;
 
   int get _elderId {
-    switch (AuthSession.elderPhone) {
-      case '13800138001':
-        return 1;
-      case '13800138002':
-        return 2;
-      case '13800138003':
-        return 3;
-      default:
-        return 1;
-    }
+    return resolveExerciseElderIdForRequest();
   }
 
-  double get _sensorProgress => (_activeSeconds / _requiredActiveSeconds).clamp(0, 1).toDouble();
+  double get _sensorProgress =>
+      (_activeSeconds / _requiredActiveSeconds).clamp(0, 1).toDouble();
+
+  bool get _manualFallbackAvailable {
+    return _sensorError != null || _elapsed.inSeconds >= _manualFallbackSeconds;
+  }
 
   @override
   void initState() {
@@ -69,7 +73,8 @@ class _ElderExerciseInProgressPageState extends State<ElderExerciseInProgressPag
       final startedAt = _startedAt;
       if (startedAt == null) return;
       final now = DateTime.now();
-      final hasRecentMotion = _lastMotionAt != null && now.difference(_lastMotionAt!) <= const Duration(milliseconds: 1800);
+      final hasRecentMotion = _lastMotionAt != null &&
+          now.difference(_lastMotionAt!) <= const Duration(milliseconds: 1800);
       if (!mounted) return;
       setState(() {
         _elapsed = now.difference(startedAt);
@@ -89,7 +94,8 @@ class _ElderExerciseInProgressPageState extends State<ElderExerciseInProgressPag
         samplingPeriod: const Duration(milliseconds: 100),
       ).listen(
         (event) {
-          final magnitude = sqrt(event.x * event.x + event.y * event.y + event.z * event.z);
+          final magnitude =
+              sqrt(event.x * event.x + event.y * event.y + event.z * event.z);
           _recordSensorSample(
             score: magnitude,
             rawMagnitude: magnitude,
@@ -105,7 +111,8 @@ class _ElderExerciseInProgressPageState extends State<ElderExerciseInProgressPag
         samplingPeriod: const Duration(milliseconds: 100),
       ).listen(
         (event) {
-          final raw = sqrt(event.x * event.x + event.y * event.y + event.z * event.z);
+          final raw =
+              sqrt(event.x * event.x + event.y * event.y + event.z * event.z);
           final score = (raw - 9.8).abs();
           _recordSensorSample(
             score: score,
@@ -166,18 +173,23 @@ class _ElderExerciseInProgressPageState extends State<ElderExerciseInProgressPag
   }
 
   Future<void> _completeVerifiedExercise() async {
-    if (_submitting || !_sensorVerified) return;
+    if (_submitting || (!_sensorVerified && !_manualFallbackAvailable)) return;
     setState(() => _submitting = true);
     try {
       await ElderExerciseReminderService.completeExercise(
         elderId: _elderId,
         reminderId: widget.reminderId,
-        source: 'sensor',
+        source: _sensorVerified ? 'sensor' : 'manual',
       );
       if (!mounted) return;
       await widget.onCompleted();
       if (!mounted) return;
       Navigator.of(context).pop(true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+      );
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -192,9 +204,11 @@ class _ElderExerciseInProgressPageState extends State<ElderExerciseInProgressPag
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('正在运动', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900)),
+            const Text('正在运动',
+                style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900)),
             const SizedBox(height: 8),
-            const Text('需要先完成传感器验证，验证通过后老人再点击完成。', style: TextStyle(color: Color(0xFF475569))),
+            const Text('需要先完成传感器验证，验证通过后老人再点击完成。',
+                style: TextStyle(color: Color(0xFF475569))),
             const SizedBox(height: 18),
             Container(
               width: double.infinity,
@@ -207,9 +221,14 @@ class _ElderExerciseInProgressPageState extends State<ElderExerciseInProgressPag
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('已运动时长', style: TextStyle(color: Color(0xFF475569), fontWeight: FontWeight.w700)),
+                  const Text('已运动时长',
+                      style: TextStyle(
+                          color: Color(0xFF475569),
+                          fontWeight: FontWeight.w700)),
                   const SizedBox(height: 10),
-                  Text(_format(_elapsed), style: const TextStyle(fontSize: 42, fontWeight: FontWeight.w900)),
+                  Text(_format(_elapsed),
+                      style: const TextStyle(
+                          fontSize: 42, fontWeight: FontWeight.w900)),
                 ],
               ),
             ),
@@ -218,9 +237,14 @@ class _ElderExerciseInProgressPageState extends State<ElderExerciseInProgressPag
               width: double.infinity,
               padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(
-                color: _sensorVerified ? const Color(0xFFECFDF5) : const Color(0xFFF8FAFC),
+                color: _sensorVerified
+                    ? const Color(0xFFECFDF5)
+                    : const Color(0xFFF8FAFC),
                 borderRadius: BorderRadius.circular(22),
-                border: Border.all(color: _sensorVerified ? const Color(0xFF14B8A6) : const Color(0xFFE2E8F0)),
+                border: Border.all(
+                    color: _sensorVerified
+                        ? const Color(0xFF14B8A6)
+                        : const Color(0xFFE2E8F0)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -228,8 +252,14 @@ class _ElderExerciseInProgressPageState extends State<ElderExerciseInProgressPag
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('传感器验证进度', style: TextStyle(color: Color(0xFF475569), fontWeight: FontWeight.w800)),
-                      Text('$_activeSeconds/$_requiredActiveSeconds 秒', style: const TextStyle(color: Color(0xFF0F766E), fontWeight: FontWeight.w900)),
+                      const Text('传感器验证进度',
+                          style: TextStyle(
+                              color: Color(0xFF475569),
+                              fontWeight: FontWeight.w800)),
+                      Text('$_activeSeconds/$_requiredActiveSeconds 秒',
+                          style: const TextStyle(
+                              color: Color(0xFF0F766E),
+                              fontWeight: FontWeight.w900)),
                     ],
                   ),
                   const SizedBox(height: 12),
@@ -244,9 +274,15 @@ class _ElderExerciseInProgressPageState extends State<ElderExerciseInProgressPag
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    _sensorVerified ? '传感器验证已通过，请点击下方“已完成运动”。' : '传感器未验证完成，暂不能点击完成。',
+                    _sensorVerified
+                        ? '传感器验证已通过，请点击下方“已完成运动”。'
+                        : (_manualFallbackAvailable
+                            ? '传感器暂未验证通过，也可以选择手动完成。'
+                            : '传感器未验证完成，暂不能点击完成。'),
                     style: TextStyle(
-                      color: _sensorVerified ? const Color(0xFF047857) : const Color(0xFFB45309),
+                      color: _sensorVerified
+                          ? const Color(0xFF047857)
+                          : const Color(0xFFB45309),
                       fontWeight: FontWeight.w800,
                       height: 1.4,
                     ),
@@ -254,16 +290,21 @@ class _ElderExerciseInProgressPageState extends State<ElderExerciseInProgressPag
                   const SizedBox(height: 8),
                   Text(
                     '强度 ${_motionScore.toStringAsFixed(3)} / 阈值 ${_motionThreshold.toStringAsFixed(1)} · 来源 $_sensorSource',
-                    style: const TextStyle(color: Color(0xFF64748B), height: 1.4),
+                    style:
+                        const TextStyle(color: Color(0xFF64748B), height: 1.4),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     '样本 $_sensorSamples · 有效 $_activeSamples · 原始 ${_rawMagnitude.toStringAsFixed(2)}',
-                    style: const TextStyle(color: Color(0xFF64748B), height: 1.4),
+                    style:
+                        const TextStyle(color: Color(0xFF64748B), height: 1.4),
                   ),
                   if (_sensorError != null) ...[
                     const SizedBox(height: 8),
-                    Text(_sensorError!, style: const TextStyle(color: Color(0xFFB91C1C), fontWeight: FontWeight.w700)),
+                    Text(_sensorError!,
+                        style: const TextStyle(
+                            color: Color(0xFFB91C1C),
+                            fontWeight: FontWeight.w700)),
                   ],
                 ],
               ),
@@ -272,8 +313,19 @@ class _ElderExerciseInProgressPageState extends State<ElderExerciseInProgressPag
             SizedBox(
               width: double.infinity,
               child: FilledButton(
-                onPressed: (_submitting || !_sensorVerified) ? null : _completeVerifiedExercise,
-                child: Text(_submitting ? '提交中...' : (_sensorVerified ? '已完成运动' : '请先完成传感器验证')),
+                onPressed: (_submitting ||
+                        (!_sensorVerified && !_manualFallbackAvailable))
+                    ? null
+                    : _completeVerifiedExercise,
+                child: Text(
+                  _submitting
+                      ? '提交中...'
+                      : (_sensorVerified
+                          ? '已完成运动'
+                          : (_manualFallbackAvailable
+                              ? '手动完成运动'
+                              : '请先完成传感器验证')),
+                ),
               ),
             ),
           ],
