@@ -35,15 +35,30 @@ class ChildSafetyTab extends StatelessWidget {
     return AppConfig.useMockLocation ? '本地自绘兜底' : '高德地图';
   }
 
+  String _helpStatusLabel(HelpRequestStatus status) {
+    switch (status) {
+      case HelpRequestStatus.pending:
+        return '待处理';
+      case HelpRequestStatus.cancelled:
+        return '已取消';
+      case HelpRequestStatus.resolved:
+        return '已处理';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final loc = location;
-    final mapTrack = track.map((e) => (latitude: e.latitude, longitude: e.longitude)).toList();
+    final mapTrack = track
+        .map((e) => (latitude: e.latitude, longitude: e.longitude))
+        .toList();
     final nav = route;
     final mapRoute = nav == null
         ? const <({double latitude, double longitude})>[]
-        : nav.points.map((e) => (latitude: e.latitude, longitude: e.longitude)).toList();
+        : nav.points
+            .map((e) => (latitude: e.latitude, longitude: e.longitude))
+            .toList();
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
@@ -90,10 +105,14 @@ class ChildSafetyTab extends StatelessWidget {
                         width: double.infinity,
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: AppConfig.useMockLocation ? const Color(0xFFF8FAFC) : const Color(0xFFF0FDF4),
+                          color: AppConfig.useMockLocation
+                              ? const Color(0xFFF8FAFC)
+                              : const Color(0xFFF0FDF4),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                            color: AppConfig.useMockLocation ? const Color(0xFFE2E8F0) : const Color(0xFFBBF7D0),
+                            color: AppConfig.useMockLocation
+                                ? const Color(0xFFE2E8F0)
+                                : const Color(0xFFBBF7D0),
                           ),
                         ),
                         child: Row(
@@ -103,11 +122,13 @@ class ChildSafetyTab extends StatelessWidget {
                               width: 34,
                               height: 34,
                               decoration: BoxDecoration(
-                                color: scheme.primary.withOpacity(0.1),
+                                color: scheme.primary.withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(10),
                               ),
                               child: Icon(
-                                AppConfig.useMockLocation ? Icons.brush_outlined : Icons.map_outlined,
+                                AppConfig.useMockLocation
+                                    ? Icons.brush_outlined
+                                    : Icons.map_outlined,
                                 size: 18,
                                 color: scheme.primary,
                               ),
@@ -121,22 +142,34 @@ class ChildSafetyTab extends StatelessWidget {
                                     children: [
                                       Text(
                                         '地图模式',
-                                        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .labelMedium
+                                            ?.copyWith(
                                               color: scheme.onSurfaceVariant,
                                               fontWeight: FontWeight.w700,
                                             ),
                                       ),
                                       const SizedBox(width: 8),
                                       Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 8, vertical: 4),
                                         decoration: BoxDecoration(
-                                          color: AppConfig.useMockLocation ? const Color(0xFFE2E8F0) : const Color(0xFFDCFCE7),
-                                          borderRadius: BorderRadius.circular(999),
+                                          color: AppConfig.useMockLocation
+                                              ? const Color(0xFFE2E8F0)
+                                              : const Color(0xFFDCFCE7),
+                                          borderRadius:
+                                              BorderRadius.circular(999),
                                         ),
                                         child: Text(
                                           _mapModeLabel(),
-                                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                                color: AppConfig.useMockLocation ? const Color(0xFF475569) : const Color(0xFF166534),
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .labelSmall
+                                              ?.copyWith(
+                                                color: AppConfig.useMockLocation
+                                                    ? const Color(0xFF475569)
+                                                    : const Color(0xFF166534),
                                                 fontWeight: FontWeight.w700,
                                               ),
                                         ),
@@ -146,7 +179,10 @@ class ChildSafetyTab extends StatelessWidget {
                                   const SizedBox(height: 4),
                                   Text(
                                     '数据源：最新定位摘要 + 家围栏参考线',
-                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodySmall
+                                        ?.copyWith(
                                           color: scheme.onSurfaceVariant,
                                         ),
                                   ),
@@ -157,22 +193,29 @@ class ChildSafetyTab extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 8),
-                      Text(loc.address, style: Theme.of(context).textTheme.bodyLarge),
+                      Text(loc.address,
+                          style: Theme.of(context).textTheme.bodyLarge),
                       const SizedBox(height: 6),
                       Text(
                         '经纬度 ${loc.latitude.toStringAsFixed(5)}，${loc.longitude.toStringAsFixed(5)}',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+                        style: Theme.of(context)
+                            .textTheme
+                            .bodySmall
+                            ?.copyWith(color: scheme.onSurfaceVariant),
                       ),
                       Text(
                         '上次更新 ${_fmt(loc.updatedAt)}',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+                        style: Theme.of(context)
+                            .textTheme
+                            .bodySmall
+                            ?.copyWith(color: scheme.onSurfaceVariant),
                       ),
                     ],
                   ),
           ),
         ),
         const SizedBox(height: 16),
-        _SafetySectionTitle(title: '路线与轨迹'),
+        const _SafetySectionTitle(title: '路线与轨迹'),
         Card(
           elevation: 0,
           color: scheme.surfaceContainerLow,
@@ -181,15 +224,25 @@ class ChildSafetyTab extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (nav != null) _RouteSummary(route: nav) else const Text('无参考回家路线数据（需定位与家围栏接口返回）'),
+                if (nav != null)
+                  _RouteSummary(route: nav)
+                else
+                  const Text('无参考回家路线数据（需定位与家围栏接口返回）'),
                 if (nav != null) const SizedBox(height: 14),
                 Text(
                   '最近轨迹',
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
+                  style: Theme.of(context)
+                      .textTheme
+                      .labelLarge
+                      ?.copyWith(fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 8),
                 if (track.isEmpty)
-                  Text('暂无轨迹点', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.outline))
+                  Text('暂无轨迹点',
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(color: scheme.outline))
                 else
                   ...track.take(5).map(
                         (item) => Padding(
@@ -203,14 +256,17 @@ class ChildSafetyTab extends StatelessWidget {
                 const SizedBox(height: 6),
                 Text(
                   '蓝线：历史轨迹　橙线：参考回家线',
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(color: scheme.outline),
+                  style: Theme.of(context)
+                      .textTheme
+                      .labelSmall
+                      ?.copyWith(color: scheme.outline),
                 ),
               ],
             ),
           ),
         ),
         const SizedBox(height: 20),
-        _SafetySectionTitle(title: '活动状态'),
+        const _SafetySectionTitle(title: '活动状态'),
         Card(
           elevation: 0,
           color: scheme.surfaceContainerLow,
@@ -241,19 +297,23 @@ class ChildSafetyTab extends StatelessWidget {
                 const SizedBox(height: 10),
                 Text(
                   '数据更新 ${_fmt(activity.updatedAt)}',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(color: scheme.onSurfaceVariant),
                 ),
               ],
             ),
           ),
         ),
         const SizedBox(height: 20),
-        _SafetySectionTitle(title: '快捷入口'),
-        _PlaceholderRow(title: '历史轨迹', subtitle: '需后端提供子女端历史轨迹查询'),
-        _PlaceholderRow(title: '地理围栏', subtitle: '可接「家围栏」等已有接口的详情页'),
-        _PlaceholderRow(title: '预警消息', subtitle: '可接 activity-alerts 等接口'),
+        const _SafetySectionTitle(title: '快捷入口'),
+        const _PlaceholderRow(title: '历史轨迹', subtitle: '需后端提供子女端历史轨迹查询'),
+        const _PlaceholderRow(title: '地理围栏', subtitle: '可接「家围栏」等已有接口的详情页'),
+        const _PlaceholderRow(
+            title: '预警消息', subtitle: '可接 activity-alerts 等接口'),
         const SizedBox(height: 20),
-        _SafetySectionTitle(title: '求助记录'),
+        const _SafetySectionTitle(title: '求助记录'),
         const SizedBox(height: 8),
         if (helpRecords.isEmpty)
           Card(
@@ -283,21 +343,42 @@ class ChildSafetyTab extends StatelessWidget {
                       children: [
                         Expanded(
                           child: Text(
-                            '${r.elderName} · ${_fmt(r.createdAt)}',
-                            style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+                            '${r.displayTitle} · ${_fmt(r.createdAt)}',
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleSmall
+                                ?.copyWith(fontWeight: FontWeight.w600),
                           ),
                         ),
                         Chip(
-                          label: Text(pending ? '待处理' : '已处理'),
+                          label: Text(_helpStatusLabel(r.status)),
                           visualDensity: VisualDensity.compact,
                           padding: EdgeInsets.zero,
-                          labelPadding: const EdgeInsets.symmetric(horizontal: 8),
-                          backgroundColor: pending ? scheme.errorContainer : scheme.surfaceContainerHighest,
+                          labelPadding:
+                              const EdgeInsets.symmetric(horizontal: 8),
+                          backgroundColor: pending
+                              ? scheme.errorContainer
+                              : scheme.surfaceContainerHighest,
                         ),
                       ],
                     ),
                     const SizedBox(height: 8),
-                    Text(r.summary, style: Theme.of(context).textTheme.bodyMedium),
+                    Text(r.summary,
+                        style: Theme.of(context).textTheme.bodyMedium),
+                    if (r.isHardwareSos) ...[
+                      const SizedBox(height: 10),
+                      Text('${r.displayArea}触发硬件求助',
+                          style: Theme.of(context).textTheme.bodySmall),
+                      Text('来源：居家守护终端',
+                          style: Theme.of(context).textTheme.bodySmall),
+                      Text('触发区域：${r.displayArea}',
+                          style: Theme.of(context).textTheme.bodySmall),
+                      if (r.deviceId != null && r.deviceId!.isNotEmpty)
+                        Text('设备编号：${r.deviceId}',
+                            style: Theme.of(context).textTheme.bodySmall),
+                      Text('消息：${r.displayHardwareMessage}',
+                          style: Theme.of(context).textTheme.bodySmall),
+                    ],
                     if (pending) ...[
                       const SizedBox(height: 12),
                       Align(
@@ -380,7 +461,9 @@ class _RouteSummary extends StatelessWidget {
             children: [
               const Icon(Icons.alt_route, color: Color(0xFFEA580C)),
               const SizedBox(width: 8),
-              Expanded(child: Text('${route.startLabel} → ${route.endLabel}', style: const TextStyle(fontWeight: FontWeight.w700))),
+              Expanded(
+                  child: Text('${route.startLabel} → ${route.endLabel}',
+                      style: const TextStyle(fontWeight: FontWeight.w700))),
             ],
           ),
           const SizedBox(height: 10),
@@ -388,12 +471,16 @@ class _RouteSummary extends StatelessWidget {
             spacing: 12,
             runSpacing: 10,
             children: [
-              _RouteMetric(label: '预计距离', value: '${route.distanceKm.toStringAsFixed(2)} km'),
-              _RouteMetric(label: '预计时间', value: '${route.estimatedMinutes} 分钟'),
+              _RouteMetric(
+                  label: '预计距离',
+                  value: '${route.distanceKm.toStringAsFixed(2)} km'),
+              _RouteMetric(
+                  label: '预计时间', value: '${route.estimatedMinutes} 分钟'),
             ],
           ),
           const SizedBox(height: 10),
-          Text(route.statusText, style: const TextStyle(color: Color(0xFF475569), height: 1.5)),
+          Text(route.statusText,
+              style: const TextStyle(color: Color(0xFF475569), height: 1.5)),
         ],
       ),
     );
@@ -428,7 +515,8 @@ class _RouteMetric extends StatelessWidget {
 }
 
 class _StatChip extends StatelessWidget {
-  const _StatChip({required this.icon, required this.label, required this.value});
+  const _StatChip(
+      {required this.icon, required this.label, required this.value});
 
   final IconData icon;
   final String label;
@@ -450,7 +538,11 @@ class _StatChip extends StatelessWidget {
           const SizedBox(height: 6),
           Text(label, style: Theme.of(context).textTheme.labelSmall),
           const SizedBox(height: 2),
-          Text(value, style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+          Text(value,
+              style: Theme.of(context)
+                  .textTheme
+                  .bodyMedium
+                  ?.copyWith(fontWeight: FontWeight.w600)),
         ],
       ),
     );

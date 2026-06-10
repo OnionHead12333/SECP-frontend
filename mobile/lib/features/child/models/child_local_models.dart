@@ -22,16 +22,18 @@ class EmergencyContact {
   });
 
   final String id;
+
   /// 所属老人（绑定老人 `BoundElder.id`）
   final String elderId;
   final String name;
   final String phone;
+
   /// 对应库表 `emergency_contacts.priority`。
   final int priority;
   final String? relation;
 }
 
-enum HelpRequestStatus { pending, resolved }
+enum HelpRequestStatus { pending, resolved, cancelled }
 
 class HelpRequestRecord {
   HelpRequestRecord({
@@ -40,6 +42,13 @@ class HelpRequestRecord {
     required this.createdAt,
     required this.summary,
     required this.status,
+    this.source,
+    this.deviceId,
+    this.area,
+    this.hardwareMessage,
+    this.alertType,
+    this.triggerMode,
+    this.familyId,
   });
 
   final String id;
@@ -47,6 +56,28 @@ class HelpRequestRecord {
   final DateTime createdAt;
   final String summary;
   HelpRequestStatus status;
+  final String? source;
+  final String? deviceId;
+  final String? area;
+  final String? hardwareMessage;
+  final String? alertType;
+  final String? triggerMode;
+  final String? familyId;
+
+  bool get isHardwareSos =>
+      (source ?? '').trim().toUpperCase() == 'HARDWARE_DEVICE';
+
+  String get displayTitle => isHardwareSos ? '家庭硬件 SOS' : elderName;
+
+  String get displayArea {
+    final text = area?.trim();
+    return text == null || text.isEmpty ? '家中固定设备区域' : text;
+  }
+
+  String get displayHardwareMessage {
+    final text = hardwareMessage?.trim();
+    return text == null || text.isEmpty ? '家庭硬件 SOS 被触发' : text;
+  }
 }
 
 class LocationTrackPoint {

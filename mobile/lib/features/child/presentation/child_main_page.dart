@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 
 import '../../../core/auth/auth_session.dart';
 import '../../../core/util/api_instant.dart';
+import '../data/child_device_api.dart';
 import '../data/child_elder_directory_service.dart';
 import '../data/child_emergency_alerts_api.dart';
 import '../data/child_geofence_api.dart';
 import '../data/child_location_summary_api.dart';
 import '../models/child_local_models.dart';
+import '../models/device_status_snapshot.dart';
 import 'tabs/child_medical_tab.dart';
 import 'tabs/child_overview_tab.dart';
 import 'tabs/child_reminder_tab.dart';
@@ -28,6 +30,7 @@ class _ChildMainPageState extends State<ChildMainPage> {
 
   List<BoundElder> _elders = const [];
   List<HelpRequestRecord> _helpRecords = const [];
+  List<DeviceStatusSnapshot> _deviceStatuses = const [];
   LocationSnapshot? _location;
   List<LocationTrackPoint> _track = const [];
   NavigationRouteSnapshot? _route;
@@ -58,7 +61,8 @@ class _ChildMainPageState extends State<ChildMainPage> {
     try {
       final elders = await ChildElderDirectoryService.resolveElders();
       if (elders.isNotEmpty) {
-        if (_selectedElderId == null || !elders.any((e) => e.id == _selectedElderId)) {
+        if (_selectedElderId == null ||
+            !elders.any((e) => e.id == _selectedElderId)) {
           _selectedElderId = elders.first.id;
         }
       } else {
@@ -76,14 +80,31 @@ class _ChildMainPageState extends State<ChildMainPage> {
             final aid = '${m['alertId'] ?? m['id'] ?? ''}'.trim();
             if (aid.isEmpty) continue;
             final st = m['status'] as String? ?? '';
-            final pending = st == 'sent';
+            final status = _mapHelpStatus(st);
+            final source = _asNullableString(m['source']);
+            final area = _asNullableString(m['area']);
+            final hardwareMessage = _asNullableString(
+                m['hardwareMessage'] ?? m['hardware_message']);
+            final isHardwareSos =
+                source?.trim().toUpperCase() == 'HARDWARE_DEVICE';
             help.add(
               HelpRequestRecord(
                 id: aid,
                 elderName: m['elderName'] as String? ?? '老人',
-                createdAt: _parseAnyTime(m['triggerTime'] ?? m['sentTime']) ?? now,
-                summary: st == 'sent' ? '安全求助，待处理' : '已处理/已核对',
-                status: pending ? HelpRequestStatus.pending : HelpRequestStatus.resolved,
+                createdAt:
+                    _parseAnyTime(m['triggerTime'] ?? m['sentTime']) ?? now,
+                summary: isHardwareSos
+                    ? '${(area == null || area.isEmpty) ? '家中固定设备区域' : area}触发硬件求助，请尽快确认家中老人状态'
+                    : _normalHelpSummary(status),
+                status: status,
+                source: source,
+                deviceId: _asNullableString(m['deviceId'] ?? m['device_id']),
+                area: area,
+                hardwareMessage: hardwareMessage,
+                alertType: _asNullableString(m['alertType'] ?? m['alert_type']),
+                triggerMode:
+                    _asNullableString(m['triggerMode'] ?? m['trigger_mode']),
+                familyId: _asNullableString(m['familyId'] ?? m['family_id']),
               ),
             );
           }
@@ -99,6 +120,7 @@ class _ChildMainPageState extends State<ChildMainPage> {
           _location = null;
           _track = const [];
           _route = null;
+          _deviceStatuses = const [];
           _activity = ActivitySnapshot(
             stepsToday: 0,
             stateLabel: '无绑定老人',
@@ -109,6 +131,12 @@ class _ChildMainPageState extends State<ChildMainPage> {
       }
 
       final eid = int.parse(_elderIdOrNull!);
+      List<DeviceStatusSnapshot> devices = const [];
+      try {
+        devices = await ChildDeviceApi.listForElder(eid);
+      } catch (_) {
+        devices = const [];
+      }
       ChildLocationSummary? loc;
       try {
         loc = await ChildLocationSummaryApi.fetch(eid);
@@ -138,7 +166,9 @@ class _ChildMainPageState extends State<ChildMainPage> {
           stepsToday: 0,
           stateLabel: loc.isHome == true
               ? '当前推断：在家'
-              : (loc.presenceSource == 'gaode_fallback' ? '当前推断：外出' : '活动状态已更新'),
+              : (loc.presenceSource == 'gaode_fallback'
+                  ? '当前推断：外出'
+                  : '活动状态已更新'),
           updatedAt: t,
         );
       } else {
@@ -160,6 +190,7 @@ class _ChildMainPageState extends State<ChildMainPage> {
       if (!mounted) return;
       setState(() {
         _elders = elders;
+        _deviceStatuses = devices;
       });
     } finally {
       if (mounted) {
@@ -171,11 +202,47 @@ class _ChildMainPageState extends State<ChildMainPage> {
   String _elderNameForSelected() {
     final id = _selectedElderId;
     if (id == null) return '家';
-    return _elders.firstWhere((e) => e.id == id, orElse: () => BoundElder(id: id, displayName: '家')).displayName;
+    return _elders
+        .firstWhere((e) => e.id == id,
+            orElse: () => BoundElder(id: id, displayName: '家'))
+        .displayName;
   }
 
   static DateTime? _parseAnyTime(Object? o) {
     return parseApiInstantToLocal(o);
+  }
+
+  static String? _asNullableString(Object? value) {
+    if (value == null) return null;
+    final text = '$value'.trim();
+    return text.isEmpty ? null : text;
+  }
+
+  static HelpRequestStatus _mapHelpStatus(String raw) {
+    switch (raw.trim().toLowerCase()) {
+      case 'sent':
+      case 'pending':
+      case 'pending_revoke':
+        return HelpRequestStatus.pending;
+      case 'cancelled':
+      case 'canceled':
+      case 'false_alarm':
+        return HelpRequestStatus.cancelled;
+      case 'handled':
+      default:
+        return HelpRequestStatus.resolved;
+    }
+  }
+
+  static String _normalHelpSummary(HelpRequestStatus status) {
+    switch (status) {
+      case HelpRequestStatus.pending:
+        return '安全求助，待处理';
+      case HelpRequestStatus.cancelled:
+        return '已取消/误报';
+      case HelpRequestStatus.resolved:
+        return '已处理/已核对';
+    }
   }
 
   Future<NavigationRouteSnapshot?> _buildRouteForElder({
@@ -197,10 +264,12 @@ class _ChildMainPageState extends State<ChildMainPage> {
       homeLng = loc.longitude;
       endLabel = '家（无围栏，参考当前点）';
     }
-    final distanceKm = _calculateDistanceKm(loc.latitude, loc.longitude, homeLat, homeLng);
+    final distanceKm =
+        _calculateDistanceKm(loc.latitude, loc.longitude, homeLat, homeLng);
     final minutes = (distanceKm * 12).clamp(2, 90).round();
     final routePoints = <RoutePoint>[
-      RoutePoint(latitude: loc.latitude, longitude: loc.longitude, label: '老人当前位置'),
+      RoutePoint(
+          latitude: loc.latitude, longitude: loc.longitude, label: '老人当前位置'),
       RoutePoint(
         latitude: (loc.latitude + homeLat) / 2,
         longitude: (loc.longitude + homeLng) / 2,
@@ -219,7 +288,8 @@ class _ChildMainPageState extends State<ChildMainPage> {
     );
   }
 
-  double _calculateDistanceKm(double startLat, double startLng, double endLat, double endLng) {
+  double _calculateDistanceKm(
+      double startLat, double startLng, double endLat, double endLng) {
     const latFactor = 111.0;
     const lngFactor = 97.0;
     final lat = (startLat - endLat).abs() * latFactor;
@@ -236,7 +306,8 @@ class _ChildMainPageState extends State<ChildMainPage> {
     final id = int.tryParse(alertId);
     if (id == null) return;
     try {
-      await ChildEmergencyAlertsApi.handle(alertId: id, action: 'handled', remark: '');
+      await ChildEmergencyAlertsApi.handle(
+          alertId: id, action: 'handled', remark: '');
       await _load();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -275,6 +346,7 @@ class _ChildMainPageState extends State<ChildMainPage> {
           location: _location,
           activity: _activity,
           helpRecords: _helpRecords,
+          deviceStatuses: _deviceStatuses,
         );
       case 1:
         return ChildMedicalTab(elders: _elders);
@@ -313,14 +385,19 @@ class _ChildMainPageState extends State<ChildMainPage> {
               padding: const EdgeInsets.symmetric(horizontal: 4),
               child: DropdownButtonHideUnderline(
                 child: DropdownButton<String>(
-                  value: _selectedElderId != null && _elders.any((e) => e.id == _selectedElderId) ? _selectedElderId : null,
-                  hint: const Text('选老人', style: TextStyle(fontSize: 14, color: Colors.white70)),
+                  value: _selectedElderId != null &&
+                          _elders.any((e) => e.id == _selectedElderId)
+                      ? _selectedElderId
+                      : null,
+                  hint: const Text('选老人',
+                      style: TextStyle(fontSize: 14, color: Colors.white70)),
                   dropdownColor: Theme.of(context).colorScheme.primaryContainer,
                   items: _elders
                       .map(
                         (e) => DropdownMenuItem(
                           value: e.id,
-                          child: Text(e.displayName, overflow: TextOverflow.ellipsis),
+                          child: Text(e.displayName,
+                              overflow: TextOverflow.ellipsis),
                         ),
                       )
                       .toList(),
@@ -360,11 +437,26 @@ class _ChildMainPageState extends State<ChildMainPage> {
         selectedIndex: _navIndex,
         onDestinationSelected: (i) => setState(() => _navIndex = i),
         destinations: const [
-          NavigationDestination(icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard), label: '首页'),
-          NavigationDestination(icon: Icon(Icons.medical_services_outlined), selectedIcon: Icon(Icons.medical_services), label: '医疗'),
-          NavigationDestination(icon: Icon(Icons.notifications_outlined), selectedIcon: Icon(Icons.notifications), label: '提醒'),
-          NavigationDestination(icon: Icon(Icons.shield_outlined), selectedIcon: Icon(Icons.shield), label: '安全'),
-          NavigationDestination(icon: Icon(Icons.settings_outlined), selectedIcon: Icon(Icons.settings), label: '设置'),
+          NavigationDestination(
+              icon: Icon(Icons.dashboard_outlined),
+              selectedIcon: Icon(Icons.dashboard),
+              label: '首页'),
+          NavigationDestination(
+              icon: Icon(Icons.medical_services_outlined),
+              selectedIcon: Icon(Icons.medical_services),
+              label: '医疗'),
+          NavigationDestination(
+              icon: Icon(Icons.notifications_outlined),
+              selectedIcon: Icon(Icons.notifications),
+              label: '提醒'),
+          NavigationDestination(
+              icon: Icon(Icons.shield_outlined),
+              selectedIcon: Icon(Icons.shield),
+              label: '安全'),
+          NavigationDestination(
+              icon: Icon(Icons.settings_outlined),
+              selectedIcon: Icon(Icons.settings),
+              label: '设置'),
         ],
       ),
     );
