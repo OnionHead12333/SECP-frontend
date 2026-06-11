@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../core/auth/auth_session.dart';
@@ -24,9 +26,13 @@ class ChildMainPage extends StatefulWidget {
 }
 
 class _ChildMainPageState extends State<ChildMainPage> {
+  static const Duration _autoRefreshInterval = Duration(seconds: 10);
+
   int _navIndex = 0;
   String? _selectedElderId;
   bool _loading = true;
+  bool _refreshing = false;
+  Timer? _autoRefreshTimer;
 
   List<BoundElder> _elders = const [];
   List<HelpRequestRecord> _helpRecords = const [];
@@ -44,7 +50,19 @@ class _ChildMainPageState extends State<ChildMainPage> {
       stateLabel: '加载中',
       updatedAt: DateTime.now(),
     );
-    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _load();
+      _autoRefreshTimer = Timer.periodic(_autoRefreshInterval, (_) {
+        if (!mounted || _refreshing) return;
+        _refreshInBackground();
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _autoRefreshTimer?.cancel();
+    super.dispose();
   }
 
   String? get _elderIdOrNull {
@@ -53,10 +71,18 @@ class _ChildMainPageState extends State<ChildMainPage> {
     return int.tryParse(id) != null ? id : null;
   }
 
-  Future<void> _load() async {
-    setState(() {
-      _loading = true;
-    });
+  Future<void> _load() => _loadData(showLoading: true);
+
+  Future<void> _refreshInBackground() => _loadData(showLoading: false);
+
+  Future<void> _loadData({required bool showLoading}) async {
+    if (_refreshing) return;
+    _refreshing = true;
+    if (showLoading) {
+      setState(() {
+        _loading = true;
+      });
+    }
     final now = DateTime.now();
     try {
       final elders = await ChildElderDirectoryService.resolveElders();
@@ -193,8 +219,11 @@ class _ChildMainPageState extends State<ChildMainPage> {
         _deviceStatuses = devices;
       });
     } finally {
+      _refreshing = false;
       if (mounted) {
-        setState(() => _loading = false);
+        setState(() {
+          _loading = false;
+        });
       }
     }
   }

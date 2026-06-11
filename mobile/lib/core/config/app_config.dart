@@ -26,7 +26,9 @@ class AppConfig {
 
   static const String apiBase = String.fromEnvironment(
     'API_BASE',
-    defaultValue: 'http://172.20.10.3:8080/api',
+    // Local backend for hotspot testing:
+    // defaultValue: 'http://172.20.10.3:8080/api',
+    defaultValue: 'http://120.46.62.182:8080/api',
   );
 
   static const String amapAndroidKey = String.fromEnvironment(
