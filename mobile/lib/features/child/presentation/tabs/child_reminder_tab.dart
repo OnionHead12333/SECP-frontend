@@ -18,7 +18,6 @@ class ChildReminderTab extends StatelessWidget {
     final items = [
       (Icons.water_drop_outlined, '喝水提醒', '设置喝水量与提醒间隔'),
       (Icons.directions_run_outlined, '锻炼提醒', '设置锻炼内容'),
-      (Icons.event_note_outlined, '其他提醒', '开发中'),
     ];
 
     return ListView.separated(

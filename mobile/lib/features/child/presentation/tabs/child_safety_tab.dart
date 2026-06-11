@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/config/app_config.dart';
+import '../../data/child_activity_alerts_api.dart';
 import '../../models/child_local_models.dart';
 import '../widgets/child_location_map.dart';
 
@@ -13,6 +14,7 @@ class ChildSafetyTab extends StatelessWidget {
     this.route,
     required this.activity,
     required this.helpRecords,
+    required this.activityAlerts,
     required this.onRefreshLocation,
     required this.onResolveHelp,
   });
@@ -22,6 +24,7 @@ class ChildSafetyTab extends StatelessWidget {
   final NavigationRouteSnapshot? route;
   final ActivitySnapshot activity;
   final List<HelpRequestRecord> helpRecords;
+  final List<ActivityAlertRecord> activityAlerts;
   final VoidCallback onRefreshLocation;
   final Future<void> Function(String id) onResolveHelp;
 
@@ -248,10 +251,57 @@ class ChildSafetyTab extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 20),
-        _SafetySectionTitle(title: '快捷入口'),
-        _PlaceholderRow(title: '历史轨迹', subtitle: '需后端提供子女端历史轨迹查询'),
-        _PlaceholderRow(title: '地理围栏', subtitle: '可接「家围栏」等已有接口的详情页'),
-        _PlaceholderRow(title: '预警消息', subtitle: '可接 activity-alerts 等接口'),
+        _SafetySectionTitle(title: '预警消息'),
+        const SizedBox(height: 8),
+        if (activityAlerts.isEmpty)
+          Card(
+            elevation: 0,
+            color: scheme.surfaceContainerLow,
+            child: const Padding(
+              padding: EdgeInsets.symmetric(vertical: 28, horizontal: 16),
+              child: Center(
+                child: Text('暂无预警消息'),
+              ),
+            ),
+          )
+        else
+          ...activityAlerts.map((alert) {
+            return Card(
+              margin: const EdgeInsets.only(bottom: 10),
+              elevation: 0,
+              color: scheme.surfaceContainerLow,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.notifications_active_outlined, color: scheme.error, size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            alert.title,
+                            style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (alert.triggeredAt != null) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        _fmt(alert.triggeredAt!),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+                      ),
+                    ],
+                    const SizedBox(height: 8),
+                    Text(alert.content, style: Theme.of(context).textTheme.bodyMedium),
+                  ],
+                ),
+              ),
+            );
+          }),
         const SizedBox(height: 20),
         _SafetySectionTitle(title: '求助记录'),
         const SizedBox(height: 8),
@@ -452,28 +502,6 @@ class _StatChip extends StatelessWidget {
           const SizedBox(height: 2),
           Text(value, style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
         ],
-      ),
-    );
-  }
-}
-
-class _PlaceholderRow extends StatelessWidget {
-  const _PlaceholderRow({required this.title, required this.subtitle});
-
-  final String title;
-  final String subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      child: ListTile(
-        title: Text(title),
-        subtitle: Text(subtitle),
-        trailing: const Icon(Icons.chevron_right),
-        onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('此入口仍可按后续需求对接已有接口扩展')),
-        ),
       ),
     );
   }

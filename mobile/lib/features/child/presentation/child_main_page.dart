@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/auth/auth_session.dart';
 import '../../../core/util/api_instant.dart';
+import '../data/child_activity_alerts_api.dart';
 import '../data/child_elder_directory_service.dart';
 import '../data/child_emergency_alerts_api.dart';
 import '../data/child_geofence_api.dart';
@@ -28,6 +29,7 @@ class _ChildMainPageState extends State<ChildMainPage> {
 
   List<BoundElder> _elders = const [];
   List<HelpRequestRecord> _helpRecords = const [];
+  List<ActivityAlertRecord> _activityAlerts = const [];
   LocationSnapshot? _location;
   List<LocationTrackPoint> _track = const [];
   NavigationRouteSnapshot? _route;
@@ -99,6 +101,7 @@ class _ChildMainPageState extends State<ChildMainPage> {
           _location = null;
           _track = const [];
           _route = null;
+          _activityAlerts = const [];
           _activity = ActivitySnapshot(
             stepsToday: 0,
             stateLabel: '无绑定老人',
@@ -156,6 +159,14 @@ class _ChildMainPageState extends State<ChildMainPage> {
         loc: _location,
         homeLabel: _elderNameForSelected(),
       );
+
+      var activityAlerts = <ActivityAlertRecord>[];
+      try {
+        activityAlerts = await ChildActivityAlertsApi.list(eid);
+      } catch (_) {
+        activityAlerts = const [];
+      }
+      _activityAlerts = activityAlerts;
 
       if (!mounted) return;
       setState(() {
@@ -277,7 +288,7 @@ class _ChildMainPageState extends State<ChildMainPage> {
           helpRecords: _helpRecords,
         );
       case 1:
-        return ChildMedicalTab(elders: _elders);
+        return ChildMedicalTab(elders: _elders, currentElder: _currentElder);
       case 2:
         return ChildReminderTab(elders: _elders);
       case 3:
@@ -287,6 +298,7 @@ class _ChildMainPageState extends State<ChildMainPage> {
           route: _route,
           activity: _activity,
           helpRecords: _helpRecords,
+          activityAlerts: _activityAlerts,
           onRefreshLocation: () {
             _load();
           },
