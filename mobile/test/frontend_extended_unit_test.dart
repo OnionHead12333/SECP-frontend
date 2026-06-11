@@ -4,6 +4,7 @@ import 'package:smart_elderly_care_mobile/features/auth/models/register_user_rol
 import 'package:smart_elderly_care_mobile/features/child/models/child_local_models.dart';
 import 'package:smart_elderly_care_mobile/features/elder/models/elder_emergency_contact.dart';
 import 'package:smart_elderly_care_mobile/features/elder/models/elder_help_request.dart';
+import 'package:smart_elderly_care_mobile/features/elder/presentation/elder_exercise_in_progress_page.dart';
 import 'package:smart_elderly_care_mobile/features/interest_community/data/community_scope.dart';
 import 'package:smart_elderly_care_mobile/features/interest_community/models/community_friend.dart';
 import 'package:smart_elderly_care_mobile/features/interest_community/models/community_message.dart';
@@ -76,6 +77,13 @@ void main() {
       AuthSession.elderId = 9;
 
       expect(CommunityScope.forCurrentElder(), 'phone_13800000000');
+    });
+
+    test('TC-FE-59 Exercise completion uses logged-in elder id', () {
+      AuthSession.elderPhone = '13800000000';
+      AuthSession.elderId = 9;
+
+      expect(resolveExerciseElderIdForRequest(), 9);
     });
   });
 
