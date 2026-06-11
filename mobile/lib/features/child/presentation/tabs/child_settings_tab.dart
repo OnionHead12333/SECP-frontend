@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../pages/child_home_geofence_page.dart';
 import '../../data/child_api_error_text.dart';
 import '../../data/child_emergency_contacts_api.dart';
 import '../../models/child_local_models.dart';
@@ -331,10 +332,27 @@ class _ChildSettingsTabState extends State<ChildSettingsTab> {
                   ),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-                    child: OutlinedButton.icon(
-                      onPressed: () => _openEmergencyContactsSheet(e),
-                      icon: const Icon(Icons.contact_phone_outlined),
-                      label: const Text('管理紧急联系人'),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: () => _openEmergencyContactsSheet(e),
+                          icon: const Icon(Icons.contact_phone_outlined),
+                          label: const Text('管理紧急联系人'),
+                        ),
+                        const SizedBox(height: 8),
+                        OutlinedButton.icon(
+                          onPressed: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) => ChildHomeGeofencePage(elder: e),
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.home_work_outlined),
+                          label: const Text('家的范围（出门提醒）'),
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -361,13 +379,21 @@ class _ChildSettingsTabState extends State<ChildSettingsTab> {
               ),
               const Divider(height: 1),
               ListTile(
-                leading: const Icon(Icons.hexagon_outlined),
-                title: const Text('地理围栏（家）'),
-                subtitle: const Text('安全页已尝试读取家围栏用于参考路线'),
+                leading: const Icon(Icons.home_work_outlined),
+                title: const Text('出门提醒 · 家的范围'),
+                subtitle: const Text('自定义离家多远判定为出门，默认 500 米'),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('围栏详情可在后端 home-geofence 接口中配置')),
+                  if (widget.elders.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('请先绑定老人')),
+                    );
+                    return;
+                  }
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => ChildHomeGeofencePage(elder: widget.elders.first),
+                    ),
                   );
                 },
               ),

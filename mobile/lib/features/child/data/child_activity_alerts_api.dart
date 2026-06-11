@@ -40,15 +40,39 @@ class ActivityAlertRecord {
   final String content;
   final DateTime? triggeredAt;
 
+  bool get isGoOut => alertType == 'go_out';
+
+  bool get isComeHome => alertType == 'come_home';
+
+  String get displayTitle {
+    if (title.isNotEmpty) return title;
+    if (isGoOut) return '老人已出门';
+    if (isComeHome) return '老人已回家';
+    return '位置变化';
+  }
+
   factory ActivityAlertRecord.fromJson(Map<String, dynamic> j) {
     final id = '${j['alertId'] ?? j['id'] ?? ''}'.trim();
+    final alertType = (j['alertType'] as String?)?.trim() ?? '';
     final title = (j['title'] as String?)?.trim() ?? '';
     final content = (j['content'] as String?)?.trim() ?? '';
+    final goOut = alertType == 'go_out';
+    final comeHome = alertType == 'come_home';
     return ActivityAlertRecord(
       id: id,
-      alertType: (j['alertType'] as String?)?.trim() ?? '',
-      title: title.isNotEmpty ? title : '活动预警',
-      content: content.isNotEmpty ? content : '检测到异常活动状态，请关注老人情况。',
+      alertType: alertType,
+      title: title.isNotEmpty
+          ? title
+          : (goOut
+              ? '老人已出门'
+              : (comeHome ? '老人已回家' : '位置变化')),
+      content: content.isNotEmpty
+          ? content
+          : (goOut
+              ? '检测到老人离开家的范围，请关注出行安全。'
+              : (comeHome
+                  ? '检测到老人回到家的范围内。'
+                  : '检测到老人位置状态变化。')),
       triggeredAt: parseApiInstantToLocal(j['triggeredAt']),
     );
   }

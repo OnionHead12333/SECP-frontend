@@ -174,6 +174,45 @@ final class ElderLocationApi {
     return api.data ?? const <ElderLocationPoint>[];
   }
 
+  static Future<List<HomeGeofenceConfig>> fetchHomeGeofence() async {
+    final res = await ApiClient.dio.get<Map<String, dynamic>>('/v1/elder/home-geofence');
+    final body = res.data;
+    if (body == null) throw Exception('空响应');
+    final api = ApiResponse.fromJson(
+      body,
+      (raw) {
+        if (raw is! List) return const <HomeGeofenceConfig>[];
+        return raw
+            .whereType<Map>()
+            .map((e) => HomeGeofenceConfig.fromJson(Map<String, dynamic>.from(e)))
+            .toList();
+      },
+    );
+    if (!api.isSuccess) throw Exception(api.displayMessage);
+    return api.data ?? const <HomeGeofenceConfig>[];
+  }
+
+  static Future<void> saveHomeGeofence({
+    required double latitude,
+    required double longitude,
+    int radius = 500,
+  }) async {
+    final res = await ApiClient.dio.put<Map<String, dynamic>>(
+      '/v1/elder/home-geofence',
+      data: {
+        'name': '家',
+        'centerLatitude': latitude,
+        'centerLongitude': longitude,
+        'radius': radius,
+        'enabled': true,
+      },
+    );
+    final body = res.data;
+    if (body == null) throw Exception('空响应');
+    final api = ApiResponse.fromJson(body, (raw) => raw);
+    if (!api.isSuccess) throw Exception(api.displayMessage);
+  }
+
   static ElderLocationPoint _pointFromJson(Map<String, dynamic> json) {
     final latitude = (json['latitude'] as num?)?.toDouble() ?? 0;
     final longitude = (json['longitude'] as num?)?.toDouble() ?? 0;
@@ -191,6 +230,34 @@ final class ElderLocationApi {
       source: source,
       locationType: locationType,
       uploaded: true,
+    );
+  }
+}
+
+class HomeGeofenceConfig {
+  const HomeGeofenceConfig({
+    required this.name,
+    required this.latitude,
+    required this.longitude,
+    required this.radius,
+    required this.enabled,
+  });
+
+  final String name;
+  final double latitude;
+  final double longitude;
+  final int radius;
+  final bool enabled;
+
+  factory HomeGeofenceConfig.fromJson(Map<String, dynamic> json) {
+    final lat = json['centerLatitude'];
+    final lng = json['centerLongitude'];
+    return HomeGeofenceConfig(
+      name: json['name'] as String? ?? '家',
+      latitude: lat is num ? lat.toDouble() : double.parse('$lat'),
+      longitude: lng is num ? lng.toDouble() : double.parse('$lng'),
+      radius: (json['radius'] as num?)?.toInt() ?? 500,
+      enabled: json['enabled'] == true || json['isEnabled'] == true,
     );
   }
 }

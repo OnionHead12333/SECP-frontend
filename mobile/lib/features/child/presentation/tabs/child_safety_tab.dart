@@ -310,7 +310,15 @@ class ChildSafetyTab extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 20),
-        const _SafetySectionTitle(title: '预警消息'),
+        const _SafetySectionTitle(title: '老人位置消息'),
+        const SizedBox(height: 4),
+        Text(
+          '记录出门与回家时间，最多保留 10 条',
+          style: Theme.of(context)
+              .textTheme
+              .bodySmall
+              ?.copyWith(color: scheme.onSurfaceVariant),
+        ),
         const SizedBox(height: 8),
         if (activityAlerts.isEmpty)
           Card(
@@ -319,12 +327,13 @@ class ChildSafetyTab extends StatelessWidget {
             child: const Padding(
               padding: EdgeInsets.symmetric(vertical: 28, horizontal: 16),
               child: Center(
-                child: Text('暂无预警消息'),
+                child: Text('暂无出门/回家记录'),
               ),
             ),
           )
         else
           ...activityAlerts.map((alert) {
+            final goOut = alert.isGoOut;
             return Card(
               margin: const EdgeInsets.only(bottom: 10),
               elevation: 0,
@@ -337,12 +346,15 @@ class ChildSafetyTab extends StatelessWidget {
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(Icons.notifications_active_outlined,
-                            color: scheme.error, size: 20),
+                        Icon(
+                          goOut ? Icons.exit_to_app_rounded : Icons.home_rounded,
+                          color: goOut ? scheme.error : const Color(0xFF15803D),
+                          size: 20,
+                        ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            alert.title,
+                            alert.displayTitle,
                             style: Theme.of(context)
                                 .textTheme
                                 .titleSmall
@@ -354,7 +366,7 @@ class ChildSafetyTab extends StatelessWidget {
                     if (alert.triggeredAt != null) ...[
                       const SizedBox(height: 6),
                       Text(
-                        _fmt(alert.triggeredAt!),
+                        '${goOut ? '出门' : '回家'}时间：${_fmt(alert.triggeredAt!)}',
                         style: Theme.of(context)
                             .textTheme
                             .bodySmall

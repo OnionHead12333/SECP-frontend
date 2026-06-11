@@ -6,6 +6,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/auth/auth_session.dart';
+import '../data/elder_location_api.dart';
 import '../data/elder_location_service.dart';
 import '../models/elder_location_point.dart';
 
@@ -133,6 +134,7 @@ class _ElderLocationStatusPageState extends State<ElderLocationStatusPage> {
       }
       await ElderLocationService.startAutoUpload(AuthSession.elderPhone ?? '');
       await _refreshTrack();
+      await _maybePromptSetHomeLocation();
       if (mounted) {
         _showMessage('已启动。若需退出后仍定位，请在本应用系统设置中把位置改为「始终允许」，并视机型允许后台运行/关闭电池优化。');
       }
@@ -171,6 +173,57 @@ class _ElderLocationStatusPageState extends State<ElderLocationStatusPage> {
         ],
       ),
     );
+  }
+
+  Future<void> _maybePromptSetHomeLocation() async {
+    try {
+      final homes = await ElderLocationApi.fetchHomeGeofence();
+      if (homes.any((h) => h.enabled)) return;
+
+      ElderLocationPoint? point = _state.latestPoint ?? (_track.isEmpty ? null : _track.first);
+      if (point == null) {
+        await ElderLocationService.captureTestPoint(AuthSession.elderPhone ?? '');
+        await _refreshTrack();
+        point = _state.latestPoint ?? (_track.isEmpty ? null : _track.first);
+      }
+      if (!mounted || point == null) return;
+      final selected = point;
+
+      final yes = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('将当前位置设为家？'),
+          content: Text(
+            '开启定位守护后，系统需要知道「家」在哪里，才能判断老人是否出门。\n\n'
+            '当前定位：\n纬度 ${selected.latitude.toStringAsFixed(5)}\n经度 ${selected.longitude.toStringAsFixed(5)}\n\n'
+            '子女端可在设置中调整「离家多远算出门」（默认 500 米）。',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('暂不设置'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('设为家'),
+            ),
+          ],
+        ),
+      );
+      if (yes != true || !mounted) return;
+
+      await ElderLocationApi.saveHomeGeofence(
+        latitude: selected.latitude,
+        longitude: selected.longitude,
+      );
+      if (mounted) {
+        _showMessage('已将当前位置设为家。');
+      }
+    } catch (e) {
+      if (mounted) {
+        _showMessage('设置家的位置失败：${e.toString().replaceFirst('Exception: ', '')}');
+      }
+    }
   }
 
   Future<void> _captureNow() async {
