@@ -10,7 +10,6 @@ STAGING_DIR=""
 #
 # 示例（连云服务器 release 包）：
 #   export API_BASE=http://120.46.62.182:8080/api
-#   export AMAP_ANDROID_KEY=你的高德AndroidKey
 #   export XFYUN_IAT_APP_ID=你的AppId
 #   export XFYUN_IAT_API_KEY=你的ApiKey
 #   export XFYUN_IAT_API_SECRET=你的ApiSecret
@@ -19,7 +18,6 @@ STAGING_DIR=""
 # 路径含中文时可启用临时目录编译：export FORCE_ASCII_BUILD=1
 
 API_BASE="${API_BASE:-http://192.168.x.x:8080/api}"
-AMAP_ANDROID_KEY="${AMAP_ANDROID_KEY:-}"
 XFYUN_IAT_APP_ID="${XFYUN_IAT_APP_ID:-}"
 XFYUN_IAT_API_KEY="${XFYUN_IAT_API_KEY:-}"
 XFYUN_IAT_API_SECRET="${XFYUN_IAT_API_SECRET:-}"
@@ -92,10 +90,6 @@ DART_DEFINES=(
   "--dart-define=API_BASE=${API_BASE}"
 )
 
-if [[ -n "${AMAP_ANDROID_KEY}" ]]; then
-  export AMAP_ANDROID_KEY
-  DART_DEFINES+=("--dart-define=AMAP_ANDROID_KEY=${AMAP_ANDROID_KEY}")
-fi
 if [[ -n "${XFYUN_IAT_APP_ID}" ]]; then
   DART_DEFINES+=("--dart-define=XFYUN_IAT_APP_ID=${XFYUN_IAT_APP_ID}")
 fi
