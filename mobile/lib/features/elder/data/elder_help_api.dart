@@ -5,12 +5,14 @@ import '../models/elder_help_request.dart';
 final class ElderHelpApi {
   ElderHelpApi._();
 
-  static Future<ElderHelpRequest> createHelpRequest() async {
+  static Future<ElderHelpRequest> createHelpRequest({
+    String triggerMode = 'button',
+  }) async {
     final res = await ApiClient.dio.post<Map<String, dynamic>>(
       '/v1/elder/emergency-alerts',
       data: {
         'alertType': 'sos',
-        'triggerMode': 'button',
+        'triggerMode': triggerMode,
       },
     );
     final body = res.data;
@@ -56,8 +58,10 @@ final class ElderHelpApi {
     return ElderHelpRequest.fromJson(api.data!);
   }
 
-  static Future<ElderHelpRequest> getHelpRequestStatus({required int alertId}) async {
-    final res = await ApiClient.dio.get<Map<String, dynamic>>('/v1/elder/emergency-alerts/$alertId');
+  static Future<ElderHelpRequest> getHelpRequestStatus(
+      {required int alertId}) async {
+    final res = await ApiClient.dio
+        .get<Map<String, dynamic>>('/v1/elder/emergency-alerts/$alertId');
     final body = res.data;
     if (body == null) throw Exception('空响应');
     final api = ApiResponse.fromJson(

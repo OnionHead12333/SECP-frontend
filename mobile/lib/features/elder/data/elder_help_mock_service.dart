@@ -6,7 +6,9 @@ final class ElderHelpMockService {
   static int _nextAlertId = 1000;
   static ElderHelpRequest? _current;
 
-  static Future<ElderHelpRequest> createHelpRequest() async {
+  static Future<ElderHelpRequest> createHelpRequest({
+    String triggerMode = 'button',
+  }) async {
     await Future<void>.delayed(const Duration(milliseconds: 220));
     if (_current != null && _current!.isPendingRevoke) {
       return _current!;
@@ -18,6 +20,7 @@ final class ElderHelpMockService {
       triggerTime: now,
       revokeDeadline: now.add(const Duration(seconds: 10)),
       serverTime: now,
+      cancelMode: triggerMode == 'voice' ? 'voice' : null,
     );
     return _current!;
   }
@@ -30,7 +33,8 @@ final class ElderHelpMockService {
     final current = _requireCurrent(alertId);
     final now = DateTime.now();
     if (!current.isPendingRevoke ||
-        (current.revokeDeadline != null && now.isAfter(current.revokeDeadline!))) {
+        (current.revokeDeadline != null &&
+            now.isAfter(current.revokeDeadline!))) {
       throw Exception('撤回时间已过');
     }
     _current = current.copyWith(
@@ -57,11 +61,14 @@ final class ElderHelpMockService {
     return _current!;
   }
 
-  static Future<ElderHelpRequest> getHelpRequestStatus({required int alertId}) async {
+  static Future<ElderHelpRequest> getHelpRequestStatus(
+      {required int alertId}) async {
     await Future<void>.delayed(const Duration(milliseconds: 120));
     final current = _requireCurrent(alertId);
     final now = DateTime.now();
-    if (current.isPendingRevoke && current.revokeDeadline != null && !now.isBefore(current.revokeDeadline!)) {
+    if (current.isPendingRevoke &&
+        current.revokeDeadline != null &&
+        !now.isBefore(current.revokeDeadline!)) {
       _current = current.copyWith(
         status: 'sent',
         sentTime: current.revokeDeadline,

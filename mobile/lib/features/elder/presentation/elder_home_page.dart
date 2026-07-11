@@ -18,7 +18,8 @@ class ElderHomePage extends StatefulWidget {
 }
 
 class _ElderHomePageState extends State<ElderHomePage> {
-  static const String _loginPermissionGuideShownKey = 'elder_login_permission_guide_shown_v1';
+  static const String _loginPermissionGuideShownKey =
+      'elder_login_permission_guide_shown_v1';
 
   int _index = 0;
 
@@ -47,8 +48,12 @@ class _ElderHomePageState extends State<ElderHomePage> {
           '安卓系统不允许软件刚下载完成就自动弹权限，必须在首次登录进入 App 后由用户确认。后台定位、电池优化等权限在部分手机上还需要到系统设置里手动开启。',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('稍后再说')),
-          FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('立即开启')),
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('稍后再说')),
+          FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('立即开启')),
         ],
       ),
     );
@@ -71,7 +76,8 @@ class _ElderHomePageState extends State<ElderHomePage> {
   }
 
   Future<void> _openElderProfile() async {
-    final r = await Navigator.of(context).pushNamed(ElderModuleRoutes.elderProfile);
+    final r =
+        await Navigator.of(context).pushNamed(ElderModuleRoutes.elderProfile);
     if (mounted && r == true) setState(() {});
   }
 
@@ -110,13 +116,18 @@ class _ElderHomePageState extends State<ElderHomePage> {
         birthText: birthText,
         claimed: claimed,
         familyCount: familyCount,
-        onBindingTap: () => Navigator.of(context).pushNamed(ElderModuleRoutes.elderBinding),
+        onBindingTap: () =>
+            Navigator.of(context).pushNamed(ElderModuleRoutes.elderBinding),
         onOpenReminders: () => setState(() => _index = 2),
-        onOpenAiAssistant: () => Navigator.of(context).pushNamed(ElderModuleRoutes.elderAiAssistant),
+        onOpenAiAssistant: () =>
+            Navigator.of(context).pushNamed(ElderModuleRoutes.elderAiAssistant),
+        onOpenVoiceControl: () => Navigator.of(context)
+            .pushNamed(ElderModuleRoutes.elderVoiceControl),
       ),
       const ElderCommunityTab(),
       ElderReminderCenterTab(
-        onOpenLocationPage: () => Navigator.of(context).pushNamed(ElderModuleRoutes.elderLocationStatus),
+        onOpenLocationPage: () => Navigator.of(context)
+            .pushNamed(ElderModuleRoutes.elderLocationStatus),
       ),
       _MyTab(
         name: name,
@@ -125,9 +136,12 @@ class _ElderHomePageState extends State<ElderHomePage> {
         birthText: birthText,
         claimed: claimed,
         onProfileEditTap: _openElderProfile,
-        onBindingTap: () => Navigator.of(context).pushNamed(ElderModuleRoutes.elderBinding),
-        onEmergencyContactsTap: () => Navigator.of(context).pushNamed(ElderModuleRoutes.elderEmergencyContacts),
-        onLocationTap: () => Navigator.of(context).pushNamed(ElderModuleRoutes.elderLocationStatus),
+        onBindingTap: () =>
+            Navigator.of(context).pushNamed(ElderModuleRoutes.elderBinding),
+        onEmergencyContactsTap: () => Navigator.of(context)
+            .pushNamed(ElderModuleRoutes.elderEmergencyContacts),
+        onLocationTap: () => Navigator.of(context)
+            .pushNamed(ElderModuleRoutes.elderLocationStatus),
         onLogout: () {
           AuthSession.clear();
           Navigator.of(context).pushNamedAndRemoveUntil('/login', (_) => false);
@@ -137,23 +151,38 @@ class _ElderHomePageState extends State<ElderHomePage> {
     const titles = ['', '社群', '提醒', '我的'];
     return Scaffold(
       backgroundColor: const Color(0xFFF7F8FC),
-      appBar: AppBar(title: Text(titles[_index]), backgroundColor: const Color(0xFFF7F8FC)),
+      appBar: AppBar(
+          title: Text(titles[_index]),
+          backgroundColor: const Color(0xFFF7F8FC)),
       body: IndexedStack(index: _index, children: pages),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
         onDestinationSelected: (v) => setState(() => _index = v),
         destinations: const [
-          NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: '首页'),
-          NavigationDestination(icon: Icon(Icons.groups_outlined), selectedIcon: Icon(Icons.groups), label: '社群'),
-          NavigationDestination(icon: Icon(Icons.notifications_none), selectedIcon: Icon(Icons.notifications), label: '提醒'),
-          NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: '我的'),
+          NavigationDestination(
+              icon: Icon(Icons.home_outlined),
+              selectedIcon: Icon(Icons.home),
+              label: '首页'),
+          NavigationDestination(
+              icon: Icon(Icons.groups_outlined),
+              selectedIcon: Icon(Icons.groups),
+              label: '社群'),
+          NavigationDestination(
+              icon: Icon(Icons.notifications_none),
+              selectedIcon: Icon(Icons.notifications),
+              label: '提醒'),
+          NavigationDestination(
+              icon: Icon(Icons.person_outline),
+              selectedIcon: Icon(Icons.person),
+              label: '我的'),
         ],
       ),
     );
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 }
 
@@ -168,6 +197,7 @@ class _HomeTab extends StatelessWidget {
     required this.onBindingTap,
     required this.onOpenReminders,
     required this.onOpenAiAssistant,
+    required this.onOpenVoiceControl,
   });
 
   final String name;
@@ -179,16 +209,19 @@ class _HomeTab extends StatelessWidget {
   final VoidCallback onBindingTap;
   final VoidCallback onOpenReminders;
   final VoidCallback onOpenAiAssistant;
+  final VoidCallback onOpenVoiceControl;
 
   @override
   Widget build(BuildContext context) {
     final statusText = claimed ? '已认领老人资料' : '未认领老人资料';
-    final statusColor = claimed ? const Color(0xFF166534) : const Color(0xFFB45309);
+    final statusColor =
+        claimed ? const Color(0xFF166534) : const Color(0xFFB45309);
     final familyText = familyCount > 0 ? '已绑定 $familyCount 位家属' : '暂未绑定家属';
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
       children: [
-        const Text('首页', style: TextStyle(fontSize: 32, fontWeight: FontWeight.w800)),
+        const Text('首页',
+            style: TextStyle(fontSize: 32, fontWeight: FontWeight.w800)),
         const SizedBox(height: 12),
         _ResponsiveHeroCard(
           name: name,
@@ -203,7 +236,8 @@ class _HomeTab extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('今日最重要', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+              const Text('今日最重要',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
               const SizedBox(height: 12),
               _SimpleRow(
                 icon: Icons.notifications_active_outlined,
@@ -217,6 +251,14 @@ class _HomeTab extends StatelessWidget {
                 title: 'AI 医疗助手',
                 value: '身体不舒服时先问一问，支持风险提示和家属同步',
                 onTap: onOpenAiAssistant,
+              ),
+              const Divider(height: 24),
+              _SimpleRow(
+                icon: Icons.mic_none_rounded,
+                key: const ValueKey('elder_voice_control_entry'),
+                title: '语音控制',
+                value: '把“停止、开始巡检、播放音乐、开始表演、呼叫帮助”识别成标准命令。',
+                onTap: onOpenVoiceControl,
               ),
               const Divider(height: 24),
               _SimpleRow(
@@ -264,15 +306,22 @@ class _ResponsiveHeroCard extends StatelessWidget {
         children: [
           Text(
             _greet(),
-            style: const TextStyle(fontSize: 16, color: Color(0xFF475569), fontWeight: FontWeight.w600),
+            style: const TextStyle(
+                fontSize: 16,
+                color: Color(0xFF475569),
+                fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 8),
           Text(
             '您好，$name',
-            style: TextStyle(fontSize: compact ? 24 : 28, fontWeight: FontWeight.w800, height: 1.15),
+            style: TextStyle(
+                fontSize: compact ? 24 : 28,
+                fontWeight: FontWeight.w800,
+                height: 1.15),
           ),
           const SizedBox(height: 10),
-          Text('手机号：$phone', style: const TextStyle(fontSize: 16, color: Color(0xFF334155))),
+          Text('手机号：$phone',
+              style: const TextStyle(fontSize: 16, color: Color(0xFF334155))),
           const SizedBox(height: 6),
           Text(
             '性别：$genderText  ·  生日：$birthText',
@@ -285,7 +334,9 @@ class _ResponsiveHeroCard extends StatelessWidget {
               color: Colors.white.withOpacity(0.88),
               borderRadius: BorderRadius.circular(999),
             ),
-            child: Text(statusText, style: TextStyle(color: statusColor, fontWeight: FontWeight.w700)),
+            child: Text(statusText,
+                style:
+                    TextStyle(color: statusColor, fontWeight: FontWeight.w700)),
           ),
         ],
       ),
@@ -299,7 +350,6 @@ class _ResponsiveHeroCard extends StatelessWidget {
     return '晚上好';
   }
 }
-
 
 class _MyTab extends StatelessWidget {
   const _MyTab({
@@ -342,9 +392,12 @@ class _MyTab extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 16),
-              Text(name, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
+              Text(name,
+                  style: const TextStyle(
+                      fontSize: 24, fontWeight: FontWeight.w800)),
               const SizedBox(height: 8),
-              Text('手机号：$phone', style: const TextStyle(color: Color(0xFF475569))),
+              Text('手机号：$phone',
+                  style: const TextStyle(color: Color(0xFF475569))),
               const SizedBox(height: 4),
               Text(
                 '性别：$genderText  ·  生日：$birthText',
@@ -359,13 +412,21 @@ class _MyTab extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 12),
-        _ItemCard(title: '个人信息', subtitle: '修改称呼、性别与出生日期', onTap: onProfileEditTap),
+        _ItemCard(
+            title: '个人信息', subtitle: '修改称呼、性别与出生日期', onTap: onProfileEditTap),
         const SizedBox(height: 10),
-        _ItemCard(title: '家属绑定状态', subtitle: '查看绑定详情与当前说明', onTap: onBindingTap),
+        _ItemCard(
+            title: '家属绑定状态', subtitle: '查看绑定详情与当前说明', onTap: onBindingTap),
         const SizedBox(height: 10),
-        _ItemCard(title: '紧急联系人', subtitle: '只支持新增联系人，已有信息统一维护', onTap: onEmergencyContactsTap),
+        _ItemCard(
+            title: '紧急联系人',
+            subtitle: '只支持新增联系人，已有信息统一维护',
+            onTap: onEmergencyContactsTap),
         const SizedBox(height: 10),
-        _ItemCard(title: '定位与轨迹上传', subtitle: '查看当前位置状态与上传演示轨迹', onTap: onLocationTap),
+        _ItemCard(
+            title: '定位与轨迹上传',
+            subtitle: '查看当前位置状态与上传演示轨迹',
+            onTap: onLocationTap),
         const SizedBox(height: 10),
         _ItemCard(title: '退出登录', subtitle: '退出当前老人账号，返回统一登录页', onTap: onLogout),
       ],
@@ -396,6 +457,7 @@ class _Panel extends StatelessWidget {
 
 class _SimpleRow extends StatelessWidget {
   const _SimpleRow({
+    super.key,
     required this.icon,
     required this.title,
     required this.value,
@@ -429,9 +491,13 @@ class _SimpleRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+                Text(title,
+                    style: const TextStyle(
+                        fontSize: 17, fontWeight: FontWeight.w800)),
                 const SizedBox(height: 4),
-                Text(value, style: const TextStyle(color: Color(0xFF475569), height: 1.45)),
+                Text(value,
+                    style: const TextStyle(
+                        color: Color(0xFF475569), height: 1.45)),
               ],
             ),
           ),
@@ -469,9 +535,13 @@ class _ItemCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                    Text(title,
+                        style: const TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.w800)),
                     const SizedBox(height: 8),
-                    Text(subtitle, style: const TextStyle(color: Color(0xFF475569), height: 1.5)),
+                    Text(subtitle,
+                        style: const TextStyle(
+                            color: Color(0xFF475569), height: 1.5)),
                   ],
                 ),
               ),

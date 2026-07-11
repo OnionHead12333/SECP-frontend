@@ -9,6 +9,7 @@ import 'presentation/elder_home_page.dart';
 import 'presentation/elder_location_status_page.dart';
 import 'presentation/elder_profile_edit_page.dart';
 import 'presentation/elder_register_page.dart';
+import 'presentation/elder_voice_control_page.dart';
 
 /// 老人端模块对外暴露的路由常量与路由表。
 final class ElderModuleRoutes {
@@ -22,6 +23,7 @@ final class ElderModuleRoutes {
   static const String elderProfile = '/elder/profile';
   static const String elderAiAssistant = '/elder/ai-assistant';
   static const String elderInterestCommunity = '/elder/interest-community';
+  static const String elderVoiceControl = '/elder/voice-control';
 
   static Map<String, WidgetBuilder> routes() {
     return {
@@ -32,8 +34,9 @@ final class ElderModuleRoutes {
       elderLocationStatus: (_) => const ElderLocationStatusPage(),
       elderProfile: (_) => const ElderProfileEditPage(),
       elderAiAssistant: (_) => const AiMedicalAssistantPage(),
-      elderInterestCommunity: (_) =>
-          const InterestCommunityListPage(audience: InterestCommunityAudience.elder),
+      elderInterestCommunity: (_) => const InterestCommunityListPage(
+          audience: InterestCommunityAudience.elder),
+      elderVoiceControl: (_) => const ElderVoiceControlPage(),
     };
   }
 }
