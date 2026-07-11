@@ -26,9 +26,13 @@ class AppConfig {
 
   static const String apiBase = String.fromEnvironment(
     'API_BASE',
-    // Local backend for hotspot testing:
-    // defaultValue: 'http://172.20.10.3:8080/api',
-    defaultValue: 'http://120.46.62.182:8080/api',
+    defaultValue: 'http://192.168.43.253:8080/api',
+  );
+
+  static const String inspectionApiBase = String.fromEnvironment(
+    'INSPECTION_API_BASE',
+    // Local backend for phone inspection testing.
+    defaultValue: 'http://192.168.43.253:8080/api',
   );
 
   static const String amapAndroidKey = String.fromEnvironment(
@@ -82,6 +86,11 @@ class AppConfig {
   /// 后端联调时再通过 dart-define 切到真实定位链路。
   static const bool useMockLocation = bool.fromEnvironment(
     'USE_MOCK_LOCATION',
+    defaultValue: false,
+  );
+
+  static const bool useMockInspection = bool.fromEnvironment(
+    'USE_MOCK_INSPECTION',
     defaultValue: false,
   );
 }

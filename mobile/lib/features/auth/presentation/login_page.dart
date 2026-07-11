@@ -163,6 +163,16 @@ class _LoginPageState extends State<LoginPage> {
                 ? const SizedBox(height: 22, width: 22, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                 : const Text('登录'),
           ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: _submitting
+                ? null
+                : () {
+                    Navigator.of(context).pushNamedAndRemoveUntil('/employee', (r) => false);
+                  },
+            icon: const Icon(Icons.badge_outlined),
+            label: const Text('员工端演示'),
+          ),
         ],
       ),
       footer: Wrap(
