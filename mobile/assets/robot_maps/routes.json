@@ -1,0 +1,7 @@
+[
+  {
+    "id": "route_1",
+    "name": "默认巡检路线",
+    "placeIds": ["patrol_A", "patrol_B", "elder_room", "home"]
+  }
+]

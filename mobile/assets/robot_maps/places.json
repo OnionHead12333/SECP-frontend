@@ -1,0 +1,47 @@
+[
+  {
+    "id": "home",
+    "name": "充电桩 / 返航点",
+    "pixelX": 80,
+    "pixelY": 320,
+    "mapX": -6.0,
+    "mapY": -6.8,
+    "yaw": 0.0
+  },
+  {
+    "id": "corridor_A",
+    "name": "一层东侧走廊",
+    "pixelX": 210,
+    "pixelY": 250,
+    "mapX": 0.5,
+    "mapY": -3.3,
+    "yaw": 0.0
+  },
+  {
+    "id": "elder_room",
+    "name": "老人房间",
+    "pixelX": 420,
+    "pixelY": 210,
+    "mapX": 11.0,
+    "mapY": -1.3,
+    "yaw": 0.0
+  },
+  {
+    "id": "patrol_A",
+    "name": "巡检点 A",
+    "pixelX": 160,
+    "pixelY": 160,
+    "mapX": -2.0,
+    "mapY": 1.2,
+    "yaw": 0.0
+  },
+  {
+    "id": "patrol_B",
+    "name": "巡检点 B",
+    "pixelX": 500,
+    "pixelY": 120,
+    "mapX": 15.0,
+    "mapY": 3.2,
+    "yaw": 0.0
+  }
+]
