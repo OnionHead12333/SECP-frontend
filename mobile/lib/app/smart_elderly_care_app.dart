@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
 import '../features/auth/presentation/login_page.dart';
+import '../features/child/presentation/pages/child_fall_alerts_page.dart';
 import '../features/child/presentation/child_main_page.dart';
 import '../features/elder/elder_module_routes.dart';
 import '../features/elder/presentation/elder_global_sos_overlay.dart';
@@ -10,7 +11,8 @@ import '../features/inspection/presentation/inspection_events_page.dart';
 import '../features/inspection/presentation/inspection_map_page.dart';
 
 final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
-final GlobalKey<ScaffoldMessengerState> appScaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
+final GlobalKey<ScaffoldMessengerState> appScaffoldMessengerKey =
+    GlobalKey<ScaffoldMessengerState>();
 
 /// 应用根组件：主题、路由入口。
 class SmartElderlyCareApp extends StatelessWidget {
@@ -46,6 +48,7 @@ class SmartElderlyCareApp extends StatelessWidget {
         '/login': (_) => const LoginPage(),
         ...ElderModuleRoutes.routes(),
         '/child': (_) => const ChildMainPage(),
+        '/child/fall-alerts': (_) => const ChildFallAlertsPage(),
         '/employee': (_) => const EmployeeHomePage(),
         '/inspection/map': (_) => const InspectionMapPage(),
         '/inspection/events': (_) => const InspectionEventsPage(),

@@ -31,7 +31,10 @@ class _LoginPageState extends State<LoginPage> {
     if (msg.contains('token') || msg.contains('role')) {
       return '登录失败，请稍后重试';
     }
-    if (msg.contains('密码') || msg.contains('账号') || msg.contains('用户名') || msg.contains('用户')) {
+    if (msg.contains('密码') ||
+        msg.contains('账号') ||
+        msg.contains('用户名') ||
+        msg.contains('用户')) {
       return '手机号或密码错误';
     }
     return '登录失败，请稍后重试';
@@ -73,16 +76,19 @@ class _LoginPageState extends State<LoginPage> {
       if (username == '123123' && password == '123123') {
         AuthSession.token = 'demo-child';
         AuthSession.role = AppRole.child;
+        AuthSession.childUserId = 1;
         if (!mounted) return;
         Navigator.of(context).pushNamedAndRemoveUntil('/child', (r) => false);
         return;
       }
 
-      final result = await AuthApi.login(username: username, password: password);
+      final result =
+          await AuthApi.login(username: username, password: password);
       AuthSession.token = result.token;
 
       if (result.role == 'child') {
         AuthSession.role = AppRole.child;
+        AuthSession.childUserId = result.userId;
         if (!mounted) return;
         Navigator.of(context).pushNamedAndRemoveUntil('/child', (r) => false);
         return;
@@ -98,7 +104,8 @@ class _LoginPageState extends State<LoginPage> {
       );
       AuthSession.elderId = result.userId;
       if (!mounted) return;
-      Navigator.of(context).pushNamedAndRemoveUntil(ElderModuleRoutes.elderHome, (r) => false);
+      Navigator.of(context)
+          .pushNamedAndRemoveUntil(ElderModuleRoutes.elderHome, (r) => false);
     } catch (e, st) {
       if (kDebugMode) {
         debugPrint('Login failed: $e');
@@ -144,23 +151,32 @@ class _LoginPageState extends State<LoginPage> {
               suffixIcon: IconButton(
                 tooltip: _obscure ? '显示密码' : '隐藏密码',
                 onPressed: () => setState(() => _obscure = !_obscure),
-                icon: Icon(_obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined),
+                icon: Icon(_obscure
+                    ? Icons.visibility_outlined
+                    : Icons.visibility_off_outlined),
               ),
             ),
           ),
           if (_error != null) ...[
             const SizedBox(height: 12),
-            Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 14)),
+            Text(_error!,
+                style: TextStyle(
+                    color: Theme.of(context).colorScheme.error, fontSize: 14)),
           ],
           const SizedBox(height: 20),
           FilledButton(
             onPressed: _submitting ? null : _submit,
             style: FilledButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
             ),
             child: _submitting
-                ? const SizedBox(height: 22, width: 22, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                ? const SizedBox(
+                    height: 22,
+                    width: 22,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white))
                 : const Text('登录'),
           ),
           const SizedBox(height: 8),
@@ -168,7 +184,8 @@ class _LoginPageState extends State<LoginPage> {
             onPressed: _submitting
                 ? null
                 : () {
-                    Navigator.of(context).pushNamedAndRemoveUntil('/employee', (r) => false);
+                    Navigator.of(context)
+                        .pushNamedAndRemoveUntil('/employee', (r) => false);
                   },
             icon: const Icon(Icons.badge_outlined),
             label: const Text('员工端演示'),
@@ -184,7 +201,8 @@ class _LoginPageState extends State<LoginPage> {
             onPressed: _submitting
                 ? null
                 : () {
-                    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const RegisterPage()));
+                    Navigator.of(context).push(MaterialPageRoute<void>(
+                        builder: (_) => const RegisterPage()));
                   },
             child: const Text('去注册'),
           ),

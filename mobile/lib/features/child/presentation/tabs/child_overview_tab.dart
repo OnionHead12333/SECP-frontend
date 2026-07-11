@@ -15,6 +15,7 @@ class ChildOverviewTab extends StatelessWidget {
     required this.activity,
     required this.helpRecords,
     required this.deviceStatuses,
+    this.onOpenFallAlerts,
   });
 
   final List<BoundElder> elders;
@@ -23,6 +24,7 @@ class ChildOverviewTab extends StatelessWidget {
   final ActivitySnapshot activity;
   final List<HelpRequestRecord> helpRecords;
   final List<DeviceStatusSnapshot> deviceStatuses;
+  final VoidCallback? onOpenFallAlerts;
 
   String _fmtTime(DateTime t) {
     final h = t.hour.toString().padLeft(2, '0');
@@ -102,6 +104,16 @@ class ChildOverviewTab extends StatelessWidget {
           heartbeatText: deviceStatuses.isEmpty
               ? '暂无'
               : _relative(deviceStatuses.first.lastHeartbeatAt),
+        ),
+        const SizedBox(height: 12),
+        Card(
+          child: ListTile(
+            leading: Icon(Icons.personal_injury_outlined, color: scheme.error),
+            title: const Text('跌倒告警'),
+            subtitle: const Text('查看老人跌倒识别与现场处理状态'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: onOpenFallAlerts,
+          ),
         ),
         const SizedBox(height: 12),
         Card(
