@@ -22,6 +22,8 @@ class InspectionMarker {
     this.time,
     this.navigationStatus,
     this.obstacleStatus,
+    this.description,
+    this.message,
     this.handler,
     this.remark,
     this.handleTime,
@@ -43,6 +45,8 @@ class InspectionMarker {
   final String? time;
   final String? navigationStatus;
   final String? obstacleStatus;
+  final String? description;
+  final String? message;
   final String? handler;
   final String? remark;
   final String? handleTime;
@@ -50,6 +54,11 @@ class InspectionMarker {
   bool get isEvent => type == 'fall' || type == 'crack' || type == 'obstacle';
 
   bool get canHandle => isEvent && status == InspectionMarkerStatus.unhandled;
+
+  String get displayMessage {
+    final text = description ?? message;
+    return text == null || text.trim().isEmpty ? '-' : text;
+  }
 
   InspectionMarker copyWith({
     InspectionMarkerStatus? status,
@@ -74,6 +83,8 @@ class InspectionMarker {
       time: time,
       navigationStatus: navigationStatus,
       obstacleStatus: obstacleStatus,
+      description: description,
+      message: message,
       handler: handler ?? this.handler,
       remark: remark ?? this.remark,
       handleTime: handleTime ?? this.handleTime,
@@ -84,7 +95,10 @@ class InspectionMarker {
     return InspectionMarker(
       id: (json['id'] as num).toInt(),
       type: '${json['type']}',
-      title: '${json['title']}',
+      title: _nullableString(json['title']) ??
+          _nullableString(json['description']) ??
+          _nullableString(json['message']) ??
+          '-',
       x: (json['x'] as num).toDouble(),
       y: (json['y'] as num).toDouble(),
       level: _nullableString(json['level']),
@@ -98,6 +112,8 @@ class InspectionMarker {
       time: _nullableString(json['time']),
       navigationStatus: _nullableString(json['navigationStatus']),
       obstacleStatus: _nullableString(json['obstacleStatus']),
+      description: _nullableString(json['description']),
+      message: _nullableString(json['message']),
       handler: _nullableString(json['handler']),
       remark: _nullableString(json['remark']),
       handleTime: _nullableString(json['handleTime']),
@@ -122,6 +138,8 @@ class InspectionMarker {
       'time': time,
       'navigationStatus': navigationStatus,
       'obstacleStatus': obstacleStatus,
+      'description': description,
+      'message': message,
       'handler': handler,
       'remark': remark,
       'handleTime': handleTime,
@@ -163,20 +181,96 @@ class InspectionMapInfo {
     required this.title,
     required this.width,
     required this.height,
+    this.imageAsset,
     this.imageUrl,
   });
 
   final String title;
   final double width;
   final double height;
+  final String? imageAsset;
   final String? imageUrl;
 
   factory InspectionMapInfo.fromJson(Map<String, dynamic> json) {
+    final mapImage = json['mapImage'] as String?;
     return InspectionMapInfo(
-      title: json['title'] as String? ?? '养老院一层地图',
-      width: (json['width'] as num?)?.toDouble() ?? 800,
-      height: (json['height'] as num?)?.toDouble() ?? 600,
-      imageUrl: json['imageUrl'] as String?,
+      title: json['title'] as String? ??
+          json['mapName'] as String? ??
+          'Inspection Map',
+      width: (json['width'] as num?)?.toDouble() ?? 608,
+      height: (json['height'] as num?)?.toDouble() ?? 384,
+      imageAsset: json['imageAsset'] as String? ?? _assetFromMapImage(mapImage),
+      imageUrl: json['imageUrl'] as String? ?? mapImage,
     );
+  }
+
+  static String? _assetFromMapImage(String? mapImage) {
+    if (mapImage == null || mapImage.trim().isEmpty) return null;
+    if (mapImage.startsWith('assets/')) return mapImage;
+    final fileName = mapImage.split('/').where((part) => part.isNotEmpty).last;
+    return fileName.isEmpty ? null : 'assets/robot_maps/$fileName';
+  }
+}
+
+class InspectionNavigationStatus {
+  const InspectionNavigationStatus({
+    this.navigationStatus,
+    this.obstacleStatus,
+    this.robotX,
+    this.robotY,
+    this.targetX,
+    this.targetY,
+    this.targetName,
+    this.message,
+    this.description,
+  });
+
+  final String? navigationStatus;
+  final String? obstacleStatus;
+  final double? robotX;
+  final double? robotY;
+  final double? targetX;
+  final double? targetY;
+  final String? targetName;
+  final String? message;
+  final String? description;
+
+  String get displayMessage {
+    final text = description ?? message;
+    return text == null || text.trim().isEmpty ? '-' : text;
+  }
+
+  factory InspectionNavigationStatus.fromJson(Map<String, dynamic> json) {
+    return InspectionNavigationStatus(
+      navigationStatus: _nullableString(
+        json['navigationStatus'] ?? json['status'],
+      ),
+      obstacleStatus: _nullableString(json['obstacleStatus']),
+      robotX: _nullableDouble(
+        json['robotX'] ?? json['currentX'] ?? json['x'],
+      ),
+      robotY: _nullableDouble(
+        json['robotY'] ?? json['currentY'] ?? json['y'],
+      ),
+      targetX: _nullableDouble(json['targetX']),
+      targetY: _nullableDouble(json['targetY']),
+      targetName: _nullableString(
+        json['targetName'] ?? json['currentTargetName'],
+      ),
+      message: _nullableString(json['message']),
+      description: _nullableString(json['description']),
+    );
+  }
+
+  static double? _nullableDouble(Object? value) {
+    if (value == null) return null;
+    if (value is num) return value.toDouble();
+    return double.tryParse('$value');
+  }
+
+  static String? _nullableString(Object? value) {
+    if (value == null) return null;
+    final text = '$value'.trim();
+    return text.isEmpty ? null : text;
   }
 }

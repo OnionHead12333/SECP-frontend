@@ -14,10 +14,12 @@ class InspectionMarkerDetailSheet extends StatefulWidget {
   final ValueChanged<InspectionMarker> onHandled;
 
   @override
-  State<InspectionMarkerDetailSheet> createState() => _InspectionMarkerDetailSheetState();
+  State<InspectionMarkerDetailSheet> createState() =>
+      _InspectionMarkerDetailSheetState();
 }
 
-class _InspectionMarkerDetailSheetState extends State<InspectionMarkerDetailSheet> {
+class _InspectionMarkerDetailSheetState
+    extends State<InspectionMarkerDetailSheet> {
   late InspectionMarker _marker;
   bool _handling = false;
 
@@ -75,11 +77,17 @@ class _InspectionMarkerDetailSheetState extends State<InspectionMarkerDetailShee
                 ),
                 const SizedBox(height: 12),
                 ..._detailRows(),
+                if (_marker.displayMessage != '-') ...[
+                  const SizedBox(height: 6),
+                  _InfoRow(label: '描述', value: _marker.displayMessage),
+                ],
                 if (_marker.imageUrl != null) ...[
                   const SizedBox(height: 12),
                   _ImagePreview(imageUrl: _marker.imageUrl!),
                 ],
-                if (_marker.handler != null || _marker.remark != null || _marker.handleTime != null) ...[
+                if (_marker.handler != null ||
+                    _marker.remark != null ||
+                    _marker.handleTime != null) ...[
                   const SizedBox(height: 12),
                   _InfoRow(label: '处理人', value: _marker.handler ?? '-'),
                   _InfoRow(label: '处理备注', value: _marker.remark ?? '-'),
@@ -113,12 +121,19 @@ class _InspectionMarkerDetailSheetState extends State<InspectionMarkerDetailShee
         return [
           const _InfoRow(label: '事件类型', value: '跌倒'),
           _InfoRow(label: '摔倒人员', value: _marker.elderName ?? '-'),
-          _InfoRow(label: '身份来源', value: _identitySourceText(_marker.identitySource)),
-          _InfoRow(label: '置信度', value: _confidenceText(_marker.identityConfidence)),
-          _InfoRow(label: '是否通知子女', value: _marker.notifiedChild == true ? '已通知' : '未通知'),
+          _InfoRow(
+              label: '身份来源',
+              value: _identitySourceText(_marker.identitySource)),
+          _InfoRow(
+              label: '置信度', value: _confidenceText(_marker.identityConfidence)),
+          _InfoRow(
+              label: '是否通知子女',
+              value: _marker.notifiedChild == true ? '已通知' : '未通知'),
           _InfoRow(label: '位置', value: _marker.locationName ?? '-'),
           _InfoRow(label: '时间', value: _marker.time ?? '-'),
-          _InfoRow(label: '状态', value: InspectionMarker.statusToJson(_marker.status)),
+          _InfoRow(
+              label: '状态',
+              value: InspectionMarker.statusToJson(_marker.status)),
         ];
       case 'crack':
         return [
@@ -126,7 +141,9 @@ class _InspectionMarkerDetailSheetState extends State<InspectionMarkerDetailShee
           _InfoRow(label: '位置', value: _marker.locationName ?? '-'),
           _InfoRow(label: '风险等级', value: _marker.level ?? '-'),
           _InfoRow(label: '时间', value: _marker.time ?? '-'),
-          _InfoRow(label: '状态', value: InspectionMarker.statusToJson(_marker.status)),
+          _InfoRow(
+              label: '状态',
+              value: InspectionMarker.statusToJson(_marker.status)),
         ];
       case 'robot':
         return [
@@ -139,19 +156,25 @@ class _InspectionMarkerDetailSheetState extends State<InspectionMarkerDetailShee
         return [
           const _InfoRow(label: '事件类型', value: '导航目标点'),
           _InfoRow(label: '位置', value: _marker.locationName ?? '-'),
-          _InfoRow(label: '状态', value: InspectionMarker.statusToJson(_marker.status)),
+          _InfoRow(
+              label: '状态',
+              value: InspectionMarker.statusToJson(_marker.status)),
         ];
       case 'obstacle':
         return [
           const _InfoRow(label: '事件类型', value: '障碍物'),
           _InfoRow(label: '位置', value: _marker.locationName ?? '-'),
           _InfoRow(label: '风险等级', value: _marker.level ?? '-'),
-          _InfoRow(label: '状态', value: InspectionMarker.statusToJson(_marker.status)),
+          _InfoRow(
+              label: '状态',
+              value: InspectionMarker.statusToJson(_marker.status)),
         ];
       default:
         return [
           _InfoRow(label: '事件类型', value: _marker.type),
-          _InfoRow(label: '状态', value: InspectionMarker.statusToJson(_marker.status)),
+          _InfoRow(
+              label: '状态',
+              value: InspectionMarker.statusToJson(_marker.status)),
         ];
     }
   }
@@ -195,7 +218,8 @@ class _InfoRow extends StatelessWidget {
             width: 104,
             child: Text(
               label,
-              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+              style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant),
             ),
           ),
           Expanded(

@@ -1,3 +1,7 @@
+import 'dart:convert';
+
+import 'package:flutter/services.dart';
+
 import '../../../core/config/app_config.dart';
 import '../../../core/network/api_client.dart';
 import '../models/inspection_marker.dart';
@@ -8,42 +12,70 @@ final class InspectionService {
   static List<InspectionMarker> _mockMarkers = _initialMockMarkers();
   static bool? _useMockOverrideForTest;
 
-  static bool get useMock => _useMockOverrideForTest ?? AppConfig.useMockInspection;
+  static bool get useMock =>
+      _useMockOverrideForTest ?? AppConfig.useMockInspection;
 
   static Future<InspectionMapInfo> getMapInfo() async {
-    if (useMock) return _mockMapInfo;
-    try {
+    if (!useMock) {
       final response = await ApiClient.dio.get<Object?>(
         _inspectionUrl('/inspection/map'),
       );
       final data = _responsePayload(response.data);
+      if (data is! Map) {
+        throw StateError('Invalid inspection map response');
+      }
+      return InspectionMapInfo.fromJson(Map<String, dynamic>.from(data));
+    }
+
+    try {
+      final text =
+          await rootBundle.loadString('assets/robot_maps/map_info.json');
+      final json = jsonDecode(text) as Map;
+      return InspectionMapInfo.fromJson(Map<String, dynamic>.from(json));
+    } catch (_) {
+      return _assetMapInfoFallback;
+    }
+  }
+
+  static Future<InspectionNavigationStatus?> getNavigationStatus() async {
+    if (useMock) return _mockNavigationStatus();
+
+    try {
+      final response = await ApiClient.dio.get<Object?>(
+        _inspectionUrl('/navigation/status'),
+      );
+      final data = _responsePayload(response.data);
       if (data is Map) {
-        return InspectionMapInfo.fromJson(Map<String, dynamic>.from(data));
+        return InspectionNavigationStatus.fromJson(
+          Map<String, dynamic>.from(data),
+        );
       }
     } catch (_) {
-      return _mockMapInfo;
+      return null;
     }
-    return _mockMapInfo;
+    return null;
   }
 
   static Future<List<InspectionMarker>> getMarkers() async {
     if (useMock) return List<InspectionMarker>.unmodifiable(_mockMarkers);
-    try {
-      final response = await ApiClient.dio.get<Object?>(
-        _inspectionUrl('/inspection/markers'),
-      );
-      final raw = _responsePayload(response.data);
-      final list = raw is List ? raw : raw is Map ? raw['list'] : null;
-      if (list is List) {
-        return list
-            .whereType<Map>()
-            .map((item) => InspectionMarker.fromJson(Map<String, dynamic>.from(item)))
-            .toList(growable: false);
-      }
-    } catch (_) {
-      return List<InspectionMarker>.unmodifiable(_mockMarkers);
+
+    final response = await ApiClient.dio.get<Object?>(
+      _inspectionUrl('/inspection/markers'),
+    );
+    final raw = _responsePayload(response.data);
+    final list = raw is List
+        ? raw
+        : raw is Map
+            ? raw['list']
+            : null;
+    if (list is! List) {
+      throw StateError('Invalid inspection markers response');
     }
-    return List<InspectionMarker>.unmodifiable(_mockMarkers);
+    return list
+        .whereType<Map>()
+        .map((item) =>
+            InspectionMarker.fromJson(Map<String, dynamic>.from(item)))
+        .toList(growable: false);
   }
 
   static Future<List<InspectionMarker>> getEventMarkers() async {
@@ -53,18 +85,15 @@ final class InspectionService {
 
   static Future<InspectionMarker> getMarkerDetail(int id) async {
     if (useMock) return _mockMarkerById(id);
-    try {
-      final response = await ApiClient.dio.get<Object?>(
-        _inspectionUrl('/inspection/markers/$id'),
-      );
-      final data = _responsePayload(response.data);
-      if (data is Map) {
-        return InspectionMarker.fromJson(Map<String, dynamic>.from(data));
-      }
-    } catch (_) {
-      return _mockMarkerById(id);
+
+    final response = await ApiClient.dio.get<Object?>(
+      _inspectionUrl('/inspection/markers/$id'),
+    );
+    final data = _responsePayload(response.data);
+    if (data is! Map) {
+      throw StateError('Invalid inspection marker detail response: $id');
     }
-    return _mockMarkerById(id);
+    return InspectionMarker.fromJson(Map<String, dynamic>.from(data));
   }
 
   static Future<InspectionMarker> handleMarker(
@@ -72,22 +101,17 @@ final class InspectionService {
     String handler,
     String remark,
   ) async {
-    if (!useMock) {
-      try {
-        final response = await ApiClient.dio.put<Object?>(
-          _inspectionUrl('/inspection/markers/$id/handle'),
-          data: {'handler': handler, 'remark': remark},
-        );
-        final data = _responsePayload(response.data);
-        if (data is Map && data.containsKey('id')) {
-          return InspectionMarker.fromJson(Map<String, dynamic>.from(data));
-        }
-        return getMarkerDetail(id);
-      } catch (_) {
-        // Fall through to local mock so the employee flow remains demonstrable.
-      }
+    if (useMock) return _handleMockMarker(id, handler, remark);
+
+    final response = await ApiClient.dio.put<Object?>(
+      _inspectionUrl('/inspection/markers/$id/handle'),
+      data: {'handler': handler, 'remark': remark},
+    );
+    final data = _responsePayload(response.data);
+    if (data is Map && data.containsKey('id')) {
+      return InspectionMarker.fromJson(Map<String, dynamic>.from(data));
     }
-    return _handleMockMarker(id, handler, remark);
+    return getMarkerDetail(id);
   }
 
   static void resetMockDataForTest() {
@@ -119,7 +143,11 @@ final class InspectionService {
     );
   }
 
-  static InspectionMarker _handleMockMarker(int id, String handler, String remark) {
+  static InspectionMarker _handleMockMarker(
+    int id,
+    String handler,
+    String remark,
+  ) {
     final index = _mockMarkers.indexWhere((marker) => marker.id == id);
     if (index < 0) {
       throw StateError('Inspection marker $id not found');
@@ -141,11 +169,24 @@ final class InspectionService {
     return '${now.year}-${two(now.month)}-${two(now.day)} ${two(now.hour)}:${two(now.minute)}';
   }
 
-  static const InspectionMapInfo _mockMapInfo = InspectionMapInfo(
-    title: '养老院一层地图',
-    width: 800,
-    height: 600,
+  static const InspectionMapInfo _assetMapInfoFallback = InspectionMapInfo(
+    title: 'yahboomcar',
+    width: 608,
+    height: 384,
+    imageAsset: 'assets/robot_maps/yahboomcar.png',
   );
+
+  static InspectionNavigationStatus _mockNavigationStatus() {
+    return const InspectionNavigationStatus(
+      navigationStatus: 'running',
+      obstacleStatus: 'safe',
+      robotX: 260,
+      robotY: 300,
+      targetX: 520,
+      targetY: 300,
+      targetName: '老人房间A',
+    );
+  }
 
   static List<InspectionMarker> _initialMockMarkers() {
     return [

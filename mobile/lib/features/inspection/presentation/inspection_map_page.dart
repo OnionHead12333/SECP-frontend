@@ -25,7 +25,12 @@ class _InspectionMapPageState extends State<InspectionMapPage> {
   Future<_MapState> _load() async {
     final mapInfo = await InspectionService.getMapInfo();
     final markers = await InspectionService.getMarkers();
-    return _MapState(mapInfo: mapInfo, markers: markers);
+    final navigationStatus = await InspectionService.getNavigationStatus();
+    return _MapState(
+      mapInfo: mapInfo,
+      markers: markers,
+      navigationStatus: navigationStatus,
+    );
   }
 
   void _replaceMarker(InspectionMarker marker) {
@@ -65,6 +70,17 @@ class _InspectionMapPageState extends State<InspectionMapPage> {
           if (snapshot.connectionState != ConnectionState.done) {
             return const Center(child: CircularProgressIndicator());
           }
+          if (snapshot.hasError) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text(
+                  '巡检地图加载失败：${snapshot.error}',
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            );
+          }
           final state = snapshot.data;
           if (state == null) {
             return const Center(child: Text('暂无巡检地图数据'));
@@ -72,13 +88,19 @@ class _InspectionMapPageState extends State<InspectionMapPage> {
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              Text(state.mapInfo.title, style: Theme.of(context).textTheme.titleMedium),
+              Text(state.mapInfo.title,
+                  style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 12),
               _MapCanvas(
                 mapInfo: state.mapInfo,
                 markers: state.markers,
+                navigationStatus: state.navigationStatus,
                 onTapMarker: _showDetail,
               ),
+              if (state.navigationStatus != null) ...[
+                const SizedBox(height: 12),
+                _NavigationStatusPanel(status: state.navigationStatus!),
+              ],
               const SizedBox(height: 12),
               const Wrap(
                 spacing: 12,
@@ -104,11 +126,13 @@ class _MapCanvas extends StatelessWidget {
   const _MapCanvas({
     required this.mapInfo,
     required this.markers,
+    required this.navigationStatus,
     required this.onTapMarker,
   });
 
   final InspectionMapInfo mapInfo;
   final List<InspectionMarker> markers;
+  final InspectionNavigationStatus? navigationStatus;
   final ValueChanged<InspectionMarker> onTapMarker;
 
   @override
@@ -128,34 +152,42 @@ class _MapCanvas extends StatelessWidget {
             child: DecoratedBox(
               decoration: BoxDecoration(
                 color: const Color(0xFFF3F4F6),
-                border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+                border: Border.all(
+                    color: Theme.of(context).colorScheme.outlineVariant),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(8),
                 child: Stack(
                   children: [
-                    const Positioned.fill(child: CustomPaint(painter: _GridPainter())),
-                    for (final marker in markers)
+                    Positioned.fill(child: _MapBackground(mapInfo: mapInfo)),
+                    for (final marker in _markersForDisplay())
                       Positioned(
                         left: marker.x * scale - 14,
                         top: marker.y * scale - 14,
                         child: Opacity(
                           key: ValueKey('marker-opacity-${marker.id}'),
-                          opacity: marker.status == InspectionMarkerStatus.handled ? 0.42 : 1,
+                          opacity:
+                              marker.status == InspectionMarkerStatus.handled
+                                  ? 0.42
+                                  : 1,
                           child: Tooltip(
                             message: marker.title,
                             child: InkWell(
-                              key: ValueKey('marker-${marker.type}-${marker.id}'),
+                              key: ValueKey(
+                                  'marker-${marker.type}-${marker.id}'),
                               borderRadius: BorderRadius.circular(18),
-                              onTap: () => onTapMarker(marker),
+                              onTap: marker.id < 0
+                                  ? null
+                                  : () => onTapMarker(marker),
                               child: Container(
                                 width: 28,
                                 height: 28,
                                 decoration: BoxDecoration(
                                   color: _markerColor(marker),
                                   shape: BoxShape.circle,
-                                  border: Border.all(color: Colors.white, width: 2),
+                                  border:
+                                      Border.all(color: Colors.white, width: 2),
                                   boxShadow: const [
                                     BoxShadow(
                                       blurRadius: 6,
@@ -182,6 +214,47 @@ class _MapCanvas extends StatelessWidget {
         );
       },
     );
+  }
+
+  List<InspectionMarker> _markersForDisplay() {
+    final status = navigationStatus;
+    if (status == null) return markers;
+
+    final result = [...markers];
+    final hasRobot = result.any((marker) => marker.type == 'robot');
+    if (!hasRobot && status.robotX != null && status.robotY != null) {
+      result.add(
+        InspectionMarker(
+          id: -100,
+          type: 'robot',
+          title: '小车当前位置',
+          x: status.robotX!,
+          y: status.robotY!,
+          level: 'info',
+          status: InspectionMarkerStatus.active,
+          navigationStatus: status.navigationStatus,
+          obstacleStatus: status.obstacleStatus,
+        ),
+      );
+    }
+
+    final hasTarget = result.any((marker) => marker.type == 'target');
+    if (!hasTarget && status.targetX != null && status.targetY != null) {
+      result.add(
+        InspectionMarker(
+          id: -101,
+          type: 'target',
+          title:
+              status.targetName == null ? '导航目标点' : '导航目标：${status.targetName}',
+          x: status.targetX!,
+          y: status.targetY!,
+          level: 'info',
+          status: InspectionMarkerStatus.active,
+          locationName: status.targetName,
+        ),
+      );
+    }
+    return result;
   }
 
   static Color _markerColor(InspectionMarker marker) {
@@ -217,6 +290,25 @@ class _MapCanvas extends StatelessWidget {
       default:
         return Icons.place_outlined;
     }
+  }
+}
+
+class _MapBackground extends StatelessWidget {
+  const _MapBackground({required this.mapInfo});
+
+  final InspectionMapInfo mapInfo;
+
+  @override
+  Widget build(BuildContext context) {
+    final asset = mapInfo.imageAsset;
+    if (asset == null || asset.isEmpty) {
+      return const CustomPaint(painter: _GridPainter());
+    }
+    return Image.asset(
+      asset,
+      fit: BoxFit.fill,
+      errorBuilder: (_, __, ___) => const CustomPaint(painter: _GridPainter()),
+    );
   }
 }
 
@@ -267,12 +359,70 @@ class _LegendDot extends StatelessWidget {
   }
 }
 
+class _NavigationStatusPanel extends StatelessWidget {
+  const _NavigationStatusPanel({required this.status});
+
+  final InspectionNavigationStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      child: Wrap(
+        spacing: 16,
+        runSpacing: 8,
+        children: [
+          _StatusText(label: '导航状态', value: status.navigationStatus ?? '-'),
+          _StatusText(label: '避障状态', value: status.obstacleStatus ?? '-'),
+          if (status.robotX != null && status.robotY != null)
+            _StatusText(
+              label: '小车当前位置',
+              value:
+                  '${status.robotX!.toStringAsFixed(0)}, ${status.robotY!.toStringAsFixed(0)}',
+            ),
+          if (status.targetX != null && status.targetY != null)
+            _StatusText(
+              label: status.targetName ?? '目标点',
+              value:
+                  '${status.targetX!.toStringAsFixed(0)}, ${status.targetY!.toStringAsFixed(0)}',
+            ),
+          if (status.displayMessage != '-')
+            _StatusText(label: '说明', value: status.displayMessage),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatusText extends StatelessWidget {
+  const _StatusText({
+    required this.label,
+    required this.value,
+  });
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text('$label：$value');
+  }
+}
+
 class _MapState {
   const _MapState({
     required this.mapInfo,
     required this.markers,
+    required this.navigationStatus,
   });
 
   final InspectionMapInfo mapInfo;
   final List<InspectionMarker> markers;
+  final InspectionNavigationStatus? navigationStatus;
 }
