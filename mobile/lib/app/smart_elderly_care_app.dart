@@ -6,6 +6,7 @@ import '../features/child/presentation/pages/child_fall_alerts_page.dart';
 import '../features/child/presentation/child_main_page.dart';
 import '../features/elder/elder_module_routes.dart';
 import '../features/elder/presentation/elder_global_sos_overlay.dart';
+import '../features/entertainment/presentation/entertainment_page.dart';
 import '../features/inspection/presentation/employee_home_page.dart';
 import '../features/inspection/presentation/inspection_events_page.dart';
 import '../features/inspection/presentation/inspection_map_page.dart';
@@ -50,6 +51,7 @@ class SmartElderlyCareApp extends StatelessWidget {
         '/child': (_) => const ChildMainPage(),
         '/child/fall-alerts': (_) => const ChildFallAlertsPage(),
         '/employee': (_) => const EmployeeHomePage(),
+        '/employee/entertainment': (_) => const EntertainmentPage(),
         '/inspection/map': (_) => const InspectionMapPage(),
         '/inspection/events': (_) => const InspectionEventsPage(),
       },

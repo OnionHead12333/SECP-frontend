@@ -6,11 +6,13 @@ import 'elder_help_mock_service.dart';
 final class ElderHelpService {
   ElderHelpService._();
 
-  static Future<ElderHelpRequest> createHelpRequest() {
+  static Future<ElderHelpRequest> createHelpRequest({
+    String triggerMode = 'button',
+  }) {
     if (AppConfig.useMockSos) {
       return ElderHelpMockService.createHelpRequest();
     }
-    return ElderHelpApi.createHelpRequest();
+    return ElderHelpApi.createHelpRequest(triggerMode: triggerMode);
   }
 
   static Future<ElderHelpRequest> revokeHelpRequest({

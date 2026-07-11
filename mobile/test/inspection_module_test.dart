@@ -124,7 +124,10 @@ void main() {
     testWidgets('employee home exposes map and event entries', (tester) async {
       await _pump(tester, const EmployeeHomePage());
 
-      expect(find.byType(ListTile), findsNWidgets(2));
+      expect(find.byType(ListTile), findsNWidgets(3));
+      expect(find.text('巡检地图'), findsOneWidget);
+      expect(find.text('异常事件'), findsOneWidget);
+      expect(find.text('娱乐'), findsOneWidget);
     });
 
     testWidgets('event list only shows fall crack and obstacle',

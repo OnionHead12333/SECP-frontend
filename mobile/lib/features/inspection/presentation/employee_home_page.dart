@@ -23,6 +23,13 @@ class EmployeeHomePage extends StatelessWidget {
             icon: Icons.assignment_late_outlined,
             onTap: () => Navigator.of(context).pushNamed('/inspection/events'),
           ),
+          const SizedBox(height: 12),
+          _EntryTile(
+            title: '娱乐',
+            subtitle: '发送音乐播放与跳舞演示命令，查看最近任务状态',
+            icon: Icons.music_note_outlined,
+            onTap: () => Navigator.of(context).pushNamed('/employee/entertainment'),
+          ),
         ],
       ),
     );
