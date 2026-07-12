@@ -66,6 +66,24 @@ class ChildSafetyTab extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
       children: [
+        Card(
+          elevation: 0,
+          color: scheme.surfaceContainerLow,
+          child: ListTile(
+            leading: CircleAvatar(
+              backgroundColor: scheme.primaryContainer,
+              child: Icon(
+                Icons.directions_car_outlined,
+                color: scheme.onPrimaryContainer,
+              ),
+            ),
+            title: const Text('远程控车'),
+            subtitle: const Text('ROS2网关 / TCP直连控制小车'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).pushNamed('/child/remote-car'),
+          ),
+        ),
+        const SizedBox(height: 14),
         _SafetySectionTitle(
           title: '老人位置',
           trailing: IconButton.filledTonal(
@@ -347,7 +365,9 @@ class ChildSafetyTab extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Icon(
-                          goOut ? Icons.exit_to_app_rounded : Icons.home_rounded,
+                          goOut
+                              ? Icons.exit_to_app_rounded
+                              : Icons.home_rounded,
                           color: goOut ? scheme.error : const Color(0xFF15803D),
                           size: 20,
                         ),

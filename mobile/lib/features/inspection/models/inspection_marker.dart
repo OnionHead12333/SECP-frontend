@@ -214,6 +214,7 @@ class InspectionMapInfo {
 
 class InspectionNavigationStatus {
   const InspectionNavigationStatus({
+    this.taskId,
     this.navigationStatus,
     this.obstacleStatus,
     this.robotX,
@@ -225,6 +226,7 @@ class InspectionNavigationStatus {
     this.description,
   });
 
+  final int? taskId;
   final String? navigationStatus;
   final String? obstacleStatus;
   final double? robotX;
@@ -242,6 +244,8 @@ class InspectionNavigationStatus {
 
   factory InspectionNavigationStatus.fromJson(Map<String, dynamic> json) {
     return InspectionNavigationStatus(
+      taskId: _nullableInt(
+          json['taskId'] ?? json['navigationTaskId'] ?? json['id']),
       navigationStatus: _nullableString(
         json['navigationStatus'] ?? json['status'],
       ),
@@ -260,6 +264,59 @@ class InspectionNavigationStatus {
       message: _nullableString(json['message']),
       description: _nullableString(json['description']),
     );
+  }
+
+  static int? _nullableInt(Object? value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse('$value');
+  }
+
+  static double? _nullableDouble(Object? value) {
+    if (value == null) return null;
+    if (value is num) return value.toDouble();
+    return double.tryParse('$value');
+  }
+
+  static String? _nullableString(Object? value) {
+    if (value == null) return null;
+    final text = '$value'.trim();
+    return text.isEmpty ? null : text;
+  }
+}
+
+class InspectionNavigationTask {
+  const InspectionNavigationTask({
+    required this.id,
+    required this.status,
+    required this.targetName,
+    required this.targetX,
+    required this.targetY,
+  });
+
+  final int id;
+  final String status;
+  final String targetName;
+  final double targetX;
+  final double targetY;
+
+  factory InspectionNavigationTask.fromJson(Map<String, dynamic> json) {
+    return InspectionNavigationTask(
+      id: _nullableInt(json['id'] ?? json['taskId']) ?? 0,
+      status:
+          _nullableString(json['status'] ?? json['navigationStatus']) ?? '-',
+      targetName: _nullableString(json['targetName']) ?? '导航目标',
+      targetX: _nullableDouble(json['targetX']) ?? 0,
+      targetY: _nullableDouble(json['targetY']) ?? 0,
+    );
+  }
+
+  static int? _nullableInt(Object? value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse('$value');
   }
 
   static double? _nullableDouble(Object? value) {

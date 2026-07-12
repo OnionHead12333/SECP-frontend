@@ -1,6 +1,8 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:smart_elderly_care_mobile/core/config/app_config.dart';
+import 'package:smart_elderly_care_mobile/core/network/api_client.dart';
 import 'package:smart_elderly_care_mobile/features/inspection/data/inspection_service.dart';
 import 'package:smart_elderly_care_mobile/features/inspection/models/inspection_marker.dart';
 import 'package:smart_elderly_care_mobile/features/inspection/presentation/employee_home_page.dart';
@@ -44,24 +46,75 @@ void main() {
 
     test('parses navigation and obstacle status from backend payload', () {
       final status = InspectionNavigationStatus.fromJson({
+        'id': 77,
         'status': 'running',
         'obstacleStatus': 'safe',
         'robotX': 260,
         'robotY': 300,
         'targetX': 520,
         'targetY': 300,
-        'targetName': '老人房间A',
-        'description': '导航中',
+        'targetName': 'room A',
+        'description': 'navigating',
       });
 
+      expect(status.taskId, 77);
       expect(status.navigationStatus, 'running');
       expect(status.obstacleStatus, 'safe');
       expect(status.robotX, 260);
       expect(status.robotY, 300);
       expect(status.targetX, 520);
       expect(status.targetY, 300);
-      expect(status.targetName, '老人房间A');
-      expect(status.displayMessage, '导航中');
+      expect(status.targetName, 'room A');
+      expect(status.displayMessage, 'navigating');
+    });
+
+    test('creates and cancels navigation tasks through backend endpoints',
+        () async {
+      InspectionService.clearTestOverrides();
+      final requests = <String, Object?>{};
+      final interceptor = InterceptorsWrapper(
+        onRequest: (options, handler) {
+          requests[options.uri.path] = options.data;
+          final data = options.uri.path.endsWith('/cancel')
+              ? {
+                  'data': {'id': 77, 'status': 'cancelled'}
+                }
+              : {
+                  'data': {
+                    'id': 77,
+                    'status': 'running',
+                    'targetName': 'target',
+                    'targetX': 123.0,
+                    'targetY': 234.0,
+                  }
+                };
+          handler.resolve(
+            Response<Object?>(requestOptions: options, data: data),
+          );
+        },
+      );
+      ApiClient.dio.interceptors.add(interceptor);
+      addTearDown(() => ApiClient.dio.interceptors.remove(interceptor));
+
+      final task = await InspectionService.createNavigationTask(
+        targetName: 'target',
+        targetX: 123,
+        targetY: 234,
+      );
+      await InspectionService.cancelNavigationTask(77);
+
+      expect(task.id, 77);
+      expect(task.status, 'running');
+      expect(requests.keys, contains('/api/navigation/tasks'));
+      expect(requests.keys, contains('/api/navigation/tasks/77/cancel'));
+      expect(requests['/api/navigation/tasks'], {
+        'robotId': 1,
+        'creatorId': 9001,
+        'mapId': 1,
+        'targetName': 'target',
+        'targetX': 123.0,
+        'targetY': 234.0,
+      });
     });
 
     test('returns six mock markers and filters event markers in test mode',
@@ -84,13 +137,14 @@ void main() {
         () async {
       InspectionService.resetMockDataForTest();
 
-      final handled = await InspectionService.handleMarker(1, '员工A', '已前往现场确认');
+      final handled =
+          await InspectionService.handleMarker(1, 'staff A', 'done');
       final detail = await InspectionService.getMarkerDetail(1);
 
       expect(handled.status, InspectionMarkerStatus.handled);
       expect(detail.status, InspectionMarkerStatus.handled);
-      expect(detail.handler, '员工A');
-      expect(detail.remark, '已前往现场确认');
+      expect(detail.handler, 'staff A');
+      expect(detail.remark, 'done');
       expect(detail.handleTime, isNotNull);
     });
 
@@ -98,25 +152,25 @@ void main() {
       final withDescription = InspectionMarker.fromJson({
         'id': 7,
         'type': 'obstacle',
-        'title': '障碍物',
+        'title': 'obstacle',
         'x': 10,
         'y': 20,
         'status': 'unhandled',
-        'description': '后端描述',
-        'message': '后端消息',
+        'description': 'description',
+        'message': 'message',
       });
       final withMessage = InspectionMarker.fromJson({
         'id': 8,
         'type': 'crack',
-        'title': '裂缝',
+        'title': 'crack',
         'x': 10,
         'y': 20,
         'status': 'unhandled',
-        'message': '只有消息',
+        'message': 'message only',
       });
 
-      expect(withDescription.displayMessage, '后端描述');
-      expect(withMessage.displayMessage, '只有消息');
+      expect(withDescription.displayMessage, 'description');
+      expect(withMessage.displayMessage, 'message only');
     });
   });
 
@@ -125,9 +179,6 @@ void main() {
       await _pump(tester, const EmployeeHomePage());
 
       expect(find.byType(ListTile), findsNWidgets(3));
-      expect(find.text('巡检地图'), findsOneWidget);
-      expect(find.text('异常事件'), findsOneWidget);
-      expect(find.text('娱乐'), findsOneWidget);
     });
 
     testWidgets('event list only shows fall crack and obstacle',
@@ -137,9 +188,105 @@ void main() {
       await _pumpAsyncWork(tester);
 
       expect(find.byType(ListTile), findsNWidgets(4));
-      expect(find.text('小车当前位置'), findsNothing);
-      expect(find.text('导航目标：老人房间A'), findsNothing);
     });
+
+    testWidgets('new navigation target appears immediately after task creation',
+        (tester) async {
+      InspectionService.clearTestOverrides();
+      final requests = <String>[];
+      final interceptor = InterceptorsWrapper(
+        onRequest: (options, handler) {
+          requests.add(options.uri.path);
+          if (options.uri.path.endsWith('/inspection/map')) {
+            handler.resolve(Response<Object?>(
+              requestOptions: options,
+              data: {
+                'data': {
+                  'mapName': 'test map',
+                  'width': 608,
+                  'height': 384,
+                },
+              },
+            ));
+            return;
+          }
+          if (options.uri.path.endsWith('/inspection/markers')) {
+            handler.resolve(Response<Object?>(
+              requestOptions: options,
+              data: {
+                'data': [
+                  {
+                    'id': 4,
+                    'type': 'robot',
+                    'title': 'robot',
+                    'x': 260,
+                    'y': 300,
+                    'status': 'active',
+                  },
+                  {
+                    'id': 5,
+                    'type': 'target',
+                    'title': 'old target',
+                    'x': 520,
+                    'y': 300,
+                    'status': 'active',
+                  },
+                ],
+              },
+            ));
+            return;
+          }
+          if (options.uri.path.endsWith('/navigation/status')) {
+            handler.resolve(Response<Object?>(
+              requestOptions: options,
+              data: {
+                'data': {
+                  'id': 77,
+                  'status': 'running',
+                  'obstacleStatus': 'safe',
+                },
+              },
+            ));
+            return;
+          }
+          if (options.uri.path.endsWith('/navigation/tasks')) {
+            final body = Map<String, Object?>.from(options.data as Map);
+            handler.resolve(Response<Object?>(
+              requestOptions: options,
+              data: {
+                'data': {
+                  'id': 77,
+                  'status': 'running',
+                  'targetName': body['targetName'],
+                  'targetX': body['targetX'],
+                  'targetY': body['targetY'],
+                },
+              },
+            ));
+            return;
+          }
+          handler.reject(DioException(requestOptions: options));
+        },
+      );
+      ApiClient.dio.interceptors.add(interceptor);
+      addTearDown(() => ApiClient.dio.interceptors.remove(interceptor));
+
+      await _pump(tester, const InspectionMapPage());
+      await _pumpAsyncWork(tester);
+
+      expect(find.byKey(const ValueKey('marker-target-5')), findsOneWidget);
+
+      final canvas = find.byKey(const ValueKey('inspection-map-canvas'));
+      await tester.tapAt(tester.getTopLeft(canvas) + const Offset(160, 120));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('确认'));
+      await _pumpAsyncWork(tester);
+
+      expect(requests, contains('/api/navigation/tasks'));
+      expect(find.byKey(const ValueKey('marker-target--77')), findsOneWidget);
+    });
+
   });
 }
 

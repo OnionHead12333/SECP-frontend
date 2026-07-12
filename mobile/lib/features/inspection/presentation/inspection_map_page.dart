@@ -15,6 +15,8 @@ class InspectionMapPage extends StatefulWidget {
 
 class _InspectionMapPageState extends State<InspectionMapPage> {
   late Future<_MapState> _future;
+  int? _activeNavigationTaskId;
+  InspectionNavigationTask? _localNavigationTask;
 
   @override
   void initState() {
@@ -29,11 +31,79 @@ class _InspectionMapPageState extends State<InspectionMapPage> {
     return _MapState(
       mapInfo: mapInfo,
       markers: markers,
-      navigationStatus: navigationStatus,
+      navigationStatus: _mergeLocalNavigationTask(navigationStatus),
+    );
+  }
+
+  InspectionNavigationStatus? _mergeLocalNavigationTask(
+    InspectionNavigationStatus? remoteStatus,
+  ) {
+    final localTask = _localNavigationTask;
+    if (localTask == null) return remoteStatus;
+
+    return InspectionNavigationStatus(
+      taskId: remoteStatus?.taskId ?? localTask.id,
+      navigationStatus: remoteStatus?.navigationStatus ?? localTask.status,
+      obstacleStatus: remoteStatus?.obstacleStatus,
+      robotX: remoteStatus?.robotX,
+      robotY: remoteStatus?.robotY,
+      targetX: localTask.targetX,
+      targetY: localTask.targetY,
+      targetName: localTask.targetName,
+      message: remoteStatus?.message,
+      description: remoteStatus?.description,
     );
   }
 
   void _replaceMarker(InspectionMarker marker) {
+    setState(() {
+      _future = _load();
+    });
+  }
+
+  Future<void> _setNavigationTarget(Offset point) async {
+    final targetX = point.dx.clamp(0, double.infinity).toDouble();
+    final targetY = point.dy.clamp(0, double.infinity).toDouble();
+    final targetName =
+        'map target ${targetX.toStringAsFixed(0)},${targetY.toStringAsFixed(0)}';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('设为导航目标？'),
+        content: Text(
+          '目标坐标：${targetX.toStringAsFixed(0)}, ${targetY.toStringAsFixed(0)}',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('确认'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    final task = await InspectionService.createNavigationTask(
+      targetName: targetName,
+      targetX: targetX,
+      targetY: targetY,
+    );
+    if (!mounted) return;
+    _activeNavigationTaskId = task.id;
+    _localNavigationTask = task;
+    setState(() {
+      _future = _load();
+    });
+  }
+
+  Future<void> _cancelNavigation(int taskId) async {
+    await InspectionService.cancelNavigationTask(taskId);
+    if (!mounted) return;
+    _activeNavigationTaskId = null;
+    _localNavigationTask = null;
     setState(() {
       _future = _load();
     });
@@ -59,7 +129,9 @@ class _InspectionMapPageState extends State<InspectionMapPage> {
         actions: [
           IconButton(
             tooltip: '刷新',
-            onPressed: () => setState(() => _future = _load()),
+            onPressed: () => setState(() {
+              _future = _load();
+            }),
             icon: const Icon(Icons.refresh),
           ),
         ],
@@ -96,10 +168,25 @@ class _InspectionMapPageState extends State<InspectionMapPage> {
                 markers: state.markers,
                 navigationStatus: state.navigationStatus,
                 onTapMarker: _showDetail,
+                onTapMap: _setNavigationTarget,
               ),
               if (state.navigationStatus != null) ...[
                 const SizedBox(height: 12),
                 _NavigationStatusPanel(status: state.navigationStatus!),
+                if ((state.navigationStatus!.taskId ??
+                        _activeNavigationTaskId) !=
+                    null) ...[
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: OutlinedButton(
+                      onPressed: () => _cancelNavigation(
+                          state.navigationStatus!.taskId ??
+                              _activeNavigationTaskId!),
+                      child: const Text('取消导航'),
+                    ),
+                  ),
+                ],
               ],
               const SizedBox(height: 12),
               const Wrap(
@@ -128,12 +215,14 @@ class _MapCanvas extends StatelessWidget {
     required this.markers,
     required this.navigationStatus,
     required this.onTapMarker,
+    required this.onTapMap,
   });
 
   final InspectionMapInfo mapInfo;
   final List<InspectionMarker> markers;
   final InspectionNavigationStatus? navigationStatus;
   final ValueChanged<InspectionMarker> onTapMarker;
+  final ValueChanged<Offset> onTapMap;
 
   @override
   Widget build(BuildContext context) {
@@ -149,64 +238,74 @@ class _MapCanvas extends StatelessWidget {
           child: SizedBox(
             width: width,
             height: height,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: const Color(0xFFF3F4F6),
-                border: Border.all(
-                    color: Theme.of(context).colorScheme.outlineVariant),
-                borderRadius: BorderRadius.circular(8),
+            child: GestureDetector(
+              key: const ValueKey('inspection-map-canvas'),
+              behavior: HitTestBehavior.opaque,
+              onTapUp: (details) => onTapMap(
+                Offset(
+                  details.localPosition.dx / scale,
+                  details.localPosition.dy / scale,
+                ),
               ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Stack(
-                  children: [
-                    Positioned.fill(child: _MapBackground(mapInfo: mapInfo)),
-                    for (final marker in _markersForDisplay())
-                      Positioned(
-                        left: marker.x * scale - 14,
-                        top: marker.y * scale - 14,
-                        child: Opacity(
-                          key: ValueKey('marker-opacity-${marker.id}'),
-                          opacity:
-                              marker.status == InspectionMarkerStatus.handled
-                                  ? 0.42
-                                  : 1,
-                          child: Tooltip(
-                            message: marker.title,
-                            child: InkWell(
-                              key: ValueKey(
-                                  'marker-${marker.type}-${marker.id}'),
-                              borderRadius: BorderRadius.circular(18),
-                              onTap: marker.id < 0
-                                  ? null
-                                  : () => onTapMarker(marker),
-                              child: Container(
-                                width: 28,
-                                height: 28,
-                                decoration: BoxDecoration(
-                                  color: _markerColor(marker),
-                                  shape: BoxShape.circle,
-                                  border:
-                                      Border.all(color: Colors.white, width: 2),
-                                  boxShadow: const [
-                                    BoxShadow(
-                                      blurRadius: 6,
-                                      color: Color(0x33000000),
-                                      offset: Offset(0, 2),
-                                    ),
-                                  ],
-                                ),
-                                child: Icon(
-                                  _markerIcon(marker.type),
-                                  color: Colors.white,
-                                  size: 16,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF3F4F6),
+                  border: Border.all(
+                      color: Theme.of(context).colorScheme.outlineVariant),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Stack(
+                    children: [
+                      Positioned.fill(child: _MapBackground(mapInfo: mapInfo)),
+                      for (final marker in _markersForDisplay())
+                        Positioned(
+                          left: marker.x * scale - 14,
+                          top: marker.y * scale - 14,
+                          child: Opacity(
+                            key: ValueKey('marker-opacity-${marker.id}'),
+                            opacity:
+                                marker.status == InspectionMarkerStatus.handled
+                                    ? 0.42
+                                    : 1,
+                            child: Tooltip(
+                              message: marker.title,
+                              child: InkWell(
+                                key: ValueKey(
+                                    'marker-${marker.type}-${marker.id}'),
+                                borderRadius: BorderRadius.circular(18),
+                                onTap: marker.id < 0
+                                    ? null
+                                    : () => onTapMarker(marker),
+                                child: Container(
+                                  width: 28,
+                                  height: 28,
+                                  decoration: BoxDecoration(
+                                    color: _markerColor(marker),
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                        color: Colors.white, width: 2),
+                                    boxShadow: const [
+                                      BoxShadow(
+                                        blurRadius: 6,
+                                        color: Color(0x33000000),
+                                        offset: Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Icon(
+                                    _markerIcon(marker.type),
+                                    color: Colors.white,
+                                    size: 16,
+                                  ),
                                 ),
                               ),
                             ),
                           ),
                         ),
-                      ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -220,7 +319,11 @@ class _MapCanvas extends StatelessWidget {
     final status = navigationStatus;
     if (status == null) return markers;
 
-    final result = [...markers];
+    final hasNavigationTarget = status.targetX != null && status.targetY != null;
+    final result = [
+      for (final marker in markers)
+        if (!(hasNavigationTarget && marker.type == 'target')) marker,
+    ];
     final hasRobot = result.any((marker) => marker.type == 'robot');
     if (!hasRobot && status.robotX != null && status.robotY != null) {
       result.add(
@@ -238,11 +341,10 @@ class _MapCanvas extends StatelessWidget {
       );
     }
 
-    final hasTarget = result.any((marker) => marker.type == 'target');
-    if (!hasTarget && status.targetX != null && status.targetY != null) {
+    if (hasNavigationTarget) {
       result.add(
         InspectionMarker(
-          id: -101,
+          id: _navigationTargetMarkerId(status.taskId),
           type: 'target',
           title:
               status.targetName == null ? '导航目标点' : '导航目标：${status.targetName}',
@@ -255,6 +357,11 @@ class _MapCanvas extends StatelessWidget {
       );
     }
     return result;
+  }
+
+  static int _navigationTargetMarkerId(int? taskId) {
+    if (taskId == null || taskId == 0) return -101;
+    return -taskId.abs();
   }
 
   static Color _markerColor(InspectionMarker marker) {

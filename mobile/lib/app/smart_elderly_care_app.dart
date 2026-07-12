@@ -3,6 +3,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 
 import '../features/auth/presentation/login_page.dart';
 import '../features/child/presentation/pages/child_fall_alerts_page.dart';
+import '../features/child/presentation/pages/child_remote_car_page.dart';
 import '../features/child/presentation/child_main_page.dart';
 import '../features/elder/elder_module_routes.dart';
 import '../features/elder/presentation/elder_global_sos_overlay.dart';
@@ -50,6 +51,7 @@ class SmartElderlyCareApp extends StatelessWidget {
         ...ElderModuleRoutes.routes(),
         '/child': (_) => const ChildMainPage(),
         '/child/fall-alerts': (_) => const ChildFallAlertsPage(),
+        '/child/remote-car': (_) => const ChildRemoteCarPage(),
         '/employee': (_) => const EmployeeHomePage(),
         '/employee/entertainment': (_) => const EntertainmentPage(),
         '/inspection/map': (_) => const InspectionMapPage(),

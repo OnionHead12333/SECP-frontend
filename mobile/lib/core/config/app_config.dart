@@ -26,13 +26,15 @@ class AppConfig {
 
   static const String apiBase = String.fromEnvironment(
     'API_BASE',
-    defaultValue: 'http://192.168.43.253:8080/api',
+    //defaultValue: 'http://192.168.43.253:8080/api',
+    defaultValue: 'http://10.40.70.166:8080/api',
   );
 
   static const String inspectionApiBase = String.fromEnvironment(
     'INSPECTION_API_BASE',
     // Local backend for phone inspection testing.
-    defaultValue: 'http://192.168.43.253:8080/api',
+    //defaultValue: 'http://192.168.43.253:8080/api',
+    defaultValue: 'http://10.40.70.166:8080/api',
   );
 
   static const String amapAndroidKey = String.fromEnvironment(

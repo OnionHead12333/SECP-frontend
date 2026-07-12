@@ -10,6 +10,9 @@ final class InspectionService {
   InspectionService._();
 
   static List<InspectionMarker> _mockMarkers = _initialMockMarkers();
+  static InspectionNavigationStatus _mockNavigationStatusValue =
+      _mockNavigationStatus();
+  static int _mockNavigationTaskId = 1000;
   static bool? _useMockOverrideForTest;
 
   static bool get useMock =>
@@ -38,7 +41,7 @@ final class InspectionService {
   }
 
   static Future<InspectionNavigationStatus?> getNavigationStatus() async {
-    if (useMock) return _mockNavigationStatus();
+    if (useMock) return _mockNavigationStatusValue;
 
     try {
       final response = await ApiClient.dio.get<Object?>(
@@ -114,9 +117,70 @@ final class InspectionService {
     return getMarkerDetail(id);
   }
 
+  static Future<InspectionNavigationTask> createNavigationTask({
+    required String targetName,
+    required double targetX,
+    required double targetY,
+  }) async {
+    if (useMock) {
+      final task = InspectionNavigationTask(
+        id: ++_mockNavigationTaskId,
+        status: 'running',
+        targetName: targetName,
+        targetX: targetX,
+        targetY: targetY,
+      );
+      _upsertMockTarget(task);
+      return task;
+    }
+
+    final response = await ApiClient.dio.post<Object?>(
+      _inspectionUrl('/navigation/tasks'),
+      data: {
+        'robotId': 1,
+        'creatorId': 9001,
+        'mapId': 1,
+        'targetName': targetName,
+        'targetX': targetX,
+        'targetY': targetY,
+      },
+    );
+    final data = _responsePayload(response.data);
+    if (data is! Map) {
+      throw StateError('Invalid navigation task response');
+    }
+    return InspectionNavigationTask.fromJson(Map<String, dynamic>.from(data));
+  }
+
+  static Future<void> cancelNavigationTask(int id) async {
+    if (useMock) {
+      _mockNavigationStatusValue = InspectionNavigationStatus(
+        taskId: id,
+        navigationStatus: 'paused',
+        obstacleStatus: _mockNavigationStatusValue.obstacleStatus,
+        robotX: _mockNavigationStatusValue.robotX,
+        robotY: _mockNavigationStatusValue.robotY,
+        targetX: _mockNavigationStatusValue.targetX,
+        targetY: _mockNavigationStatusValue.targetY,
+        targetName: _mockNavigationStatusValue.targetName,
+      );
+      return;
+    }
+
+    await ApiClient.dio.post<Object?>(
+      _inspectionUrl('/navigation/tasks/$id/cancel'),
+    );
+  }
+
   static void resetMockDataForTest() {
     _mockMarkers = _initialMockMarkers();
+    _mockNavigationStatusValue = _mockNavigationStatus();
+    _mockNavigationTaskId = 1000;
     _useMockOverrideForTest = true;
+  }
+
+  static void clearTestOverrides() {
+    _useMockOverrideForTest = null;
   }
 
   static String _inspectionUrl(String path) {
@@ -178,6 +242,7 @@ final class InspectionService {
 
   static InspectionNavigationStatus _mockNavigationStatus() {
     return const InspectionNavigationStatus(
+      taskId: 5,
       navigationStatus: 'running',
       obstacleStatus: 'safe',
       robotX: 260,
@@ -185,6 +250,35 @@ final class InspectionService {
       targetX: 520,
       targetY: 300,
       targetName: '老人房间A',
+    );
+  }
+
+  static void _upsertMockTarget(InspectionNavigationTask task) {
+    final target = InspectionMarker(
+      id: 5,
+      type: 'target',
+      title: 'Navigation target: ${task.targetName}',
+      x: task.targetX,
+      y: task.targetY,
+      level: 'info',
+      status: InspectionMarkerStatus.active,
+      locationName: task.targetName,
+      navigationStatus: task.status,
+    );
+    _mockMarkers = [
+      for (final marker in _mockMarkers)
+        if (marker.type != 'target') marker,
+      target,
+    ];
+    _mockNavigationStatusValue = InspectionNavigationStatus(
+      taskId: task.id,
+      navigationStatus: task.status,
+      obstacleStatus: _mockNavigationStatusValue.obstacleStatus,
+      robotX: _mockNavigationStatusValue.robotX,
+      robotY: _mockNavigationStatusValue.robotY,
+      targetX: task.targetX,
+      targetY: task.targetY,
+      targetName: task.targetName,
     );
   }
 
