@@ -91,6 +91,10 @@ void main() {
   });
 
   testWidgets('elder home exposes voice control entry', (tester) async {
+    final interceptor = _rejectBackgroundRequests();
+    ApiClient.dio.interceptors.add(interceptor);
+    addTearDown(() => ApiClient.dio.interceptors.remove(interceptor));
+
     SharedPreferences.setMockInitialValues(
       {'elder_login_permission_guide_shown_v1': true},
     );
@@ -104,8 +108,21 @@ void main() {
         home: const ElderHomePage(),
       ),
     );
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     expect(find.text('语音控制'), findsOneWidget);
   });
+}
+
+Interceptor _rejectBackgroundRequests() {
+  return InterceptorsWrapper(
+    onRequest: (options, handler) {
+      handler.resolve(
+        Response<Object?>(
+          requestOptions: options,
+          data: const {'code': 5000, 'message': 'test offline'},
+        ),
+      );
+    },
+  );
 }
