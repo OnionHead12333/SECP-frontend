@@ -28,10 +28,17 @@ class RosbridgeTopicMessage {
 }
 
 class RosbridgeNavigationClient {
+  RosbridgeNavigationClient({
+    WebSocketChannel Function(Uri uri)? channelFactory,
+  }) : _channelFactory =
+            channelFactory ?? ((uri) => WebSocketChannel.connect(uri));
+
   final _connectionController =
       StreamController<RosbridgeConnectionEvent>.broadcast();
   final _messageController =
       StreamController<RosbridgeTopicMessage>.broadcast();
+
+  final WebSocketChannel Function(Uri uri) _channelFactory;
 
   WebSocketChannel? _channel;
   StreamSubscription<Object?>? _socketSubscription;
@@ -40,6 +47,7 @@ class RosbridgeNavigationClient {
   bool _manualDisconnect = true;
   bool _disposed = false;
   int _reconnectAttempt = 0;
+  int _connectionGeneration = 0;
   RosbridgeConnectionStatus _status = RosbridgeConnectionStatus.disconnected;
 
   Stream<RosbridgeConnectionEvent> get connectionEvents =>
@@ -50,27 +58,37 @@ class RosbridgeNavigationClient {
   RosbridgeConnectionStatus get status => _status;
 
   Future<void> connect(String url) async {
+    if (_disposed) {
+      throw StateError('ROS bridge client has been disposed');
+    }
     final trimmedUrl = url.trim();
     if (trimmedUrl.isEmpty) {
       throw ArgumentError('ROS bridge URL is empty');
     }
 
+    final generation = ++_connectionGeneration;
     _manualDisconnect = false;
     _url = trimmedUrl;
     _reconnectTimer?.cancel();
     await _closeSocket();
+    if (!_isActiveGeneration(generation)) return;
     _emitConnection(
       _reconnectAttempt == 0
           ? RosbridgeConnectionStatus.connecting
           : RosbridgeConnectionStatus.reconnecting,
     );
 
+    WebSocketChannel? channel;
     try {
-      final channel = WebSocketChannel.connect(Uri.parse(trimmedUrl));
+      channel = _channelFactory(Uri.parse(trimmedUrl));
+      if (!_isActiveGeneration(generation)) {
+        await _discardChannel(channel);
+        return;
+      }
       _channel = channel;
       await channel.ready.timeout(const Duration(seconds: 6));
-      if (_disposed || _manualDisconnect || _channel != channel) {
-        await channel.sink.close(ws_status.normalClosure);
+      if (!_isCurrentChannel(generation, channel)) {
+        await _discardChannel(channel);
         return;
       }
 
@@ -79,25 +97,32 @@ class RosbridgeNavigationClient {
       _socketSubscription = channel.stream.listen(
         _handleSocketData,
         onError: (Object error, StackTrace stackTrace) {
-          _handleSocketClosed('WebSocket error: $error');
+          _handleSocketClosed(
+            'WebSocket error: $error',
+            generation,
+            channel!,
+          );
         },
         onDone: () {
-          _handleSocketClosed('WebSocket closed');
+          _handleSocketClosed('WebSocket closed', generation, channel!);
         },
         cancelOnError: true,
       );
       _registerRosInterfaces();
     } catch (error) {
+      await _discardChannel(channel);
+      if (!_isActiveGeneration(generation)) return;
       _emitConnection(
         RosbridgeConnectionStatus.error,
         message: '$error',
       );
-      _scheduleReconnect();
+      _scheduleReconnect(generation);
     }
   }
 
   Future<void> disconnect() async {
     _manualDisconnect = true;
+    _connectionGeneration += 1;
     _reconnectAttempt = 0;
     _reconnectTimer?.cancel();
     await _closeSocket();
@@ -179,32 +204,8 @@ class RosbridgeNavigationClient {
     });
   }
 
-  Future<void> cancelNavigationAndStop() async {
-    _send({
-      'op': 'call_service',
-      'id': 'cancel-navigation-${DateTime.now().microsecondsSinceEpoch}',
-      'service': '/navigate_to_pose/_action/cancel_goal',
-      'type': 'action_msgs/srv/CancelGoal',
-      'args': {
-        'goal_info': {
-          'goal_id': {
-            'uuid': List<int>.filled(16, 0),
-          },
-          'stamp': {'sec': 0, 'nanosec': 0},
-        },
-      },
-    });
-
-    const zero = {
-      'linear': {'x': 0.0, 'y': 0.0, 'z': 0.0},
-      'angular': {'x': 0.0, 'y': 0.0, 'z': 0.0},
-    };
-    for (var index = 0; index < 4; index += 1) {
-      _publish('/cmd_vel', zero);
-      if (index < 3) {
-        await Future<void>.delayed(const Duration(milliseconds: 90));
-      }
-    }
+  void stopNavigation() {
+    _publish('/inspection_map/stop_navigation', const {});
   }
 
   Future<void> dispose() async {
@@ -263,7 +264,7 @@ class RosbridgeNavigationClient {
     const advertisements = <String, String>{
       '/initialpose': 'geometry_msgs/msg/PoseWithCovarianceStamped',
       '/goal_pose': 'geometry_msgs/msg/PoseStamped',
-      '/cmd_vel': 'geometry_msgs/msg/Twist',
+      '/inspection_map/stop_navigation': 'std_msgs/msg/Empty',
     };
     for (final entry in advertisements.entries) {
       _send({
@@ -299,16 +300,20 @@ class RosbridgeNavigationClient {
     }
   }
 
-  void _handleSocketClosed(String reason) {
-    if (_manualDisconnect || _disposed) return;
+  void _handleSocketClosed(
+    String reason,
+    int generation,
+    WebSocketChannel channel,
+  ) {
+    if (!_isCurrentChannel(generation, channel)) return;
     _emitConnection(
       RosbridgeConnectionStatus.reconnecting,
       message: reason,
     );
-    _scheduleReconnect();
+    _scheduleReconnect(generation);
   }
 
-  void _scheduleReconnect() {
+  void _scheduleReconnect(int generation) {
     if (_manualDisconnect || _disposed || _reconnectTimer?.isActive == true) {
       return;
     }
@@ -316,7 +321,7 @@ class RosbridgeNavigationClient {
     final seconds = math.min(8, math.pow(2, _reconnectAttempt - 1).toInt());
     _reconnectTimer = Timer(Duration(seconds: seconds), () {
       final url = _url;
-      if (url != null && !_manualDisconnect && !_disposed) {
+      if (url != null && _isActiveGeneration(generation)) {
         unawaited(connect(url));
       }
     });
@@ -325,22 +330,58 @@ class RosbridgeNavigationClient {
   Future<void> _closeSocket() async {
     final subscription = _socketSubscription;
     _socketSubscription = null;
-    await subscription?.cancel();
     final channel = _channel;
     _channel = null;
-    await channel?.sink.close(ws_status.normalClosure);
+    await subscription?.cancel();
+    await _closeChannel(channel);
+  }
+
+  Future<void> _discardChannel(WebSocketChannel? channel) async {
+    if (channel == null) return;
+    StreamSubscription<Object?>? subscription;
+    if (identical(_channel, channel)) {
+      _channel = null;
+      subscription = _socketSubscription;
+      _socketSubscription = null;
+    }
+    await subscription?.cancel();
+    await _closeChannel(channel);
+  }
+
+  Future<void> _closeChannel(WebSocketChannel? channel) async {
+    if (channel == null) return;
+    try {
+      await channel.sink.close(ws_status.normalClosure);
+    } catch (_) {
+      // The channel can already be closed after a failed handshake.
+    }
+  }
+
+  bool _isActiveGeneration(int generation) {
+    return generation == _connectionGeneration &&
+        !_manualDisconnect &&
+        !_disposed;
+  }
+
+  bool _isCurrentChannel(int generation, WebSocketChannel channel) {
+    return _isActiveGeneration(generation) && identical(_channel, channel);
   }
 
   void _publish(String topic, Map<String, dynamic> message) {
     _send({'op': 'publish', 'topic': topic, 'msg': message});
   }
 
-  void _send(Map<String, dynamic> message) {
+  bool _send(Map<String, dynamic> message) {
     final channel = _channel;
     if (channel == null || _status != RosbridgeConnectionStatus.connected) {
-      return;
+      return false;
     }
-    channel.sink.add(jsonEncode(message));
+    try {
+      channel.sink.add(jsonEncode(message));
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   void _emitConnection(

@@ -9,8 +9,10 @@ import '../features/elder/elder_module_routes.dart';
 import '../features/elder/presentation/elder_global_sos_overlay.dart';
 import '../features/entertainment/presentation/entertainment_page.dart';
 import '../features/inspection/presentation/employee_home_page.dart';
+import '../features/inspection/presentation/employee_robot_inspection_page.dart';
 import '../features/inspection/presentation/inspection_events_page.dart';
 import '../features/inspection/presentation/inspection_map_page.dart';
+import '../features/inspection_map/presentation/inspection_map_ros_page.dart';
 
 final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
 final GlobalKey<ScaffoldMessengerState> appScaffoldMessengerKey =
@@ -54,7 +56,10 @@ class SmartElderlyCareApp extends StatelessWidget {
         '/child/remote-car': (_) => const ChildRemoteCarPage(),
         '/employee': (_) => const EmployeeHomePage(),
         '/employee/entertainment': (_) => const EntertainmentPage(),
+        '/employee/robot-inspection': (_) =>
+            const EmployeeRobotInspectionPage(),
         '/inspection/map': (_) => const InspectionMapPage(),
+        '/inspection-map': (_) => const InspectionMapRosPage(),
         '/inspection/events': (_) => const InspectionEventsPage(),
       },
     );

@@ -348,6 +348,8 @@ class RosTransform2D {
 class RosTfTree {
   final Map<String, RosTransform2D> _byChild = {};
 
+  void clear() => _byChild.clear();
+
   void updateFromMessage(Map<String, dynamic> message) {
     final transforms = message['transforms'];
     if (transforms is! List) return;

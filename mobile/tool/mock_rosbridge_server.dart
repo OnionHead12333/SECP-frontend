@@ -132,21 +132,33 @@ class _RosbridgeSimulator {
       _broadcast('/navigate_to_pose/_action/status', _statusMessage());
       return;
     }
+    if (topic == '/inspection_map/stop_navigation') {
+      _cancelNavigation();
+      return;
+    }
   }
 
   void _handleServiceCall(_MockClient client, Map<String, dynamic> request) {
-    if (request['service'] == '/navigate_to_pose/_action/cancel_goal') {
-      navigating = false;
-      goalStatus = 5;
-      _broadcast('/navigate_to_pose/_action/status', _statusMessage());
-    }
     client.socket.add(jsonEncode({
       'op': 'service_response',
       'id': request['id'],
       'service': request['service'],
-      'result': true,
-      'values': {'return_code': 0, 'goals_canceling': []},
+      'result': false,
+      'values': {
+        'return_code': 1,
+        'message': 'Mock accepts stop only on /inspection_map/stop_navigation',
+      },
     }));
+  }
+
+  void _cancelNavigation() {
+    navigating = false;
+    goalStatus = 5;
+    _broadcast('/navigate_to_pose/_action/status', _statusMessage());
+    _broadcast('/cmd_vel', {
+      'linear': {'x': 0.0, 'y': 0.0, 'z': 0.0},
+      'angular': {'x': 0.0, 'y': 0.0, 'z': 0.0},
+    });
   }
 
   void _setRobotPose(Map<String, dynamic> pose) {

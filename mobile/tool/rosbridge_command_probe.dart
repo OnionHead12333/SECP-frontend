@@ -110,7 +110,7 @@ Future<void> main(List<String> arguments) async {
     primaryStackTrace = stackTrace;
   } finally {
     try {
-      await session.cancelAndStop();
+      await session.stopNavigation();
     } catch (error, stackTrace) {
       cleanupError = error;
       cleanupStackTrace = stackTrace;
@@ -129,8 +129,8 @@ Future<void> main(List<String> arguments) async {
   }
 
   stdout.writeln(
-    'Safety cleanup passed: CancelGoal completed and 5 finite zero Twist '
-    'messages were published.',
+    'Safety cleanup passed: one Empty stop request was published and the '
+    'tracked action reached a terminal state.',
   );
 }
 
@@ -152,8 +152,6 @@ class _ProbeSession {
   final _actionState = Completer<_GoalState>();
   final _feedback = Completer<Map<String, dynamic>>();
   final _terminalState = Completer<_GoalState>();
-  Completer<Map<String, dynamic>>? _cancelResponse;
-  String? _cancelRequestId;
   Set<String> _baselineGoalIds = const {};
   String? _trackedGoalId;
   int _feedbackEnvelopeCount = 0;
@@ -209,7 +207,7 @@ class _ProbeSession {
     const advertisements = <String, String>{
       '/initialpose': 'geometry_msgs/msg/PoseWithCovarianceStamped',
       '/goal_pose': 'geometry_msgs/msg/PoseStamped',
-      '/cmd_vel': 'geometry_msgs/msg/Twist',
+      '/inspection_map/stop_navigation': 'std_msgs/msg/Empty',
     };
     for (final entry in advertisements.entries) {
       _send({
@@ -267,71 +265,23 @@ class _ProbeSession {
     }
   }
 
-  Future<void> cancelAndStop() async {
-    Object? cancelError;
-    StackTrace? cancelStackTrace;
-    if (!_closed && socket.readyState == WebSocket.open) {
-      try {
-        if (_probeGoalPublished) {
-          final cancelId = 'inspection-map-command-probe-cancel-'
-              '${DateTime.now().microsecondsSinceEpoch}';
-          _cancelRequestId = cancelId;
-          _cancelResponse = Completer<Map<String, dynamic>>();
-          _send({
-            'op': 'call_service',
-            'id': cancelId,
-            'service': '/navigate_to_pose/_action/cancel_goal',
-            'type': 'action_msgs/srv/CancelGoal',
-            'args': {
-              'goal_info': {
-                'goal_id': {'uuid': List<int>.filled(16, 0)},
-                'stamp': {'sec': 0, 'nanosec': 0},
-              },
-            },
-          });
-          final response = await _cancelResponse!.future.timeout(
-            const Duration(seconds: 5),
-            onTimeout: () => throw TimeoutException(
-              'CancelGoal service did not respond.',
-            ),
-          );
-          _validateCancelResponse(response);
-
-          final trackedGoalId = _trackedGoalId;
-          if (trackedGoalId != null && !_terminalState.isCompleted) {
-            await _terminalState.future.timeout(
-              const Duration(seconds: 4),
-              onTimeout: () => throw TimeoutException(
-                'CancelGoal responded but the tracked action did not reach a '
-                'terminal status.',
-              ),
-            );
-          }
-        }
-      } catch (error, stackTrace) {
-        cancelError = error;
-        cancelStackTrace = stackTrace;
-      } finally {
-        await _publishFiniteZeroVelocityPulse();
-      }
+  Future<void> stopNavigation() async {
+    if (_closed ||
+        socket.readyState != WebSocket.open ||
+        !_probeGoalPublished) {
+      return;
     }
+    publish('/inspection_map/stop_navigation', const {});
 
-    if (cancelError != null) {
-      Error.throwWithStackTrace(cancelError, cancelStackTrace!);
-    }
-  }
-
-  Future<void> _publishFiniteZeroVelocityPulse() async {
-    const zeroTwist = {
-      'linear': {'x': 0.0, 'y': 0.0, 'z': 0.0},
-      'angular': {'x': 0.0, 'y': 0.0, 'z': 0.0},
-    };
-    for (var index = 0; index < 5; index += 1) {
-      if (_closed || socket.readyState != WebSocket.open) return;
-      publish('/cmd_vel', zeroTwist);
-      if (index < 4) {
-        await Future<void>.delayed(const Duration(milliseconds: 100));
-      }
+    final trackedGoalId = _trackedGoalId;
+    if (trackedGoalId != null && !_terminalState.isCompleted) {
+      await _terminalState.future.timeout(
+        const Duration(seconds: 4),
+        onTimeout: () => throw TimeoutException(
+          'The stop topic was published but the tracked action did not reach '
+          'a terminal status.',
+        ),
+      );
     }
   }
 
@@ -356,10 +306,6 @@ class _ProbeSession {
           case '/navigate_to_pose/_action/feedback':
             _handleFeedback(message);
         }
-      } else if (envelope['op'] == 'service_response' &&
-          envelope['id'] == _cancelRequestId &&
-          _cancelResponse?.isCompleted == false) {
-        _cancelResponse!.complete(envelope);
       } else if (envelope['op'] == 'status' && envelope['level'] == 'error') {
         _rosbridgeErrors.add('${envelope['msg'] ?? 'unknown error'}');
       }
@@ -425,10 +371,6 @@ class _ProbeSession {
       if (!completer.isCompleted) {
         completer.completeError(error, stackTrace);
       }
-    }
-    final cancelResponse = _cancelResponse;
-    if (cancelResponse != null && !cancelResponse.isCompleted) {
-      cancelResponse.completeError(error, stackTrace);
     }
   }
 
@@ -747,18 +689,6 @@ double _validateFeedback(Map<String, dynamic> message) {
     _validateHeader(currentPose);
   }
   return distanceRemaining.toDouble();
-}
-
-void _validateCancelResponse(Map<String, dynamic> envelope) {
-  if (envelope['result'] != true) {
-    throw StateError(
-      'CancelGoal service returned result=${envelope['result']}',
-    );
-  }
-  final values = _map(envelope['values']);
-  if (values['return_code'] != 0) {
-    throw StateError('CancelGoal return_code=${values['return_code']}');
-  }
 }
 
 List<_GoalState> _goalStates(Map<String, dynamic> message) {

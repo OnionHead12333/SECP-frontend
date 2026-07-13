@@ -12,9 +12,10 @@ class EmployeeHomePage extends StatelessWidget {
         children: [
           _EntryTile(
             title: '巡检地图',
-            subtitle: '查看养老院一层巡检点位和小车状态',
+            subtitle: '查看实时地图、设置导航目标并检查启动状态',
             icon: Icons.map_outlined,
-            onTap: () => Navigator.of(context).pushNamed('/inspection/map'),
+            onTap: () =>
+                Navigator.of(context).pushNamed('/employee/robot-inspection'),
           ),
           const SizedBox(height: 12),
           _EntryTile(
@@ -28,7 +29,8 @@ class EmployeeHomePage extends StatelessWidget {
             title: '娱乐',
             subtitle: '发送音乐播放与跳舞演示命令，查看最近任务状态',
             icon: Icons.music_note_outlined,
-            onTap: () => Navigator.of(context).pushNamed('/employee/entertainment'),
+            onTap: () =>
+                Navigator.of(context).pushNamed('/employee/entertainment'),
           ),
         ],
       ),
@@ -55,7 +57,8 @@ class _EntryTile extends StatelessWidget {
       margin: EdgeInsets.zero,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         leading: CircleAvatar(child: Icon(icon)),
         title: Text(title),
         subtitle: Text(subtitle),

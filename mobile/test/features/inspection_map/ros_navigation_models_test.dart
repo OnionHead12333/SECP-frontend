@@ -63,6 +63,9 @@ void main() {
     final point = mapToLaser.transformPoint(const RosPoint2D(1, 0));
     expect(point.x, closeTo(2.0, 1e-9));
     expect(point.y, closeTo(2.2, 1e-9));
+
+    tree.clear();
+    expect(tree.resolve('map', 'laser'), isNull);
   });
 
   test('parses Nav2 status and feedback', () {

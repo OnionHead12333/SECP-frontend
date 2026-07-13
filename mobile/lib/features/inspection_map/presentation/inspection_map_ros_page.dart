@@ -1,55 +1,74 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../data/rosbridge_navigation_client.dart';
 import '../models/map_info.dart';
 import '../models/ros_navigation_models.dart';
 import '../utils/coordinate_converter.dart';
+import '../utils/occupancy_grid_placement.dart';
 
 enum _PoseMode { initialPose, goalPose }
+
+enum InspectionMapExperience { debug, employee }
+
+enum _EmployeeSection { map, navigation, startup }
 
 class InspectionMapRosPage extends StatefulWidget {
   const InspectionMapRosPage({
     super.key,
     this.initialUrl = const String.fromEnvironment(
       'ROSBRIDGE_URL',
-      defaultValue: 'ws://192.168.160.125:9090',
+      defaultValue: 'ws://192.168.137.142:9090',
     ),
+    this.autoConnect = const bool.fromEnvironment(
+      'ROSBRIDGE_AUTO_CONNECT',
+      defaultValue: true,
+    ),
+    this.rosClient,
+    this.experience = InspectionMapExperience.debug,
+    this.onStartRobotServices,
   });
 
   final String initialUrl;
+  final bool autoConnect;
+  final RosbridgeNavigationClient? rosClient;
+  final InspectionMapExperience experience;
+  final Future<void> Function()? onStartRobotServices;
 
   @override
   State<InspectionMapRosPage> createState() => _InspectionMapRosPageState();
 }
 
 class _InspectionMapRosPageState extends State<InspectionMapRosPage> {
+  static const _commandGuardDuration = Duration(milliseconds: 800);
   static const _fallbackMapInfo = MapInfo(
     mapName: 'yahboomcar',
     imageAsset: 'assets/robot_maps/yahboomcar.png',
     imageFile: 'yahboomcar.png',
-    width: 608,
-    height: 384,
-    imageHeight: 384,
+    width: 864,
+    height: 896,
+    imageHeight: 896,
     resolution: 0.05,
-    origin: [-10, -10, 0],
+    origin: [-22.8, -22.8, 0],
     frameId: 'map',
   );
+  static const _particleSpreadWarningMeters = 1.5;
 
   final _transformController = TransformationController();
-  final _rosClient = RosbridgeNavigationClient();
+  late final RosbridgeNavigationClient _rosClient;
   final _tfTree = RosTfTree();
 
   late final TextEditingController _urlController;
   StreamSubscription<RosbridgeConnectionEvent>? _connectionSubscription;
   StreamSubscription<RosbridgeTopicMessage>? _messageSubscription;
 
+  MapInfo _offlineMapInfo = _fallbackMapInfo;
   MapInfo _mapInfo = _fallbackMapInfo;
-  RosOccupancyGrid? _mapGrid;
   RosOccupancyGrid? _globalCostmap;
   RosOccupancyGrid? _localCostmap;
   ui.Image? _mapImage;
@@ -70,12 +89,24 @@ class _InspectionMapRosPageState extends State<InspectionMapRosPage> {
   RosbridgeConnectionStatus _connectionStatus =
       RosbridgeConnectionStatus.disconnected;
   String? _connectionMessage;
+  String? _mapMetadataMessage;
   DateTime? _lastMessageAt;
   double _linearVelocity = 0;
   double _angularVelocity = 0;
   double _selectedYaw = 0;
   _PoseMode _poseMode = _PoseMode.goalPose;
   bool _initialPoseSent = false;
+  bool _mapReceived = false;
+  bool _amclReceived = false;
+  bool _scanReceived = false;
+  bool _tfReceived = false;
+  bool _particleCloudReceived = false;
+  bool _navigateRequestInFlight = false;
+  bool _stopRequestInFlight = false;
+  bool _startupRequestInFlight = false;
+  String? _startupMessage;
+  _EmployeeSection _employeeSection = _EmployeeSection.map;
+  int _connectionGeneration = 0;
 
   bool _showLaser = true;
   bool _showGlobalPlan = true;
@@ -88,18 +119,74 @@ class _InspectionMapRosPageState extends State<InspectionMapRosPage> {
   bool get _isConnected =>
       _connectionStatus == RosbridgeConnectionStatus.connected;
 
+  bool get _scanTfReady {
+    final scan = _laserScan;
+    if (!_scanReceived || scan == null) return false;
+    if (normalizeRosFrame(scan.frameId) ==
+        normalizeRosFrame(_mapInfo.frameId)) {
+      return true;
+    }
+    return _tfReceived &&
+        _tfTree.resolve(_mapInfo.frameId, scan.frameId) != null;
+  }
+
+  double? get _particleSpreadMeters {
+    if (!_particleCloudReceived) return null;
+    final cloud = _particleCloud;
+    if (cloud == null) return null;
+    final poses = cloud.poses.map(_poseInMap).whereType<RosPose2D>().toList();
+    if (poses.length < 4) return null;
+
+    final meanX =
+        poses.fold<double>(0, (sum, pose) => sum + pose.x) / poses.length;
+    final meanY =
+        poses.fold<double>(0, (sum, pose) => sum + pose.y) / poses.length;
+    final radialVariance = poses.fold<double>(0, (sum, pose) {
+          final dx = pose.x - meanX;
+          final dy = pose.y - meanY;
+          return sum + dx * dx + dy * dy;
+        }) /
+        poses.length;
+    return math.sqrt(radialVariance);
+  }
+
+  bool get _localizationClearlyDispersed {
+    final spread = _particleSpreadMeters;
+    return spread != null && spread > _particleSpreadWarningMeters;
+  }
+
+  bool get _navigationActionActive => switch (_goalStatus) {
+        RosGoalStatus.accepted ||
+        RosGoalStatus.executing ||
+        RosGoalStatus.canceling =>
+          true,
+        _ => false,
+      };
+
+  List<String> get _navigationBlockers {
+    if (!_isConnected) return const ['rosbridge 未连接'];
+    final blockers = <String>[
+      if (!_mapReceived) '未收到 /map',
+      if (!_amclReceived) '未收到 /amcl_pose',
+      if (!_scanReceived) '未收到 /scan',
+      if (_scanReceived && !_scanTfReady) '等待 /scan 到 map 的 TF',
+      if (_localizationClearlyDispersed) '定位未收敛（AMCL 粒子分散）',
+      if (_navigationActionActive) '已有导航任务正在执行',
+      if (_goalPose == null) '请在 Target 模式点击地图',
+    ];
+    return blockers;
+  }
+
   @override
   void initState() {
     super.initState();
+    _rosClient = widget.rosClient ?? RosbridgeNavigationClient();
     _urlController = TextEditingController(text: widget.initialUrl);
+    unawaited(_loadFallbackMapInfo());
     _connectionSubscription =
         _rosClient.connectionEvents.listen(_handleConnectionEvent);
     _messageSubscription = _rosClient.messages.listen(_handleRosMessage);
-    const autoConnect = bool.fromEnvironment(
-      'ROSBRIDGE_AUTO_CONNECT',
-      defaultValue: true,
-    );
-    if (autoConnect) {
+    if (widget.autoConnect) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _connect());
     }
   }
@@ -119,16 +206,91 @@ class _InspectionMapRosPageState extends State<InspectionMapRosPage> {
 
   Future<void> _connect() async {
     FocusManager.instance.primaryFocus?.unfocus();
-    await _rosClient.connect(_urlController.text);
+    try {
+      await _rosClient.connect(_urlController.text);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _connectionMessage = 'Connect failed: $error');
+    }
   }
 
   Future<void> _disconnect() => _rosClient.disconnect();
+
+  Future<void> _loadFallbackMapInfo() async {
+    try {
+      final source = await rootBundle.loadString(
+        'assets/robot_maps/map_info.json',
+      );
+      final decoded = jsonDecode(source);
+      if (decoded is! Map) {
+        throw const FormatException('map_info.json must contain an object');
+      }
+      final mapInfo = MapInfo.fromJson(Map<String, dynamic>.from(decoded));
+      if (mapInfo.width <= 0 ||
+          mapInfo.height <= 0 ||
+          mapInfo.imageHeight <= 0 ||
+          mapInfo.resolution <= 0 ||
+          mapInfo.origin.length < 2 ||
+          mapInfo.imageAsset.isEmpty) {
+        throw const FormatException('map_info.json contains invalid metadata');
+      }
+      if (!mounted || _mapReceived) return;
+      setState(() {
+        _offlineMapInfo = mapInfo;
+        _mapInfo = mapInfo;
+        _mapMetadataMessage = null;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _mapMetadataMessage =
+            'Offline map metadata unavailable; using built-in values: $error';
+      });
+    }
+  }
+
+  void _resetSessionReadiness() {
+    _connectionGeneration += 1;
+    _mapReceived = false;
+    _amclReceived = false;
+    _scanReceived = false;
+    _tfReceived = false;
+    _particleCloudReceived = false;
+    _initialPoseSent = false;
+    _tfTree.clear();
+    _mapImage?.dispose();
+    _globalCostmapImage?.dispose();
+    _localCostmapImage?.dispose();
+    _mapImage = null;
+    _globalCostmapImage = null;
+    _localCostmapImage = null;
+    _globalCostmap = null;
+    _localCostmap = null;
+    _robotPose = null;
+    _initialPose = null;
+    _goalPose = null;
+    _laserScan = null;
+    _particleCloud = null;
+    _costCloud = null;
+    _globalPlan = null;
+    _localPlan = null;
+    _feedback = null;
+    _goalStatus = RosGoalStatus.unknown;
+    _linearVelocity = 0;
+    _angularVelocity = 0;
+    _selectedYaw = 0;
+    _lastMessageAt = null;
+    _mapInfo = _offlineMapInfo;
+  }
 
   void _handleConnectionEvent(RosbridgeConnectionEvent event) {
     if (!mounted) return;
     setState(() {
       _connectionStatus = event.status;
       _connectionMessage = event.message;
+      if (event.status != RosbridgeConnectionStatus.connected) {
+        _resetSessionReadiness();
+      }
     });
   }
 
@@ -138,28 +300,45 @@ class _InspectionMapRosPageState extends State<InspectionMapRosPage> {
     try {
       switch (event.topic) {
         case '/map':
-          unawaited(_applyMap(RosOccupancyGrid.fromMessage(event.message)));
+          unawaited(
+            _applyMap(
+              RosOccupancyGrid.fromMessage(event.message),
+              _connectionGeneration,
+            ),
+          );
         case '/global_costmap/costmap':
-          unawaited(_applyGlobalCostmap(
-            RosOccupancyGrid.fromMessage(event.message),
-          ));
+          unawaited(
+            _applyGlobalCostmap(
+              RosOccupancyGrid.fromMessage(event.message),
+              _connectionGeneration,
+            ),
+          );
         case '/local_costmap/costmap':
-          unawaited(_applyLocalCostmap(
-            RosOccupancyGrid.fromMessage(event.message),
-          ));
+          unawaited(
+            _applyLocalCostmap(
+              RosOccupancyGrid.fromMessage(event.message),
+              _connectionGeneration,
+            ),
+          );
         case '/amcl_pose':
           final header = _asMap(event.message['header']);
           final poseWithCovariance = _asMap(event.message['pose']);
           final pose = _asMap(poseWithCovariance['pose']);
+          if (pose.isEmpty) {
+            throw const FormatException('/amcl_pose is missing pose.pose');
+          }
           setState(() {
             _robotPose = RosPose2D.fromPose(
               pose,
               frameId: '${header['frame_id'] ?? 'map'}',
             );
+            _amclReceived = true;
           });
         case '/scan':
+          final scan = RosLaserScan.fromMessage(event.message);
           setState(() {
-            _laserScan = RosLaserScan.fromMessage(event.message);
+            _laserScan = scan;
+            _scanReceived = scan.ranges.isNotEmpty;
           });
         case '/plan':
           setState(() {
@@ -170,8 +349,10 @@ class _InspectionMapRosPageState extends State<InspectionMapRosPage> {
             _localPlan = RosPath.fromMessage(event.message);
           });
         case '/particlecloud':
+          final cloud = RosPoseArray.fromMessage(event.message);
           setState(() {
-            _particleCloud = RosPoseArray.fromMessage(event.message);
+            _particleCloud = cloud;
+            _particleCloudReceived = cloud.poses.isNotEmpty;
           });
         case '/cost_cloud':
           setState(() {
@@ -180,7 +361,7 @@ class _InspectionMapRosPageState extends State<InspectionMapRosPage> {
         case '/tf':
         case '/tf_static':
           _tfTree.updateFromMessage(event.message);
-          if (_laserScan != null && mounted) setState(() {});
+          setState(() => _tfReceived = true);
         case '/goal_pose':
           final header = _asMap(event.message['header']);
           setState(() {
@@ -212,20 +393,16 @@ class _InspectionMapRosPageState extends State<InspectionMapRosPage> {
     }
   }
 
-  Future<void> _applyMap(RosOccupancyGrid grid) async {
+  Future<void> _applyMap(RosOccupancyGrid grid, int generation) async {
     if (!grid.isValid) return;
-    final image = await _occupancyGridImage(grid, isCostmap: false);
-    if (!mounted) {
-      image.dispose();
-      return;
-    }
+    if (!mounted || generation != _connectionGeneration) return;
     final oldImage = _mapImage;
     setState(() {
-      _mapGrid = grid;
-      _mapImage = image;
+      _mapImage = null;
+      _mapReceived = true;
       _mapInfo = MapInfo(
         mapName: 'ROS /map',
-        imageAsset: _fallbackMapInfo.imageAsset,
+        imageAsset: _offlineMapInfo.imageAsset,
         imageFile: '/map',
         width: grid.width,
         height: grid.height,
@@ -236,16 +413,26 @@ class _InspectionMapRosPageState extends State<InspectionMapRosPage> {
       );
     });
     oldImage?.dispose();
+
+    final image = await _occupancyGridImage(grid, isCostmap: false);
+    if (!mounted || generation != _connectionGeneration) {
+      image.dispose();
+      return;
+    }
+    setState(() => _mapImage = image);
   }
 
-  Future<void> _applyGlobalCostmap(RosOccupancyGrid grid) async {
+  Future<void> _applyGlobalCostmap(
+    RosOccupancyGrid grid,
+    int generation,
+  ) async {
     if (!grid.isValid) return;
     final image = await _occupancyGridImage(
       grid,
       isCostmap: true,
       tint: const Color(0xFFDC2626),
     );
-    if (!mounted) {
+    if (!mounted || generation != _connectionGeneration) {
       image.dispose();
       return;
     }
@@ -257,14 +444,17 @@ class _InspectionMapRosPageState extends State<InspectionMapRosPage> {
     oldImage?.dispose();
   }
 
-  Future<void> _applyLocalCostmap(RosOccupancyGrid grid) async {
+  Future<void> _applyLocalCostmap(
+    RosOccupancyGrid grid,
+    int generation,
+  ) async {
     if (!grid.isValid) return;
     final image = await _occupancyGridImage(
       grid,
       isCostmap: true,
       tint: const Color(0xFFF59E0B),
     );
-    if (!mounted) {
+    if (!mounted || generation != _connectionGeneration) {
       image.dispose();
       return;
     }
@@ -332,58 +522,494 @@ class _InspectionMapRosPageState extends State<InspectionMapRosPage> {
     setState(() => _initialPoseSent = true);
   }
 
-  void _publishGoalPose() {
+  Future<void> _publishGoalPose() async {
     final pose = _goalPose;
-    if (!_isConnected || pose == null) return;
-    _rosClient.publishGoalPose(x: pose.x, y: pose.y, yaw: pose.yaw);
+    if (pose == null ||
+        _navigationBlockers.isNotEmpty ||
+        _navigateRequestInFlight ||
+        _stopRequestInFlight) {
+      return;
+    }
+    setState(() => _navigateRequestInFlight = true);
+    try {
+      _rosClient.publishGoalPose(x: pose.x, y: pose.y, yaw: pose.yaw);
+      await Future<void>.delayed(_commandGuardDuration);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _connectionMessage = 'Navigate failed: $error');
+    } finally {
+      if (mounted) setState(() => _navigateRequestInFlight = false);
+    }
   }
 
-  Future<void> _stopRobot() async {
-    if (!_isConnected) return;
-    await _rosClient.cancelNavigationAndStop();
+  Future<void> _stopNavigation() async {
+    if (!_isConnected || _stopRequestInFlight) return;
+    setState(() => _stopRequestInFlight = true);
+    try {
+      _rosClient.stopNavigation();
+      await Future<void>.delayed(_commandGuardDuration);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _connectionMessage = 'Stop navigation failed: $error');
+    } finally {
+      if (mounted) setState(() => _stopRequestInFlight = false);
+    }
+  }
+
+  Future<void> _startRobotServices() async {
+    final start = widget.onStartRobotServices;
+    if (start == null || _startupRequestInFlight) return;
+    setState(() {
+      _startupRequestInFlight = true;
+      _startupMessage = null;
+    });
+    try {
+      await start();
+      if (!mounted) return;
+      setState(() => _startupMessage = '启动请求已提交');
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _startupMessage = '启动失败：$error');
+    } finally {
+      if (mounted) setState(() => _startupRequestInFlight = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final employeeMode = widget.experience == InspectionMapExperience.employee;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Robot navigation'),
+        title: Text(employeeMode ? '巡检机器人' : 'Robot navigation'),
         actions: [
           IconButton(
-            tooltip: 'Reset map view',
+            tooltip: employeeMode ? '复位地图视图' : 'Reset map view',
             onPressed: () => _transformController.value = Matrix4.identity(),
             icon: const Icon(Icons.center_focus_strong),
           ),
           const SizedBox(width: 8),
         ],
       ),
-      body: Column(
-        children: [
-          _buildConnectionBar(context),
-          Expanded(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                if (constraints.maxWidth < 900) {
-                  return Column(
-                    children: [
-                      Expanded(flex: 3, child: _buildMapSurface(context)),
-                      SizedBox(
-                        height: math.min(330, constraints.maxHeight * 0.42),
-                        child: _buildControlPanel(context),
-                      ),
-                    ],
-                  );
-                }
-                return Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Expanded(child: _buildMapSurface(context)),
-                    SizedBox(width: 352, child: _buildControlPanel(context)),
-                  ],
-                );
+      body:
+          employeeMode ? _buildEmployeeBody(context) : _buildDebugBody(context),
+    );
+  }
+
+  Widget _buildDebugBody(BuildContext context) {
+    return Column(
+      children: [
+        _buildConnectionBar(context),
+        Expanded(child: _buildNavigationWorkspace(context, employee: false)),
+      ],
+    );
+  }
+
+  Widget _buildEmployeeBody(BuildContext context) {
+    return Column(
+      children: [
+        _buildEmployeeConnectionBar(context),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+          child: SizedBox(
+            width: double.infinity,
+            child: SegmentedButton<_EmployeeSection>(
+              key: const ValueKey('employee-inspection-sections'),
+              segments: const [
+                ButtonSegment(
+                  value: _EmployeeSection.map,
+                  icon: Icon(Icons.map_outlined),
+                  label: Text(
+                    '地图展示',
+                    key: ValueKey('employee-inspection-map-tab'),
+                  ),
+                ),
+                ButtonSegment(
+                  value: _EmployeeSection.navigation,
+                  icon: Icon(Icons.navigation_outlined),
+                  label: Text(
+                    '导航控制',
+                    key: ValueKey('employee-inspection-navigation-tab'),
+                  ),
+                ),
+                ButtonSegment(
+                  value: _EmployeeSection.startup,
+                  icon: Icon(Icons.power_settings_new),
+                  label: Text(
+                    '启动准备',
+                    key: ValueKey('employee-inspection-startup-tab'),
+                  ),
+                ),
+              ],
+              selected: {_employeeSection},
+              onSelectionChanged: (selection) {
+                setState(() => _employeeSection = selection.first);
               },
             ),
           ),
+        ),
+        Expanded(
+          child: switch (_employeeSection) {
+            _EmployeeSection.map => _buildEmployeeMapView(context),
+            _EmployeeSection.navigation =>
+              _buildNavigationWorkspace(context, employee: true),
+            _EmployeeSection.startup => _buildEmployeeStartupView(context),
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildNavigationWorkspace(
+    BuildContext context, {
+    required bool employee,
+  }) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final controlPanel = employee
+            ? _buildEmployeeNavigationPanel(context)
+            : _buildControlPanel(context);
+        if (constraints.maxWidth < 900) {
+          return Column(
+            children: [
+              Expanded(
+                flex: 3,
+                child: _buildMapSurface(
+                  context,
+                  allowPoseSelection: true,
+                ),
+              ),
+              SizedBox(
+                height: math.min(
+                  employee ? 360 : 330,
+                  constraints.maxHeight * (employee ? 0.5 : 0.42),
+                ),
+                child: controlPanel,
+              ),
+            ],
+          );
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: _buildMapSurface(
+                context,
+                allowPoseSelection: true,
+              ),
+            ),
+            SizedBox(width: employee ? 376 : 352, child: controlPanel),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildEmployeeConnectionBar(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final busy = _connectionStatus == RosbridgeConnectionStatus.connecting ||
+        _connectionStatus == RosbridgeConnectionStatus.reconnecting;
+    final canConnect = !busy && !_isConnected;
+    return Material(
+      color: scheme.surfaceContainerHighest,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: Row(
+          children: [
+            Container(
+              width: 10,
+              height: 10,
+              decoration: BoxDecoration(
+                color: _connectionColor(scheme),
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '机器人连接',
+                    style: Theme.of(context).textTheme.labelLarge,
+                  ),
+                  Text(
+                    _employeeConnectionLabel,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                  ),
+                ],
+              ),
+            ),
+            IconButton(
+              key: const ValueKey('employee-inspection-connect'),
+              tooltip: '连接机器人',
+              onPressed: canConnect ? _connect : null,
+              icon: busy
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.link),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmployeeMapView(BuildContext context) {
+    return Column(
+      children: [
+        Expanded(
+          child: _buildMapSurface(
+            context,
+            allowPoseSelection: false,
+          ),
+        ),
+        Material(
+          color: Theme.of(context).colorScheme.surface,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _EmployeeSignal(
+                  icon: Icons.map_outlined,
+                  label: '地图',
+                  ready: _mapReceived,
+                ),
+                _EmployeeSignal(
+                  icon: Icons.my_location,
+                  label: '定位',
+                  ready: _amclReceived,
+                ),
+                _EmployeeSignal(
+                  icon: Icons.radar,
+                  label: '雷达',
+                  ready: _scanReceived,
+                ),
+                _EmployeeSignal(
+                  icon: Icons.account_tree_outlined,
+                  label: '坐标',
+                  ready: _scanTfReady,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEmployeeStartupView(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final startupConfigured = widget.onStartRobotServices != null;
+    return ListView(
+      key: const ValueKey('employee-inspection-startup-view'),
+      padding: const EdgeInsets.all(16),
+      children: [
+        Text('启动准备', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 12),
+        _InfoRow(label: '机器人连接', value: _employeeConnectionLabel),
+        _InfoRow(label: '地图服务', value: _employeeReadyLabel(_mapReceived)),
+        _InfoRow(label: '定位服务', value: _employeeReadyLabel(_amclReceived)),
+        _InfoRow(label: '雷达数据', value: _employeeReadyLabel(_scanReceived)),
+        _InfoRow(label: '坐标变换', value: _employeeReadyLabel(_scanTfReady)),
+        const SizedBox(height: 16),
+        FilledButton.icon(
+          key: const ValueKey('employee-inspection-start-services'),
+          onPressed: startupConfigured && !_startupRequestInFlight
+              ? _startRobotServices
+              : null,
+          icon: _startupRequestInFlight
+              ? const SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.power_settings_new),
+          label: Text(_startupRequestInFlight ? '正在启动' : '一键启动机器人服务'),
+        ),
+        const SizedBox(height: 8),
+        if (!startupConfigured)
+          Text(
+            '启动服务接口未配置',
+            key: const ValueKey('employee-inspection-startup-unconfigured'),
+            style: TextStyle(color: scheme.onSurfaceVariant),
+          ),
+        if (_startupMessage != null)
+          Text(
+            _startupMessage!,
+            style: TextStyle(
+              color: _startupMessage!.startsWith('启动失败')
+                  ? scheme.error
+                  : const Color(0xFF166534),
+            ),
+          ),
+        const Divider(height: 32),
+        Text('导航状态', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 8),
+        _InfoRow(label: '任务', value: _goalStatus.label),
+        _InfoRow(
+          label: '速度',
+          value: '${_linearVelocity.toStringAsFixed(2)} m/s  '
+              '${_angularVelocity.toStringAsFixed(2)} rad/s',
+        ),
+        _InfoRow(
+          label: '最近消息',
+          value: _lastMessageAt == null ? '-' : _formatTime(_lastMessageAt!),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEmployeeNavigationPanel(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final selectedPose =
+        _poseMode == _PoseMode.initialPose ? _initialPose : _goalPose;
+    final navigationBlockers = _navigationBlockers;
+    return Material(
+      color: scheme.surface,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Text('导航准备', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: navigationBlockers.isEmpty
+                  ? const Color(0xFFDCFCE7)
+                  : scheme.errorContainer,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              navigationBlockers.isEmpty
+                  ? '导航就绪'
+                  : navigationBlockers.join('；'),
+              style: TextStyle(
+                color: navigationBlockers.isEmpty
+                    ? const Color(0xFF166534)
+                    : scheme.onErrorContainer,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          SegmentedButton<_PoseMode>(
+            segments: const [
+              ButtonSegment(
+                value: _PoseMode.initialPose,
+                icon: Icon(Icons.my_location),
+                label: Text('初始位置'),
+              ),
+              ButtonSegment(
+                value: _PoseMode.goalPose,
+                icon: Icon(Icons.flag_outlined),
+                label: Text('目标位置'),
+              ),
+            ],
+            selected: {_poseMode},
+            onSelectionChanged: (selection) {
+              final mode = selection.first;
+              setState(() {
+                _poseMode = mode;
+                final pose =
+                    mode == _PoseMode.initialPose ? _initialPose : _goalPose;
+                _selectedYaw = pose?.yaw ?? 0;
+              });
+            },
+          ),
+          const SizedBox(height: 12),
+          _InfoRow(
+            label: '位置',
+            value: selectedPose == null
+                ? '-'
+                : '${selectedPose.x.toStringAsFixed(3)}, '
+                    '${selectedPose.y.toStringAsFixed(3)}',
+          ),
+          _InfoRow(
+            label: '朝向',
+            value: '${(_selectedYaw * 180 / math.pi).toStringAsFixed(1)}°',
+          ),
+          Slider(
+            min: -math.pi,
+            max: math.pi,
+            divisions: 72,
+            value: _selectedYaw,
+            onChanged: _setSelectedYaw,
+          ),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _isConnected && _initialPose != null
+                      ? _publishInitialPose
+                      : null,
+                  icon: Icon(
+                    _initialPoseSent ? Icons.check : Icons.my_location,
+                  ),
+                  label: const Text('设置初始位置'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: FilledButton.icon(
+                  key: const ValueKey('inspection-map-navigate'),
+                  onPressed: navigationBlockers.isEmpty &&
+                          !_navigateRequestInFlight &&
+                          !_stopRequestInFlight
+                      ? _publishGoalPose
+                      : null,
+                  icon: const Icon(Icons.navigation),
+                  label: Text(_navigateRequestInFlight ? '正在发送' : '开始导航'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          FilledButton.icon(
+            key: const ValueKey('inspection-map-stop'),
+            style: FilledButton.styleFrom(
+              backgroundColor: scheme.error,
+              foregroundColor: scheme.onError,
+            ),
+            onPressed:
+                _isConnected && !_stopRequestInFlight ? _stopNavigation : null,
+            icon: const Icon(Icons.stop_circle_outlined),
+            label: Text(_stopRequestInFlight ? '正在停止' : '停止导航'),
+          ),
+          const Divider(height: 28),
+          Text('任务状态', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          _InfoRow(label: '状态', value: _goalStatus.label),
+          _InfoRow(
+            label: '小车位置',
+            value: _robotPose == null
+                ? '-'
+                : '${_robotPose!.x.toStringAsFixed(3)}, '
+                    '${_robotPose!.y.toStringAsFixed(3)}',
+          ),
+          _InfoRow(
+            label: '剩余距离',
+            value: _feedback == null
+                ? '-'
+                : '${_feedback!.distanceRemaining.toStringAsFixed(2)} m',
+          ),
+          _InfoRow(
+            label: '预计时间',
+            value: _feedback == null
+                ? '-'
+                : '${_feedback!.estimatedTimeRemaining.inSeconds} s',
+          ),
+          if (_connectionMessage != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              _connectionMessage!,
+              style: TextStyle(color: scheme.error, fontSize: 12),
+            ),
+          ],
         ],
       ),
     );
@@ -448,7 +1074,10 @@ class _InspectionMapRosPageState extends State<InspectionMapRosPage> {
     );
   }
 
-  Widget _buildMapSurface(BuildContext context) {
+  Widget _buildMapSurface(
+    BuildContext context, {
+    required bool allowPoseSelection,
+  }) {
     final scheme = Theme.of(context).colorScheme;
     final globalPlan =
         _showGlobalPlan ? _pathPixels(_globalPlan) : const <Offset>[];
@@ -478,6 +1107,7 @@ class _InspectionMapRosPageState extends State<InspectionMapRosPage> {
     );
 
     return ColoredBox(
+      key: const ValueKey('inspection-map-surface'),
       color: const Color(0xFFD7DCDD),
       child: InteractiveViewer(
         transformationController: _transformController,
@@ -491,7 +1121,7 @@ class _InspectionMapRosPageState extends State<InspectionMapRosPage> {
             child: FittedBox(
               fit: BoxFit.fill,
               child: GestureDetector(
-                onTapDown: _onMapTap,
+                onTapDown: allowPoseSelection ? _onMapTap : null,
                 child: SizedBox(
                   width: _mapInfo.width.toDouble(),
                   height: _mapInfo.height.toDouble(),
@@ -581,10 +1211,10 @@ class _InspectionMapRosPageState extends State<InspectionMapRosPage> {
                         Positioned(
                           left: goalPixel.x - 18,
                           top: goalPixel.y - 18,
-                          child: const IgnorePointer(
+                          child: IgnorePointer(
                             child: CustomPaint(
-                              size: Size(36, 36),
-                              painter: _GoalPainter(),
+                              size: const Size(36, 36),
+                              painter: _GoalPainter(yaw: _goalPose!.yaw),
                             ),
                           ),
                         ),
@@ -617,8 +1247,8 @@ class _InspectionMapRosPageState extends State<InspectionMapRosPage> {
                                 vertical: 5,
                               ),
                               child: Text(
-                                '${_mapInfo.width} x ${_mapInfo.height}  '
-                                '${_mapInfo.resolution.toStringAsFixed(3)} m/cell',
+                                '${_mapInfo.width} x ${_mapInfo.height} '
+                                '/ ${_mapInfo.resolution.toStringAsFixed(3)} m/cell',
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 11,
@@ -649,33 +1279,38 @@ class _InspectionMapRosPageState extends State<InspectionMapRosPage> {
       );
     }
     return Image.asset(
-      _fallbackMapInfo.imageAsset,
+      _mapInfo.imageAsset.isEmpty
+          ? _fallbackMapInfo.imageAsset
+          : _mapInfo.imageAsset,
       fit: BoxFit.fill,
       filterQuality: FilterQuality.none,
     );
   }
 
   Widget _buildGridOverlay(RosOccupancyGrid? grid, ui.Image? image) {
-    if (grid == null || image == null || _mapGrid == null) {
+    if (grid == null || image == null || !_mapReceived) {
       return const SizedBox.shrink();
     }
-    final topLeft = mapToPixel(
-      grid.origin.x,
-      grid.origin.y + grid.height * grid.resolution,
-      _mapInfo,
+    final placement = resolveOccupancyGridPlacement(
+      grid: grid,
+      mapInfo: _mapInfo,
+      tfTree: _tfTree,
     );
-    final width = grid.width * grid.resolution / _mapInfo.resolution;
-    final height = grid.height * grid.resolution / _mapInfo.resolution;
+    if (placement == null) return const SizedBox.shrink();
     return Positioned(
-      left: topLeft.x,
-      top: topLeft.y,
-      width: width,
-      height: height,
+      left: placement.originPixelX,
+      top: placement.originPixelY - placement.height,
+      width: placement.width,
+      height: placement.height,
       child: IgnorePointer(
-        child: RawImage(
-          image: image,
-          fit: BoxFit.fill,
-          filterQuality: FilterQuality.none,
+        child: Transform.rotate(
+          angle: placement.screenRotation,
+          alignment: Alignment.bottomLeft,
+          child: RawImage(
+            image: image,
+            fit: BoxFit.fill,
+            filterQuality: FilterQuality.none,
+          ),
         ),
       ),
     );
@@ -685,11 +1320,67 @@ class _InspectionMapRosPageState extends State<InspectionMapRosPage> {
     final scheme = Theme.of(context).colorScheme;
     final selectedPose =
         _poseMode == _PoseMode.initialPose ? _initialPose : _goalPose;
+    final navigationBlockers = _navigationBlockers;
+    final particleSpread = _particleSpreadMeters;
     return Material(
       color: scheme.surface,
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          Text(
+            'Navigation readiness',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 8),
+          _InfoRow(
+              label: 'source', value: _mapReceived ? 'ROS /map' : 'offline'),
+          _InfoRow(label: '/map', value: _receivedLabel(_mapReceived)),
+          _InfoRow(label: '/amcl_pose', value: _receivedLabel(_amclReceived)),
+          _InfoRow(label: '/scan', value: _receivedLabel(_scanReceived)),
+          _InfoRow(label: 'scan TF', value: _receivedLabel(_scanTfReady)),
+          _InfoRow(
+            label: 'map',
+            value: '${_mapInfo.width} x ${_mapInfo.height} / '
+                '${_mapInfo.resolution.toStringAsFixed(3)} m/cell',
+          ),
+          _InfoRow(label: 'frame', value: _mapInfo.frameId),
+          _InfoRow(
+            label: 'origin',
+            value: '${_mapInfo.originX.toStringAsFixed(3)}, '
+                '${_mapInfo.originY.toStringAsFixed(3)}',
+          ),
+          if (particleSpread != null)
+            _InfoRow(
+              label: 'AMCL spread',
+              value: '${particleSpread.toStringAsFixed(2)} m',
+            ),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: navigationBlockers.isEmpty
+                  ? const Color(0xFFDCFCE7)
+                  : scheme.errorContainer,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              navigationBlockers.isEmpty
+                  ? 'Ready to navigate'
+                  : 'Navigate disabled: ${navigationBlockers.join('；')}',
+              style: TextStyle(
+                color: navigationBlockers.isEmpty
+                    ? const Color(0xFF166534)
+                    : scheme.onErrorContainer,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '先用 Start 设置真实初始位置；若雷达点与墙体不重合，请勿导航。',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const Divider(height: 28),
           Text('Pose tool', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
           SegmentedButton<_PoseMode>(
@@ -751,24 +1442,32 @@ class _InspectionMapRosPageState extends State<InspectionMapRosPage> {
               const SizedBox(width: 8),
               Expanded(
                 child: FilledButton.icon(
-                  onPressed: _isConnected && _goalPose != null
+                  key: const ValueKey('inspection-map-navigate'),
+                  onPressed: navigationBlockers.isEmpty &&
+                          !_navigateRequestInFlight &&
+                          !_stopRequestInFlight
                       ? _publishGoalPose
                       : null,
                   icon: const Icon(Icons.navigation),
-                  label: const Text('Navigate'),
+                  label: Text(
+                    _navigateRequestInFlight ? 'Sending...' : 'Navigate',
+                  ),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 8),
           FilledButton.icon(
+            key: const ValueKey('inspection-map-stop'),
             style: FilledButton.styleFrom(
               backgroundColor: scheme.error,
               foregroundColor: scheme.onError,
             ),
-            onPressed: _isConnected ? _stopRobot : null,
+            onPressed:
+                _isConnected && !_stopRequestInFlight ? _stopNavigation : null,
             icon: const Icon(Icons.stop_circle_outlined),
-            label: const Text('Stop robot'),
+            label:
+                Text(_stopRequestInFlight ? 'Stopping...' : 'Stop navigation'),
           ),
           const Divider(height: 28),
           Text('Navigation', style: Theme.of(context).textTheme.titleMedium),
@@ -850,6 +1549,13 @@ class _InspectionMapRosPageState extends State<InspectionMapRosPage> {
             const Divider(height: 28),
             Text(
               _connectionMessage!,
+              style: TextStyle(color: scheme.error, fontSize: 12),
+            ),
+          ],
+          if (_mapMetadataMessage != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              _mapMetadataMessage!,
               style: TextStyle(color: scheme.error, fontSize: 12),
             ),
           ],
@@ -959,12 +1665,24 @@ class _InspectionMapRosPageState extends State<InspectionMapRosPage> {
         RosbridgeConnectionStatus.error => 'Connection error',
       };
 
+  String get _employeeConnectionLabel => switch (_connectionStatus) {
+        RosbridgeConnectionStatus.disconnected => '未连接',
+        RosbridgeConnectionStatus.connecting => '连接中',
+        RosbridgeConnectionStatus.connected => '已连接',
+        RosbridgeConnectionStatus.reconnecting => '重新连接中',
+        RosbridgeConnectionStatus.error => '连接异常',
+      };
+
+  String _employeeReadyLabel(bool ready) => ready ? '正常' : '等待数据';
+
   String _formatTime(DateTime value) {
     final local = value.toLocal();
     return '${local.hour.toString().padLeft(2, '0')}:'
         '${local.minute.toString().padLeft(2, '0')}:'
         '${local.second.toString().padLeft(2, '0')}';
   }
+
+  String _receivedLabel(bool received) => received ? 'received' : 'waiting';
 }
 
 Future<ui.Image> _occupancyGridImage(
@@ -1163,7 +1881,9 @@ class _RobotPainter extends CustomPainter {
 }
 
 class _GoalPainter extends CustomPainter {
-  const _GoalPainter();
+  const _GoalPainter({required this.yaw});
+
+  final double yaw;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1176,6 +1896,7 @@ class _GoalPainter extends CustomPainter {
       ..color = const Color(0xFFDC2626)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 3;
+    final direction = Offset(math.cos(yaw), -math.sin(yaw));
     canvas
       ..drawCircle(center, 10, white)
       ..drawCircle(center, 10, red)
@@ -1186,11 +1907,14 @@ class _GoalPainter extends CustomPainter {
       ..drawLine(
           center - const Offset(0, 14), center + const Offset(0, 14), white)
       ..drawLine(
-          center - const Offset(0, 14), center + const Offset(0, 14), red);
+          center - const Offset(0, 14), center + const Offset(0, 14), red)
+      ..drawLine(center, center + direction * 16, white)
+      ..drawLine(center, center + direction * 16, red);
   }
 
   @override
-  bool shouldRepaint(covariant _GoalPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _GoalPainter oldDelegate) =>
+      oldDelegate.yaw != yaw;
 }
 
 class _LayerToggle extends StatelessWidget {
@@ -1247,6 +1971,43 @@ class _InfoRow extends StatelessWidget {
             ),
           ),
           Expanded(child: Text(value)),
+        ],
+      ),
+    );
+  }
+}
+
+class _EmployeeSignal extends StatelessWidget {
+  const _EmployeeSignal({
+    required this.icon,
+    required this.label,
+    required this.ready,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool ready;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final foreground =
+        ready ? const Color(0xFF166534) : scheme.onSurfaceVariant;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: ready ? const Color(0xFFDCFCE7) : scheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: foreground),
+          const SizedBox(width: 6),
+          Text(
+            '$label ${ready ? '正常' : '等待'}',
+            style: TextStyle(color: foreground),
+          ),
         ],
       ),
     );

@@ -41,7 +41,7 @@ ros_navigation_models.dart
 inspection_map_ros_page.dart
   负责页面展示和交互，显示 ROS 地图、机器人位置、雷达点云、全局路径、
   局部路径、global/local costmap、导航状态，并提供 Start、Target、
-  Navigate、Stop robot 操作。
+  Navigate、Stop navigation 操作。
 ```
 
 辅助调试文件：
@@ -105,9 +105,9 @@ Android App 侧需要发布：
 停止导航应执行：
 
 ```text
-1. 调用 /navigate_to_pose/_action/cancel_goal
-2. 短脉冲发布全零 Twist 到 /cmd_vel
-3. 不持续发布零速度，避免和 Nav2 抢 /cmd_vel
+1. Flutter 向 /inspection_map/stop_navigation 单次发布 std_msgs/msg/Empty
+2. Flutter 不直接调用 NavigateToPose CancelGoal
+3. Flutter 不 advertise 或发布 /cmd_vel；取消 action 和有限零速由 bridge 统一负责
 ```
 
 ## 地图资源放入 App 的方式
@@ -136,11 +136,11 @@ flutter:
   "mapName": "yahboomcar",
   "imageAsset": "assets/robot_maps/yahboomcar.png",
   "imageFile": "yahboomcar.png",
-  "width": 608,
-  "height": 864,
-  "imageHeight": 864,
+  "width": 864,
+  "height": 896,
+  "imageHeight": 896,
   "resolution": 0.05,
-  "origin": [-10.0, -21.2, 0.0],
+  "origin": [-22.8, -22.8, 0.0],
   "frameId": "map"
 }
 ```
@@ -294,8 +294,8 @@ Android 真机上应验证：
 7. NavigateToPose status/feedback 能更新
 8. Start 发布 /initialpose 格式正确
 9. Navigate 发布 /goal_pose 格式正确
-10. Stop robot 能 cancel action，并短脉冲发布零 Twist
-11. 不会持续抢占 /cmd_vel
+10. Stop navigation 只向 /inspection_map/stop_navigation 发布一次 Empty
+11. Flutter 不直接调用 CancelGoal，也不 advertise 或发布 /cmd_vel
 12. 不依赖 app_control_gateway.py
 ```
 
@@ -349,4 +349,3 @@ assets/robot_maps/map_info.json
 ```text
 lib/features/inspection_map/data/robot_control_bridge_client.dart
 ```
-

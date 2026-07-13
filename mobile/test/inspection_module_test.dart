@@ -26,8 +26,8 @@ void main() {
       final mapInfo = await InspectionService.getMapInfo();
 
       expect(mapInfo.imageAsset, 'assets/robot_maps/yahboomcar.png');
-      expect(mapInfo.width, 608);
-      expect(mapInfo.height, 384);
+      expect(mapInfo.width, 864);
+      expect(mapInfo.height, 896);
     });
 
     test('maps backend mapImage to the bundled yahboomcar asset', () {
@@ -179,6 +179,16 @@ void main() {
       await _pump(tester, const EmployeeHomePage());
 
       expect(find.byType(ListTile), findsNWidgets(3));
+      expect(find.text('巡检地图'), findsOneWidget);
+      expect(find.text('异常事件'), findsOneWidget);
+      expect(find.text('娱乐'), findsOneWidget);
+
+      await tester.tap(find.text('巡检地图'));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('employee-robot-inspection-route-test')),
+        findsOneWidget,
+      );
     });
 
     testWidgets('event list only shows fall crack and obstacle',
@@ -286,7 +296,6 @@ void main() {
       expect(requests, contains('/api/navigation/tasks'));
       expect(find.byKey(const ValueKey('marker-target--77')), findsOneWidget);
     });
-
   });
 }
 
@@ -295,6 +304,12 @@ Future<void> _pump(WidgetTester tester, Widget child) async {
     MaterialApp(
       home: child,
       routes: {
+        '/employee/robot-inspection': (_) => const Scaffold(
+              body: Text(
+                '员工巡检机器人页面',
+                key: ValueKey('employee-robot-inspection-route-test'),
+              ),
+            ),
         '/inspection/map': (_) => const InspectionMapPage(),
         '/inspection/events': (_) => const InspectionEventsPage(),
       },
