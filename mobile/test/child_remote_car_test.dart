@@ -11,6 +11,11 @@ void main() {
     expect(CarEncoder.button(CarDirection.brake), r'$0115040721#');
   });
 
+  test('car encoder emits smart car rocker and wheel speed protocol', () {
+    expect(CarEncoder.rocker(60, -60), r'$0110063CC417#');
+    expect(CarEncoder.wheelSpeeds(10, 20, -30, -40), r'$01210A0A14E2D804#');
+  });
+
   test('remote car commands map to TCP directions', () {
     expect(RemoteCarCommand.forward.tcpDirection, CarDirection.front);
     expect(RemoteCarCommand.backward.tcpDirection, CarDirection.back);
@@ -146,6 +151,87 @@ void main() {
       find.text('小车控制连接失败，请确认 app.py 已启动，6000 端口可访问'),
       findsOneWidget,
     );
+  });
+
+  testWidgets('remote car page exposes speed-limited rocker controls',
+      (tester) async {
+    final tcpClient = _FakeTcpClient();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ChildRemoteCarPage(
+          tcpClient: tcpClient,
+          mjpegBuilder: (_, __) => const SizedBox(key: Key('fakeMjpeg')),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('连接 TCP'));
+    await tester.pump();
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('rockerXSlider')),
+      400,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pump();
+
+    var xSlider = tester.widget<Slider>(find.byKey(const Key('rockerXSlider')));
+    var ySlider = tester.widget<Slider>(find.byKey(const Key('rockerYSlider')));
+    expect(xSlider.max, 60);
+    expect(ySlider.max, 60);
+    expect(find.text('中速 60'), findsOneWidget);
+
+    await tester.tap(find.text('快速'));
+    await tester.pump();
+
+    xSlider = tester.widget<Slider>(find.byKey(const Key('rockerXSlider')));
+    ySlider = tester.widget<Slider>(find.byKey(const Key('rockerYSlider')));
+    expect(xSlider.max, 100);
+    expect(ySlider.max, 100);
+
+    await tester.tap(find.text('发送摇杆命令'));
+    await tester.pump();
+
+    expect(tcpClient.sent.last, CarEncoder.rocker(0, 0));
+  });
+
+  testWidgets('remote car page keeps wheel speeds in advanced debug',
+      (tester) async {
+    final tcpClient = _FakeTcpClient();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ChildRemoteCarPage(
+          tcpClient: tcpClient,
+          mjpegBuilder: (_, __) => const SizedBox(key: Key('fakeMjpeg')),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('连接 TCP'));
+    await tester.pump();
+    await tester.scrollUntilVisible(
+      find.text('高级调试'),
+      500,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pump();
+
+    expect(find.text('高级调试'), findsOneWidget);
+    expect(find.text('发送四轮速度'), findsNothing);
+
+    await tester.tap(find.text('高级调试'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('发送四轮速度'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('发送四轮速度'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pump();
+    await tester.tap(find.text('发送四轮速度'));
+    await tester.pump();
+
+    expect(tcpClient.sent.last, CarEncoder.wheelSpeeds(0, 0, 0, 0));
   });
 }
 

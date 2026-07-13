@@ -39,6 +39,13 @@ class _ChildRemoteCarPageState extends State<ChildRemoteCarPage> {
   String _connectionStatus = 'TCP未连接';
   String _lastCommand = '-';
   String? _errorText;
+  int _speedLimit = 60;
+  double _rockerX = 0;
+  double _rockerY = 0;
+  double _leftFrontSpeed = 0;
+  double _leftRearSpeed = 0;
+  double _rightFrontSpeed = 0;
+  double _rightRearSpeed = 0;
   bool _busy = false;
 
   @override
@@ -98,6 +105,61 @@ class _ChildRemoteCarPageState extends State<ChildRemoteCarPage> {
       },
       failureMessage: _controlFailureMessage,
     );
+  }
+
+  Future<void> _sendRocker({bool resetAfterSend = false}) async {
+    if (!_tcpClient.isConnected) {
+      _showControlFailure();
+      return;
+    }
+    final x = _rockerX.round().clamp(-_speedLimit, _speedLimit);
+    final y = _rockerY.round().clamp(-_speedLimit, _speedLimit);
+    await _runAction(
+      () async {
+        await _tcpClient.send(CarEncoder.rocker(x, y));
+        setState(() {
+          _lastCommand = '摇杆 x=$x y=$y';
+          _errorText = null;
+          if (resetAfterSend) {
+            _rockerX = 0;
+            _rockerY = 0;
+          }
+        });
+      },
+      failureMessage: _controlFailureMessage,
+    );
+  }
+
+  Future<void> _sendWheelSpeeds() async {
+    if (!_tcpClient.isConnected) {
+      _showControlFailure();
+      return;
+    }
+    await _runAction(
+      () async {
+        await _tcpClient.send(
+          CarEncoder.wheelSpeeds(
+            _leftFrontSpeed,
+            _leftRearSpeed,
+            _rightFrontSpeed,
+            _rightRearSpeed,
+          ),
+        );
+        setState(() {
+          _lastCommand = '四轮速度';
+          _errorText = null;
+        });
+      },
+      failureMessage: _controlFailureMessage,
+    );
+  }
+
+  void _setSpeedLimit(int value) {
+    setState(() {
+      _speedLimit = value;
+      _rockerX = _rockerX.clamp(-value, value).toDouble();
+      _rockerY = _rockerY.clamp(-value, value).toDouble();
+    });
   }
 
   Future<void> _runAction(
@@ -164,9 +226,248 @@ class _ChildRemoteCarPageState extends State<ChildRemoteCarPage> {
             onCommand: _sendCommand,
           ),
           const SizedBox(height: 14),
+          _RockerControlCard(
+            busy: _busy,
+            speedLimit: _speedLimit,
+            rockerX: _rockerX,
+            rockerY: _rockerY,
+            onSpeedChanged: _setSpeedLimit,
+            onXChanged: (value) => setState(() => _rockerX = value),
+            onYChanged: (value) => setState(() => _rockerY = value),
+            onSend: _busy ? null : () => _sendRocker(),
+          ),
+          const SizedBox(height: 14),
+          _AdvancedDebugCard(
+            busy: _busy,
+            speedLimit: _speedLimit,
+            leftFront: _leftFrontSpeed,
+            leftRear: _leftRearSpeed,
+            rightFront: _rightFrontSpeed,
+            rightRear: _rightRearSpeed,
+            onLeftFrontChanged: (value) =>
+                setState(() => _leftFrontSpeed = value),
+            onLeftRearChanged: (value) => setState(() => _leftRearSpeed = value),
+            onRightFrontChanged: (value) =>
+                setState(() => _rightFrontSpeed = value),
+            onRightRearChanged: (value) =>
+                setState(() => _rightRearSpeed = value),
+            onSend: _busy ? null : _sendWheelSpeeds,
+          ),
+          const SizedBox(height: 14),
           _ErrorPanel(errorText: _errorText),
         ],
       ),
+    );
+  }
+}
+
+class _RockerControlCard extends StatelessWidget {
+  const _RockerControlCard({
+    required this.busy,
+    required this.speedLimit,
+    required this.rockerX,
+    required this.rockerY,
+    required this.onSpeedChanged,
+    required this.onXChanged,
+    required this.onYChanged,
+    required this.onSend,
+  });
+
+  final bool busy;
+  final int speedLimit;
+  final double rockerX;
+  final double rockerY;
+  final ValueChanged<int> onSpeedChanged;
+  final ValueChanged<double> onXChanged;
+  final ValueChanged<double> onYChanged;
+  final VoidCallback? onSend;
+
+  String get _speedLabel {
+    return switch (speedLimit) {
+      30 => '慢速 30',
+      100 => '快速 100',
+      _ => '中速 60',
+    };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Card(
+      elevation: 0,
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.gamepad_outlined, color: scheme.primary),
+                const SizedBox(width: 8),
+                Text('虚拟摇杆', style: Theme.of(context).textTheme.titleSmall),
+              ],
+            ),
+            const SizedBox(height: 12),
+            SegmentedButton<int>(
+              segments: const [
+                ButtonSegment(value: 30, label: Text('慢速')),
+                ButtonSegment(value: 60, label: Text('中速')),
+                ButtonSegment(value: 100, label: Text('快速')),
+              ],
+              selected: {speedLimit},
+              onSelectionChanged:
+                  busy ? null : (values) => onSpeedChanged(values.first),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _speedLabel,
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: scheme.onSurfaceVariant),
+            ),
+            const SizedBox(height: 12),
+            _SignedSlider(
+              sliderKey: const Key('rockerXSlider'),
+              label: 'X：左转 / 右转',
+              value: rockerX,
+              limit: speedLimit,
+              onChanged: busy ? null : onXChanged,
+            ),
+            _SignedSlider(
+              sliderKey: const Key('rockerYSlider'),
+              label: 'Y：后退 / 前进',
+              value: rockerY,
+              limit: speedLimit,
+              onChanged: busy ? null : onYChanged,
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: onSend,
+                icon: const Icon(Icons.send),
+                label: const Text('发送摇杆命令'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AdvancedDebugCard extends StatelessWidget {
+  const _AdvancedDebugCard({
+    required this.busy,
+    required this.speedLimit,
+    required this.leftFront,
+    required this.leftRear,
+    required this.rightFront,
+    required this.rightRear,
+    required this.onLeftFrontChanged,
+    required this.onLeftRearChanged,
+    required this.onRightFrontChanged,
+    required this.onRightRearChanged,
+    required this.onSend,
+  });
+
+  final bool busy;
+  final int speedLimit;
+  final double leftFront;
+  final double leftRear;
+  final double rightFront;
+  final double rightRear;
+  final ValueChanged<double> onLeftFrontChanged;
+  final ValueChanged<double> onLeftRearChanged;
+  final ValueChanged<double> onRightFrontChanged;
+  final ValueChanged<double> onRightRearChanged;
+  final VoidCallback? onSend;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 0,
+      child: ExpansionTile(
+        title: const Text('高级调试'),
+        leading: const Icon(Icons.tune),
+        childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+        children: [
+          _SignedSlider(
+            label: '左前轮',
+            value: leftFront,
+            limit: speedLimit,
+            onChanged: busy ? null : onLeftFrontChanged,
+          ),
+          _SignedSlider(
+            label: '左后轮',
+            value: leftRear,
+            limit: speedLimit,
+            onChanged: busy ? null : onLeftRearChanged,
+          ),
+          _SignedSlider(
+            label: '右前轮',
+            value: rightFront,
+            limit: speedLimit,
+            onChanged: busy ? null : onRightFrontChanged,
+          ),
+          _SignedSlider(
+            label: '右后轮',
+            value: rightRear,
+            limit: speedLimit,
+            onChanged: busy ? null : onRightRearChanged,
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: onSend,
+              icon: const Icon(Icons.memory),
+              label: const Text('发送四轮速度'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SignedSlider extends StatelessWidget {
+  const _SignedSlider({
+    this.sliderKey,
+    required this.label,
+    required this.value,
+    required this.limit,
+    required this.onChanged,
+  });
+
+  final Key? sliderKey;
+  final String label;
+  final double value;
+  final int limit;
+  final ValueChanged<double>? onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(child: Text(label)),
+            Text(value.round().toString()),
+          ],
+        ),
+        Slider(
+          key: sliderKey,
+          value: value.clamp(-limit, limit).toDouble(),
+          min: -limit.toDouble(),
+          max: limit.toDouble(),
+          divisions: limit * 2,
+          label: value.round().toString(),
+          onChanged: onChanged,
+        ),
+      ],
     );
   }
 }
