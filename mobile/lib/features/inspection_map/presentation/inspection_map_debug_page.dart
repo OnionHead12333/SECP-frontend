@@ -1,10 +1,12 @@
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
 import '../data/inspection_map_api_repository.dart';
 import '../data/inspection_map_mock_repository.dart';
 import '../data/inspection_map_repository.dart';
+import '../data/robot_control_bridge_client.dart';
 import '../models/inspection_marker.dart';
 import '../models/inspection_place.dart';
 import '../models/inspection_route.dart';
@@ -26,6 +28,7 @@ class InspectionMapDebugPage extends StatefulWidget {
 
 class _InspectionMapDebugPageState extends State<InspectionMapDebugPage> {
   final _transformController = TransformationController();
+  final _robotBridge = RobotControlBridgeClient();
 
   _DataSource _dataSource = _DataSource.mockAssets;
   InspectionMapRepository _repository = InspectionMapMockRepository();
@@ -40,9 +43,16 @@ class _InspectionMapDebugPageState extends State<InspectionMapDebugPage> {
   _ClickMode _clickMode = _ClickMode.navGoal;
   PixelPoint? _selectedPixel;
   MapPoint? _selectedMap;
+  PixelPoint? _initialPosePixel;
   Map<String, dynamic>? _initialPoseJson;
   Map<String, dynamic>? _navGoalJson;
+  List<MapPoint> _realPlanMapPoints = const [];
+  List<PixelPoint> _realPlanPixels = const [];
+  double _initialPoseYaw = 0;
+  bool _initialPoseSent = false;
   String? _errorMessage;
+  String? _robotBridgeStatus;
+  bool _robotBridgeBusy = false;
 
   @override
   void initState() {
@@ -131,6 +141,246 @@ class _InspectionMapDebugPageState extends State<InspectionMapDebugPage> {
     });
   }
 
+  Future<void> _sendInitialPoseToCar() async {
+    final pose = _initialPoseJson;
+    if (pose == null) return;
+    final sent = await _runRobotBridgeAction(
+      action: () => _robotBridge.publishInitialPose(pose),
+      successMessage: 'AMCL initial estimate sent to the real car',
+    );
+    if (sent && mounted) {
+      setState(() => _initialPoseSent = true);
+    }
+  }
+
+  Future<void> _checkRobotBridge() async {
+    await _runRobotBridgeAction(
+      action: _robotBridge.checkHealth,
+      successMessage: 'Robot bridge is reachable',
+    );
+  }
+
+  Future<void> _checkNavigationReady() async {
+    await _runRobotBridgeAction(
+      action: _robotBridge.checkNavigationReady,
+      successMessage: 'Robot navigation graph checked',
+    );
+  }
+
+  Future<void> _restartRobotNavigationStack() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Restart robot navigation stack?'),
+        content: const Text(
+          'This stops known n1/n3/Nav2 processes in Docker, then starts n1 '
+          'and n3 again. Use it when processes are running but topics are '
+          'missing.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.of(context).pop(true),
+            icon: const Icon(Icons.restart_alt),
+            label: const Text('Restart stack'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    await _runRobotBridgeAction(
+      action: _robotBridge.restartNavigation,
+      successMessage: 'Robot navigation stack restarted',
+    );
+  }
+
+  Future<void> _emergencyStopRobot() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Stop real car now?'),
+        content: const Text(
+          'This stops Nav2 control and publishes zero velocity to /cmd_vel.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.of(context).pop(true),
+            icon: const Icon(Icons.stop_circle_outlined),
+            label: const Text('Stop now'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    await _runRobotBridgeAction(
+      action: _robotBridge.emergencyStop,
+      successMessage: 'Emergency stop sent to the real car',
+    );
+  }
+
+  Future<void> _refreshRealPlan() async {
+    await _loadRealPlan(maxAttempts: 1);
+  }
+
+  Future<void> _startRobotNavigationStack() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Prepare robot navigation?'),
+        content: const Text(
+          'This runs s, enters Docker (d), then starts n1 (base and laser) '
+          'and n3 (DWA navigation). It does not send a goal or move the car.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.of(context).pop(true),
+            icon: const Icon(Icons.power_settings_new),
+            label: const Text('Prepare robot'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    await _runRobotBridgeAction(
+      action: _robotBridge.prepareNavigation,
+      successMessage: 'Robot prepared: s, d, n1 and n3 completed',
+    );
+  }
+
+  Future<void> _sendGoalPoseToCar() async {
+    final pose = _navGoalJson;
+    if (pose == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Navigate real car?'),
+        content: Text(
+          'This will publish /goal_pose to the real car at '
+          'x=${pose['x']}, y=${pose['y']}, yaw=${pose['yaw']}.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.of(context).pop(true),
+            icon: const Icon(Icons.navigation),
+            label: const Text('Send goal'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    final ready = await _runRobotBridgeAction(
+      action: _robotBridge.checkNavigationReady,
+      successMessage: 'Robot navigation graph checked',
+    );
+    if (!ready || !mounted) return;
+    final sent = await _runRobotBridgeAction(
+      action: () => _robotBridge.publishGoalPose(pose),
+      successMessage: 'Goal pose sent to the real car',
+    );
+    if (sent) {
+      await _loadRealPlan(maxAttempts: 2);
+    }
+  }
+
+  Future<void> _loadRealPlan({required int maxAttempts}) async {
+    final mapInfo = _mapInfo;
+    if (mapInfo == null) return;
+    for (var attempt = 0; attempt < maxAttempts; attempt += 1) {
+      if (attempt > 0) {
+        await Future<void>.delayed(const Duration(milliseconds: 900));
+      }
+      final result = await _runRobotBridgeAction(
+        action: _robotBridge.loadNavigationPlan,
+        successMessage: 'Real navigation plan refreshed',
+      );
+      if (!result || !mounted) return;
+      if (_realPlanPixels.length > 1) return;
+    }
+  }
+
+  Future<bool> _runRobotBridgeAction({
+    required Future<Map<String, dynamic>> Function() action,
+    required String successMessage,
+  }) async {
+    setState(() {
+      _robotBridgeBusy = true;
+      _robotBridgeStatus = null;
+    });
+    try {
+      final result = await action();
+      if (!mounted) return false;
+      final dryRun = result['dryRun'] == true;
+      _applyRobotBridgeResult(result);
+      setState(() {
+        _robotBridgeStatus = dryRun
+            ? '$successMessage (dry-run only)'
+            : _formatRobotBridgeStatus(successMessage, result);
+      });
+      return true;
+    } catch (error) {
+      if (!mounted) return false;
+      setState(() {
+        _robotBridgeStatus = 'Robot bridge error: $error';
+      });
+      return false;
+    } finally {
+      if (mounted) {
+        setState(() => _robotBridgeBusy = false);
+      }
+    }
+  }
+
+  void _applyRobotBridgeResult(Map<String, dynamic> result) {
+    final points = result['points'];
+    final mapInfo = _mapInfo;
+    if (points is! List || mapInfo == null) return;
+    final mapPoints = <MapPoint>[];
+    final pixels = <PixelPoint>[];
+    for (final point in points) {
+      if (point is! Map) continue;
+      final x = (point['x'] as num?)?.toDouble();
+      final y = (point['y'] as num?)?.toDouble();
+      if (x == null || y == null) continue;
+      mapPoints.add(MapPoint(x: x, y: y));
+      pixels.add(mapToPixel(x, y, mapInfo));
+    }
+    _realPlanMapPoints = mapPoints;
+    _realPlanPixels = pixels;
+  }
+
+  String _formatRobotBridgeStatus(
+    String successMessage,
+    Map<String, dynamic> result,
+  ) {
+    final ready = result['ready'];
+    if (ready == false) {
+      final missing = result['missingTopics'];
+      return '$successMessage: missing ${missing is List ? missing.join(', ') : 'topics'}';
+    }
+    final pointCount = result['pointCount'];
+    if (pointCount is num) {
+      return pointCount > 1
+          ? '$successMessage: $pointCount plan points'
+          : '$successMessage: no /plan yet';
+    }
+    return '$successMessage (code=${result['code'] ?? 0})';
+  }
+
   _NavigationTarget _resolveNavigationTarget() {
     final selectedPixel = _selectedPixel;
     if (selectedPixel != null) {
@@ -182,24 +432,84 @@ class _InspectionMapDebugPageState extends State<InspectionMapDebugPage> {
 
     final pixel = PixelPoint(x: local.dx, y: local.dy);
     final map = pixelToMap(pixel.x, pixel.y, mapInfo);
-    final payload = {
-      'type':
-          _clickMode == _ClickMode.initialPose ? 'initial_pose' : 'nav_goal',
-      'frame_id': mapInfo.frameId,
-      'x': _round(map.x),
-      'y': _round(map.y),
-      'yaw': 0.0,
-    };
+    final payload = _posePayload(
+      type: _clickMode == _ClickMode.initialPose ? 'initial_pose' : 'nav_goal',
+      mapInfo: mapInfo,
+      map: map,
+      yaw: _clickMode == _ClickMode.initialPose ? _initialPoseYaw : 0,
+    );
 
     setState(() {
       _selectedPixel = pixel;
       _selectedMap = map;
       if (_clickMode == _ClickMode.initialPose) {
+        _initialPosePixel = pixel;
         _initialPoseJson = payload;
+        _initialPoseSent = false;
       } else {
         _navGoalJson = payload;
       }
     });
+  }
+
+  void _selectMarkerAsNavigationTarget(InspectionMarker marker) {
+    final mapInfo = _mapInfo;
+    if (mapInfo == null) return;
+
+    final pixel = PixelPoint(x: marker.pixelX, y: marker.pixelY);
+    final map = pixelToMap(pixel.x, pixel.y, mapInfo);
+    final payload = _posePayload(
+      type: 'nav_goal',
+      mapInfo: mapInfo,
+      map: map,
+      yaw: 0,
+    );
+
+    setState(() {
+      _selectedPixel = pixel;
+      _selectedMap = map;
+      _navGoalJson = payload;
+    });
+  }
+
+  Map<String, dynamic> _posePayload({
+    required String type,
+    required MapInfo mapInfo,
+    required MapPoint map,
+    required double yaw,
+  }) {
+    return {
+      'type': type,
+      'frame_id': mapInfo.frameId,
+      'x': _round(map.x),
+      'y': _round(map.y),
+      'yaw': _round(_normalizeYaw(yaw)),
+    };
+  }
+
+  void _setInitialPoseYaw(double yaw) {
+    final pose = _initialPoseJson;
+    setState(() {
+      _initialPoseYaw = _normalizeYaw(yaw);
+      if (pose != null) {
+        _initialPoseJson = {
+          ...pose,
+          'yaw': _round(_initialPoseYaw),
+        };
+        _initialPoseSent = false;
+      }
+    });
+  }
+
+  double _normalizeYaw(double yaw) {
+    var value = yaw;
+    while (value > math.pi) {
+      value -= math.pi * 2;
+    }
+    while (value <= -math.pi) {
+      value += math.pi * 2;
+    }
+    return value;
   }
 
   Future<void> _showMarkerDetail(InspectionMarker marker) async {
@@ -428,7 +738,29 @@ class _InspectionMapDebugPageState extends State<InspectionMapDebugPage> {
                                   filterQuality: FilterQuality.none,
                                 ),
                               ),
+                              if (_realPlanPixels.length > 1)
+                                Positioned.fill(
+                                  child: IgnorePointer(
+                                    child: CustomPaint(
+                                      painter: _PlanPainter(_realPlanPixels),
+                                    ),
+                                  ),
+                                ),
                               ..._markers.map(_buildMarker),
+                              if (_initialPosePixel != null)
+                                Positioned(
+                                  left: _initialPosePixel!.x - 32,
+                                  top: _initialPosePixel!.y - 32,
+                                  child: IgnorePointer(
+                                    child: CustomPaint(
+                                      size: const Size(64, 64),
+                                      painter: _PoseArrowPainter(
+                                        yaw: _initialPoseYaw,
+                                        color: scheme.primary,
+                                      ),
+                                    ),
+                                  ),
+                                ),
                               if (_selectedPixel != null)
                                 Positioned(
                                   left: _selectedPixel!.x - 7,
@@ -478,7 +810,14 @@ class _InspectionMapDebugPageState extends State<InspectionMapDebugPage> {
       child: Tooltip(
         message: '${marker.title}\n${marker.status}',
         child: GestureDetector(
-          onTap: () => _showMarkerDetail(marker),
+          onTap: () {
+            if (_clickMode == _ClickMode.navGoal &&
+                marker.type == InspectionMarkerType.target) {
+              _selectMarkerAsNavigationTarget(marker);
+              return;
+            }
+            _showMarkerDetail(marker);
+          },
           child: Container(
             width: 22,
             height: 22,
@@ -544,6 +883,140 @@ class _InspectionMapDebugPageState extends State<InspectionMapDebugPage> {
               ? '-'
               : '${_round(_selectedMap!.x)}, ${_round(_selectedMap!.y)}',
         ),
+        if (_initialPoseJson != null) ...[
+          const SizedBox(height: 12),
+          Text(
+            'Initial pose heading',
+            style: Theme.of(context).textTheme.titleSmall,
+          ),
+          const SizedBox(height: 4),
+          _InfoLine(
+            label: 'yaw',
+            value:
+                '${_round(_initialPoseYaw)} rad / ${_round(_initialPoseYaw * 180 / math.pi)} deg',
+          ),
+          Slider(
+            min: -math.pi,
+            max: math.pi,
+            divisions: 72,
+            value: _initialPoseYaw,
+            onChanged: _setInitialPoseYaw,
+          ),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              OutlinedButton(
+                onPressed: () => _setInitialPoseYaw(0),
+                child: const Text('0 deg'),
+              ),
+              OutlinedButton(
+                onPressed: () => _setInitialPoseYaw(math.pi / 2),
+                child: const Text('90 deg'),
+              ),
+              OutlinedButton(
+                onPressed: () => _setInitialPoseYaw(math.pi),
+                child: const Text('180 deg'),
+              ),
+              OutlinedButton(
+                onPressed: () => _setInitialPoseYaw(-math.pi / 2),
+                child: const Text('-90 deg'),
+              ),
+            ],
+          ),
+        ],
+        const Divider(height: 28),
+        Text('Real car bridge', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 4),
+        const Text(
+          'http://127.0.0.1:18080',
+          style: TextStyle(fontSize: 12),
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            OutlinedButton.icon(
+              onPressed: _robotBridgeBusy ? null : _checkRobotBridge,
+              icon: const Icon(Icons.link),
+              label: const Text('Check bridge'),
+            ),
+            OutlinedButton.icon(
+              onPressed: _robotBridgeBusy ? null : _startRobotNavigationStack,
+              icon: const Icon(Icons.power_settings_new),
+              label: const Text('Prepare s + d + n1 + n3'),
+            ),
+            OutlinedButton.icon(
+              onPressed: _robotBridgeBusy ? null : _checkNavigationReady,
+              icon: const Icon(Icons.fact_check_outlined),
+              label: const Text('Check nav ready'),
+            ),
+            OutlinedButton.icon(
+              onPressed: _robotBridgeBusy ? null : _restartRobotNavigationStack,
+              icon: const Icon(Icons.restart_alt),
+              label: const Text('Restart nav stack'),
+            ),
+            FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.error,
+                foregroundColor: Theme.of(context).colorScheme.onError,
+              ),
+              onPressed: _robotBridgeBusy ? null : _emergencyStopRobot,
+              icon: const Icon(Icons.stop_circle_outlined),
+              label: const Text('Stop real car'),
+            ),
+            OutlinedButton.icon(
+              onPressed: _initialPoseJson == null || _robotBridgeBusy
+                  ? null
+                  : _sendInitialPoseToCar,
+              icon: const Icon(Icons.my_location),
+              label: const Text('Send AMCL initial estimate'),
+            ),
+            FilledButton.icon(
+              onPressed:
+                  _navGoalJson == null || !_initialPoseSent || _robotBridgeBusy
+                      ? null
+                      : _sendGoalPoseToCar,
+              icon: const Icon(Icons.navigation),
+              label: const Text('Navigate real car'),
+            ),
+            OutlinedButton.icon(
+              onPressed: _robotBridgeBusy ? null : _refreshRealPlan,
+              icon: const Icon(Icons.alt_route),
+              label: const Text('Refresh real plan'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        const Text(
+          '/initialpose gives AMCL an initial estimate. Laser-to-map matching '
+          'corrects it afterward; it is not automatic localization. Use a map '
+          'that matches the real place.',
+          style: TextStyle(fontSize: 12),
+        ),
+        if (_robotBridgeBusy) ...[
+          const SizedBox(height: 10),
+          const LinearProgressIndicator(),
+        ],
+        if (_robotBridgeStatus != null) ...[
+          const SizedBox(height: 10),
+          Text(
+            _robotBridgeStatus!,
+            style: TextStyle(
+              color: _robotBridgeStatus!.startsWith('Robot bridge error')
+                  ? Theme.of(context).colorScheme.error
+                  : Theme.of(context).colorScheme.primary,
+            ),
+          ),
+        ],
+        if (_realPlanMapPoints.length > 1) ...[
+          const SizedBox(height: 8),
+          _InfoLine(
+            label: 'real plan',
+            value: '${_realPlanMapPoints.length} points from /plan',
+          ),
+        ],
         const Divider(height: 28),
         Text('Status', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
@@ -567,7 +1040,7 @@ class _InspectionMapDebugPageState extends State<InspectionMapDebugPage> {
             FilledButton.icon(
               onPressed: _startNavigation,
               icon: const Icon(Icons.play_arrow),
-              label: const Text('Start navigation'),
+              label: const Text('Mock start'),
             ),
             OutlinedButton.icon(
               onPressed: _cancelNavigation,
@@ -641,6 +1114,12 @@ class _InspectionMapDebugPageState extends State<InspectionMapDebugPage> {
               },
               'initial_pose': _initialPoseJson,
               'nav_goal': _navGoalJson,
+              'real_plan_points': _realPlanMapPoints
+                  .map((point) => {
+                        'x': _round(point.x),
+                        'y': _round(point.y),
+                      })
+                  .toList(),
             }),
             style: const TextStyle(
               color: Color(0xFFE5E7EB),
@@ -684,6 +1163,92 @@ class _InspectionMapDebugPageState extends State<InspectionMapDebugPage> {
   }
 
   static double _round(double value) => double.parse(value.toStringAsFixed(4));
+}
+
+class _PlanPainter extends CustomPainter {
+  const _PlanPainter(this.points);
+
+  final List<PixelPoint> points;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (points.length < 2) return;
+    final shadow = Paint()
+      ..color = Colors.white.withValues(alpha: 0.9)
+      ..strokeWidth = 7
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    final line = Paint()
+      ..color = const Color(0xFF2563EB)
+      ..strokeWidth = 4
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    final path = Path()..moveTo(points.first.x, points.first.y);
+    for (final point in points.skip(1)) {
+      path.lineTo(point.x, point.y);
+    }
+    canvas
+      ..drawPath(path, shadow)
+      ..drawPath(path, line);
+  }
+
+  @override
+  bool shouldRepaint(covariant _PlanPainter oldDelegate) {
+    return oldDelegate.points != points;
+  }
+}
+
+class _PoseArrowPainter extends CustomPainter {
+  const _PoseArrowPainter({
+    required this.yaw,
+    required this.color,
+  });
+
+  final double yaw;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final direction = Offset(math.cos(yaw), -math.sin(yaw));
+    final end = center + direction * 26;
+    final normal = Offset(-direction.dy, direction.dx);
+    final headBase = end - direction * 10;
+
+    final shadow = Paint()
+      ..color = Colors.white.withValues(alpha: 0.92)
+      ..strokeWidth = 8
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
+    final line = Paint()
+      ..color = color
+      ..strokeWidth = 4
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
+    final dot = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+
+    final path = Path()
+      ..moveTo(center.dx, center.dy)
+      ..lineTo(end.dx, end.dy)
+      ..moveTo((headBase + normal * 6).dx, (headBase + normal * 6).dy)
+      ..lineTo(end.dx, end.dy)
+      ..lineTo((headBase - normal * 6).dx, (headBase - normal * 6).dy);
+
+    canvas
+      ..drawPath(path, shadow)
+      ..drawPath(path, line)
+      ..drawCircle(center, 5, Paint()..color = Colors.white)
+      ..drawCircle(center, 3, dot);
+  }
+
+  @override
+  bool shouldRepaint(covariant _PoseArrowPainter oldDelegate) {
+    return oldDelegate.yaw != yaw || oldDelegate.color != color;
+  }
 }
 
 class _InfoLine extends StatelessWidget {

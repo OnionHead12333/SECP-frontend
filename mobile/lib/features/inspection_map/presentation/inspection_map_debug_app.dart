@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'inspection_map_debug_page.dart';
+import 'inspection_map_ros_page.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -19,7 +19,7 @@ class InspectionMapDebugApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF1565C0)),
         useMaterial3: true,
       ),
-      home: const InspectionMapDebugPage(),
+      home: const InspectionMapRosPage(),
     );
   }
 }
