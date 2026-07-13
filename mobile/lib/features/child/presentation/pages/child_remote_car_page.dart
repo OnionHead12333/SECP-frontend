@@ -1,3 +1,6 @@
+import 'dart:math' as math;
+
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_mjpeg/flutter_mjpeg.dart';
 
@@ -46,6 +49,8 @@ class _ChildRemoteCarPageState extends State<ChildRemoteCarPage> {
   double _leftRearSpeed = 0;
   double _rightFrontSpeed = 0;
   double _rightRearSpeed = 0;
+  DateTime? _lastRockerSentAt;
+  int _videoRefreshToken = 0;
   bool _busy = false;
 
   @override
@@ -64,7 +69,13 @@ class _ChildRemoteCarPageState extends State<ChildRemoteCarPage> {
 
   String get _carIp => _carIpController.text.trim();
 
-  String get _videoStreamUrl => 'http://$_carIp:6500/video_feed';
+  String get _videoBaseUrl => 'http://$_carIp:6500/video_feed';
+
+  String get _videoStreamUrl {
+    final baseUrl = _videoBaseUrl;
+    if (_videoRefreshToken == 0) return baseUrl;
+    return '$baseUrl?refresh=$_videoRefreshToken';
+  }
 
   Future<void> _connectTcp() async {
     if (_carIp.isEmpty) {
@@ -97,7 +108,7 @@ class _ChildRemoteCarPageState extends State<ChildRemoteCarPage> {
     }
     await _runAction(
       () async {
-        await _tcpClient.send(CarEncoder.button(command.tcpDirection));
+        await _tcpClient.send(_encodeCommand(command));
         setState(() {
           _lastCommand = command.label;
           _errorText = null;
@@ -107,27 +118,86 @@ class _ChildRemoteCarPageState extends State<ChildRemoteCarPage> {
     );
   }
 
-  Future<void> _sendRocker({bool resetAfterSend = false}) async {
+  String _encodeCommand(RemoteCarCommand command) {
+    final speed = _speedLimit;
+    switch (command) {
+      case RemoteCarCommand.forward:
+        return CarEncoder.wheelSpeeds(speed, speed, speed, speed);
+      case RemoteCarCommand.backward:
+        return CarEncoder.wheelSpeeds(-speed, -speed, -speed, -speed);
+      case RemoteCarCommand.left:
+        return CarEncoder.wheelSpeeds(-speed, -speed, speed, speed);
+      case RemoteCarCommand.right:
+        return CarEncoder.wheelSpeeds(speed, speed, -speed, -speed);
+      case RemoteCarCommand.stop:
+        return CarEncoder.wheelSpeeds(0, 0, 0, 0);
+      case RemoteCarCommand.emergencyStop:
+        return CarEncoder.button(CarDirection.brake);
+    }
+  }
+
+  ({int left, int right}) _rockerToWheelSpeeds(int x, int y) {
+    final linear = y;
+    final turn = x;
+    final left = (linear - turn).clamp(-_speedLimit, _speedLimit);
+    final right = (linear + turn).clamp(-_speedLimit, _speedLimit);
+    return (left: left, right: right);
+  }
+
+  Future<void> _sendRockerValues(
+    int x,
+    int y, {
+    bool force = false,
+  }) async {
     if (!_tcpClient.isConnected) {
       _showControlFailure();
       return;
     }
-    final x = _rockerX.round().clamp(-_speedLimit, _speedLimit);
-    final y = _rockerY.round().clamp(-_speedLimit, _speedLimit);
-    await _runAction(
-      () async {
-        await _tcpClient.send(CarEncoder.rocker(x, y));
+    final now = DateTime.now();
+    final lastSentAt = _lastRockerSentAt;
+    if (!force &&
+        lastSentAt != null &&
+        now.difference(lastSentAt) < const Duration(milliseconds: 100)) {
+      return;
+    }
+    _lastRockerSentAt = now;
+    final limitedX = x.clamp(-_speedLimit, _speedLimit);
+    final limitedY = y.clamp(-_speedLimit, _speedLimit);
+    final wheels = _rockerToWheelSpeeds(limitedX, limitedY);
+    try {
+      await _tcpClient.send(
+        CarEncoder.wheelSpeeds(
+          wheels.left,
+          wheels.left,
+          wheels.right,
+          wheels.right,
+        ),
+      );
+      if (mounted) {
         setState(() {
-          _lastCommand = '摇杆 x=$x y=$y';
+          _lastCommand = '摇杆 L=${wheels.left} R=${wheels.right}';
           _errorText = null;
-          if (resetAfterSend) {
-            _rockerX = 0;
-            _rockerY = 0;
-          }
         });
-      },
-      failureMessage: _controlFailureMessage,
-    );
+      }
+    } catch (_) {
+      _showControlFailure();
+    }
+  }
+
+  Future<void> _handleRockerChanged(int x, int y) async {
+    setState(() {
+      _rockerX = x.toDouble();
+      _rockerY = y.toDouble();
+    });
+    await _sendRockerValues(x, y);
+  }
+
+  Future<void> _handleRockerReleased() async {
+    setState(() {
+      _rockerX = 0;
+      _rockerY = 0;
+    });
+    await _sendRockerValues(0, 0, force: true);
   }
 
   Future<void> _sendWheelSpeeds() async {
@@ -194,6 +264,12 @@ class _ChildRemoteCarPageState extends State<ChildRemoteCarPage> {
     );
   }
 
+  void _refreshVideo() {
+    setState(() {
+      _videoRefreshToken += 1;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -219,11 +295,7 @@ class _ChildRemoteCarPageState extends State<ChildRemoteCarPage> {
             streamUrl: _videoStreamUrl,
             failureMessage: _videoFailureMessage,
             mjpegBuilder: widget._mjpegBuilder,
-          ),
-          const SizedBox(height: 14),
-          _ControlPad(
-            busy: _busy,
-            onCommand: _sendCommand,
+            onRefresh: _refreshVideo,
           ),
           const SizedBox(height: 14),
           _RockerControlCard(
@@ -232,9 +304,13 @@ class _ChildRemoteCarPageState extends State<ChildRemoteCarPage> {
             rockerX: _rockerX,
             rockerY: _rockerY,
             onSpeedChanged: _setSpeedLimit,
-            onXChanged: (value) => setState(() => _rockerX = value),
-            onYChanged: (value) => setState(() => _rockerY = value),
-            onSend: _busy ? null : () => _sendRocker(),
+            onRockerChanged: _busy ? null : _handleRockerChanged,
+            onRockerReleased: _busy ? null : _handleRockerReleased,
+          ),
+          const SizedBox(height: 14),
+          _ControlPad(
+            busy: _busy,
+            onCommand: _sendCommand,
           ),
           const SizedBox(height: 14),
           _AdvancedDebugCard(
@@ -246,7 +322,8 @@ class _ChildRemoteCarPageState extends State<ChildRemoteCarPage> {
             rightRear: _rightRearSpeed,
             onLeftFrontChanged: (value) =>
                 setState(() => _leftFrontSpeed = value),
-            onLeftRearChanged: (value) => setState(() => _leftRearSpeed = value),
+            onLeftRearChanged: (value) =>
+                setState(() => _leftRearSpeed = value),
             onRightFrontChanged: (value) =>
                 setState(() => _rightFrontSpeed = value),
             onRightRearChanged: (value) =>
@@ -268,9 +345,8 @@ class _RockerControlCard extends StatelessWidget {
     required this.rockerX,
     required this.rockerY,
     required this.onSpeedChanged,
-    required this.onXChanged,
-    required this.onYChanged,
-    required this.onSend,
+    required this.onRockerChanged,
+    required this.onRockerReleased,
   });
 
   final bool busy;
@@ -278,9 +354,8 @@ class _RockerControlCard extends StatelessWidget {
   final double rockerX;
   final double rockerY;
   final ValueChanged<int> onSpeedChanged;
-  final ValueChanged<double> onXChanged;
-  final ValueChanged<double> onYChanged;
-  final VoidCallback? onSend;
+  final Future<void> Function(int x, int y)? onRockerChanged;
+  final Future<void> Function()? onRockerReleased;
 
   String get _speedLabel {
     return switch (speedLimit) {
@@ -327,33 +402,164 @@ class _RockerControlCard extends StatelessWidget {
                   ?.copyWith(color: scheme.onSurfaceVariant),
             ),
             const SizedBox(height: 12),
-            _SignedSlider(
-              sliderKey: const Key('rockerXSlider'),
-              label: 'X：左转 / 右转',
-              value: rockerX,
-              limit: speedLimit,
-              onChanged: busy ? null : onXChanged,
-            ),
-            _SignedSlider(
-              sliderKey: const Key('rockerYSlider'),
-              label: 'Y：后退 / 前进',
-              value: rockerY,
-              limit: speedLimit,
-              onChanged: busy ? null : onYChanged,
-            ),
-            const SizedBox(height: 8),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: onSend,
-                icon: const Icon(Icons.send),
-                label: const Text('发送摇杆命令'),
+            Center(
+              child: _CircularJoystick(
+                key: const Key('circularJoystick'),
+                enabled: !busy,
+                speedLimit: speedLimit,
+                x: rockerX,
+                y: rockerY,
+                onChanged: onRockerChanged,
+                onReleased: onRockerReleased,
               ),
             ),
           ],
         ),
       ),
     );
+  }
+}
+
+class _CircularJoystick extends StatelessWidget {
+  const _CircularJoystick({
+    super.key,
+    required this.enabled,
+    required this.speedLimit,
+    required this.x,
+    required this.y,
+    required this.onChanged,
+    required this.onReleased,
+  });
+
+  static const double _size = 220;
+  static const double _knobRadius = 24;
+  static const double _padding = 10;
+
+  final bool enabled;
+  final int speedLimit;
+  final double x;
+  final double y;
+  final Future<void> Function(int x, int y)? onChanged;
+  final Future<void> Function()? onReleased;
+
+  double get _travelRadius => (_size / 2) - _knobRadius - _padding;
+
+  void _handleLocalPosition(Offset localPosition) {
+    if (!enabled || onChanged == null) return;
+    final center = const Offset(_size / 2, _size / 2);
+    final rawOffset = localPosition - center;
+    final distance = rawOffset.distance;
+    final limitedOffset = distance > _travelRadius && distance > 0
+        ? rawOffset / distance * _travelRadius
+        : rawOffset;
+    final nextX = (limitedOffset.dx / _travelRadius * speedLimit).round();
+    final nextY = (-limitedOffset.dy / _travelRadius * speedLimit).round();
+    onChanged!(
+      nextX.clamp(-speedLimit, speedLimit),
+      nextY.clamp(-speedLimit, speedLimit),
+    );
+  }
+
+  Future<void> _release() async {
+    if (!enabled || onReleased == null) return;
+    await onReleased!();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final center = const Offset(_size / 2, _size / 2);
+    final safeSpeed = math.max(speedLimit, 1);
+    final knobOffset = Offset(
+      (x.clamp(-speedLimit, speedLimit) / safeSpeed) * _travelRadius,
+      (-y.clamp(-speedLimit, speedLimit) / safeSpeed) * _travelRadius,
+    );
+    final knobCenter = center + knobOffset;
+
+    return RawGestureDetector(
+      gestures: {
+        EagerGestureRecognizer:
+            GestureRecognizerFactoryWithHandlers<EagerGestureRecognizer>(
+          EagerGestureRecognizer.new,
+          (recognizer) {},
+        ),
+      },
+      child: Listener(
+        behavior: HitTestBehavior.opaque,
+        onPointerMove: enabled
+            ? (event) => _handleLocalPosition(event.localPosition)
+            : null,
+        onPointerUp: enabled ? (_) => _release() : null,
+        onPointerCancel: enabled ? (_) => _release() : null,
+        child: SizedBox(
+          width: _size,
+          height: _size,
+          child: CustomPaint(
+            painter: _JoystickPainter(
+              knobCenter: knobCenter,
+              knobRadius: _knobRadius,
+              enabled: enabled,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _JoystickPainter extends CustomPainter {
+  const _JoystickPainter({
+    required this.knobCenter,
+    required this.knobRadius,
+    required this.enabled,
+  });
+
+  final Offset knobCenter;
+  final double knobRadius;
+  final bool enabled;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = math.min(size.width, size.height) / 2;
+    final outerPaint = Paint()
+      ..color = enabled ? const Color(0xFFEFF6FF) : const Color(0xFFE5E7EB)
+      ..style = PaintingStyle.fill;
+    final outerBorder = Paint()
+      ..color = enabled ? const Color(0xFF93C5FD) : const Color(0xFFCBD5E1)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2;
+    final crossPaint = Paint()
+      ..color = enabled ? const Color(0xFFBFDBFE) : const Color(0xFFD1D5DB)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
+    final knobPaint = Paint()
+      ..color = enabled ? const Color(0xFF2563EB) : const Color(0xFF94A3B8)
+      ..style = PaintingStyle.fill;
+    final knobShadow = Paint()
+      ..color = Colors.black.withValues(alpha: 0.12)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
+
+    canvas.drawCircle(center, radius - 1, outerPaint);
+    canvas.drawCircle(center, radius - 1, outerBorder);
+    canvas.drawLine(
+      Offset(center.dx, 16),
+      Offset(center.dx, size.height - 16),
+      crossPaint,
+    );
+    canvas.drawLine(
+      Offset(16, center.dy),
+      Offset(size.width - 16, center.dy),
+      crossPaint,
+    );
+    canvas.drawCircle(knobCenter.translate(0, 2), knobRadius, knobShadow);
+    canvas.drawCircle(knobCenter, knobRadius, knobPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _JoystickPainter oldDelegate) {
+    return oldDelegate.knobCenter != knobCenter ||
+        oldDelegate.enabled != enabled ||
+        oldDelegate.knobRadius != knobRadius;
   }
 }
 
@@ -434,14 +640,12 @@ class _AdvancedDebugCard extends StatelessWidget {
 
 class _SignedSlider extends StatelessWidget {
   const _SignedSlider({
-    this.sliderKey,
     required this.label,
     required this.value,
     required this.limit,
     required this.onChanged,
   });
 
-  final Key? sliderKey;
   final String label;
   final double value;
   final int limit;
@@ -459,7 +663,6 @@ class _SignedSlider extends StatelessWidget {
           ],
         ),
         Slider(
-          key: sliderKey,
           value: value.clamp(-limit, limit).toDouble(),
           min: -limit.toDouble(),
           max: limit.toDouble(),
@@ -579,11 +782,13 @@ class _VideoCard extends StatelessWidget {
   const _VideoCard({
     required this.streamUrl,
     required this.failureMessage,
+    required this.onRefresh,
     this.mjpegBuilder,
   });
 
   final String streamUrl;
   final String failureMessage;
+  final VoidCallback onRefresh;
   final MjpegWidgetBuilder? mjpegBuilder;
 
   @override
@@ -591,7 +796,7 @@ class _VideoCard extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final child = mjpegBuilder?.call(context, streamUrl) ??
         Mjpeg(
-          key: const Key('mjpegVideo'),
+          key: ValueKey('mjpegVideo:$streamUrl'),
           stream: streamUrl,
           isLive: true,
           fit: BoxFit.cover,
@@ -613,7 +818,18 @@ class _VideoCard extends StatelessWidget {
               children: [
                 Icon(Icons.videocam_outlined, color: scheme.primary),
                 const SizedBox(width: 8),
-                Text('实时视频', style: Theme.of(context).textTheme.titleSmall),
+                Expanded(
+                  child: Text(
+                    '实时视频',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                ),
+                IconButton.filledTonal(
+                  key: const Key('refreshVideoButton'),
+                  onPressed: onRefresh,
+                  icon: const Icon(Icons.refresh),
+                  tooltip: '刷新视频',
+                ),
               ],
             ),
             const SizedBox(height: 8),

@@ -24,11 +24,13 @@ abstract final class ElderVoiceCommandExecutor {
     try {
       switch (match.commandType!) {
         case VoiceCommandType.playMusic:
-          final task = await EntertainmentApi.playMusic(_voiceMusic);
+          final music = await _resolveMusicFromVoice(match);
+          final task = await EntertainmentApi.playMusic(music);
           return _fromEntertainmentTask(match, task, fallback: '音乐播放命令已发送');
         case VoiceCommandType.dance:
+          final music = await _resolveMusicFromVoice(match);
           final task = await EntertainmentApi.startDance(
-            _voiceMusic,
+            music,
             danceMode: 'gentle',
           );
           return _fromEntertainmentTask(match, task, fallback: '跳舞命令已发送');
@@ -59,6 +61,28 @@ abstract final class ElderVoiceCommandExecutor {
     }
   }
 
+  static Future<EntertainmentMusic> _resolveMusicFromVoice(
+    VoiceCommandMatch match,
+  ) async {
+    try {
+      final musicList = await EntertainmentApi.fetchMusic();
+      if (musicList.isEmpty) return _voiceMusic;
+
+      final normalizedText = _normalize(match.rawText);
+      for (final music in musicList) {
+        final normalizedName = _normalize(music.musicName);
+        if (normalizedName.isNotEmpty &&
+            normalizedText.contains(normalizedName)) {
+          return music;
+        }
+      }
+
+      return musicList.first;
+    } catch (_) {
+      return _voiceMusic;
+    }
+  }
+
   static VoiceCommandExecutionResult _fromEntertainmentTask(
     VoiceCommandMatch match,
     EntertainmentTaskStatus? task, {
@@ -86,5 +110,11 @@ abstract final class ElderVoiceCommandExecutor {
       taskId: taskId,
       recognizedAt: match.recognizedAt,
     );
+  }
+
+  static String _normalize(String text) {
+    return text
+        .toLowerCase()
+        .replaceAll(RegExp(r'[\s,，。.!！?？、；;:"“”‘’\-]+'), '');
   }
 }
