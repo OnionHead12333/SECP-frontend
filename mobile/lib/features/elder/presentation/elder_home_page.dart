@@ -113,6 +113,8 @@ class _ElderHomePageState extends State<ElderHomePage> {
         onBindingTap: () => Navigator.of(context).pushNamed(ElderModuleRoutes.elderBinding),
         onOpenReminders: () => setState(() => _index = 2),
         onOpenAiAssistant: () => Navigator.of(context).pushNamed(ElderModuleRoutes.elderAiAssistant),
+        onOpenEntertainment: () => Navigator.of(context).pushNamed(ElderModuleRoutes.elderEntertainment),
+        onOpenVoiceControl: () => Navigator.of(context).pushNamed(ElderModuleRoutes.elderVoiceControl),
       ),
       const ElderCommunityTab(),
       ElderReminderCenterTab(
@@ -168,6 +170,8 @@ class _HomeTab extends StatelessWidget {
     required this.onBindingTap,
     required this.onOpenReminders,
     required this.onOpenAiAssistant,
+    required this.onOpenEntertainment,
+    required this.onOpenVoiceControl,
   });
 
   final String name;
@@ -179,6 +183,8 @@ class _HomeTab extends StatelessWidget {
   final VoidCallback onBindingTap;
   final VoidCallback onOpenReminders;
   final VoidCallback onOpenAiAssistant;
+  final VoidCallback onOpenEntertainment;
+  final VoidCallback onOpenVoiceControl;
 
   @override
   Widget build(BuildContext context) {
@@ -217,6 +223,20 @@ class _HomeTab extends StatelessWidget {
                 title: 'AI 医疗助手',
                 value: '身体不舒服时先问一问，支持风险提示和家属同步',
                 onTap: onOpenAiAssistant,
+              ),
+              const Divider(height: 24),
+              _SimpleRow(
+                icon: Icons.mic_none_outlined,
+                title: '语音控制',
+                value: '说“播放音乐”“跳舞”“求助”或“停止”控制机器人',
+                onTap: onOpenVoiceControl,
+              ),
+              const Divider(height: 24),
+              _SimpleRow(
+                icon: Icons.music_note_outlined,
+                title: '娱乐',
+                value: '播放音乐，也可以让机器人配合跳舞',
+                onTap: onOpenEntertainment,
               ),
               const Divider(height: 24),
               _SimpleRow(

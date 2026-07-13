@@ -14,14 +14,17 @@ final class AuthSession {
 
   /// 老人端首页展示所需的基础状态。
   static String? elderName;
+
   /// 与后端 users.gender 一致：male / female / unknown
   static String? elderGender;
+
   /// yyyy-MM-dd，未设置时为 null
   static String? elderBirthday;
   static bool elderClaimed = false;
   static int elderFamilyCount = 0;
   static String? elderPhone;
   static int? elderId;
+  static int? childUserId;
 
   static final ValueNotifier<int> sessionChanges = ValueNotifier<int>(0);
 
@@ -56,6 +59,7 @@ final class AuthSession {
     elderGender = null;
     elderBirthday = null;
     elderId = null;
+    childUserId = null;
     elderClaimed = false;
     elderFamilyCount = 0;
     _notifyChanged();

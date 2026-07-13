@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'presentation/ai_medical_assistant_page.dart';
+import '../entertainment/presentation/entertainment_page.dart';
 import '../interest_community/presentation/interest_community_list_page.dart';
 import '../interest_community/models/community_message.dart';
 import 'presentation/elder_binding_status_page.dart';
@@ -9,6 +10,7 @@ import 'presentation/elder_home_page.dart';
 import 'presentation/elder_location_status_page.dart';
 import 'presentation/elder_profile_edit_page.dart';
 import 'presentation/elder_register_page.dart';
+import 'presentation/elder_voice_control_page.dart';
 
 /// 老人端模块对外暴露的路由常量与路由表。
 final class ElderModuleRoutes {
@@ -22,6 +24,8 @@ final class ElderModuleRoutes {
   static const String elderProfile = '/elder/profile';
   static const String elderAiAssistant = '/elder/ai-assistant';
   static const String elderInterestCommunity = '/elder/interest-community';
+  static const String elderEntertainment = '/elder/entertainment';
+  static const String elderVoiceControl = '/elder/voice-control';
 
   static Map<String, WidgetBuilder> routes() {
     return {
@@ -34,6 +38,8 @@ final class ElderModuleRoutes {
       elderAiAssistant: (_) => const AiMedicalAssistantPage(),
       elderInterestCommunity: (_) =>
           const InterestCommunityListPage(audience: InterestCommunityAudience.elder),
+      elderEntertainment: (_) => const EntertainmentPage(),
+      elderVoiceControl: (_) => const ElderVoiceControlPage(),
     };
   }
 }

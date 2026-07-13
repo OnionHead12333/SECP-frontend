@@ -5,12 +5,14 @@ import '../models/elder_help_request.dart';
 final class ElderHelpApi {
   ElderHelpApi._();
 
-  static Future<ElderHelpRequest> createHelpRequest() async {
+  static Future<ElderHelpRequest> createHelpRequest({
+    String triggerMode = 'button',
+  }) async {
     final res = await ApiClient.dio.post<Map<String, dynamic>>(
       '/v1/elder/emergency-alerts',
       data: {
         'alertType': 'sos',
-        'triggerMode': 'button',
+        'triggerMode': triggerMode,
       },
     );
     final body = res.data;
