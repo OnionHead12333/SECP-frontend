@@ -1,9 +1,7 @@
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:smart_elderly_care_mobile/features/child/data/remote_car/car_encoder.dart';
 import 'package:smart_elderly_care_mobile/features/child/data/remote_car/car_tcp_client.dart';
-import 'package:smart_elderly_care_mobile/features/child/data/remote_car/child_remote_car_gateway_client.dart';
 import 'package:smart_elderly_care_mobile/features/child/data/remote_car/remote_car_models.dart';
 import 'package:smart_elderly_care_mobile/features/child/presentation/pages/child_remote_car_page.dart';
 
@@ -20,170 +18,141 @@ void main() {
     expect(RemoteCarCommand.right.tcpDirection, CarDirection.rightRotate);
     expect(RemoteCarCommand.stop.tcpDirection, CarDirection.stop);
     expect(RemoteCarCommand.emergencyStop.tcpDirection, CarDirection.brake);
-    expect(RemoteCarCommand.resetEmergency.tcpDirection, isNull);
   });
 
-  test('ros car state parses gateway fields', () {
-    final state = RosCarState.fromJson({
-      'current_cmd': 'forward',
-      'fall_alert': true,
-      'risk_level': 'high',
-      'obstacle_status': 'front_blocked',
-      'navigation_status': 'manual',
-      'control_connected': true,
-      'emergency_stop': false,
-      'control_block_reason': 'clear',
-    });
-
-    expect(state.currentCmd, 'forward');
-    expect(state.fallAlert, isTrue);
-    expect(state.riskLevel, 'high');
-    expect(state.obstacleStatus, 'front_blocked');
-    expect(state.navigationStatus, 'manual');
-    expect(state.controlConnected, isTrue);
-    expect(state.emergencyStop, isFalse);
-    expect(state.controlBlockReason, 'clear');
-  });
-
-  test('gateway client posts command and gets state from gateway base url',
-      () async {
-    final calls = <String>[];
-    final dio = Dio()
-      ..interceptors.add(
-        InterceptorsWrapper(
-          onRequest: (options, handler) {
-            calls.add('${options.method} ${options.uri}');
-            if (options.path.endsWith('/api/state')) {
-              handler.resolve(
-                Response<Object?>(
-                  requestOptions: options,
-                  data: {
-                    'current_cmd': 'stop',
-                    'fall_alert': false,
-                    'risk_level': 'low',
-                    'obstacle_status': 'clear',
-                    'navigation_status': 'idle',
-                    'control_connected': true,
-                    'emergency_stop': false,
-                    'control_block_reason': '',
-                  },
-                ),
-              );
-              return;
-            }
-            handler.resolve(
-              Response<Object?>(
-                requestOptions: options,
-                data: {'ok': true},
-              ),
-            );
-          },
-        ),
-      );
-    final client = ChildRemoteCarGatewayClient(dio: dio);
-
-    await client.sendCommand(
-      gatewayBaseUrl: 'http://192.168.1.10:9090',
-      command: RemoteCarCommand.forward,
-    );
-    final state = await client.fetchState(
-      gatewayBaseUrl: 'http://192.168.1.10:9090',
-    );
-
-    expect(calls, [
-      'POST http://192.168.1.10:9090/api/command',
-      'GET http://192.168.1.10:9090/api/state',
-    ]);
-    expect(state.currentCmd, 'stop');
-  });
-
-  testWidgets('remote car page switches modes and disables TCP reset',
+  testWidgets('remote car page only exposes TCP direct controls',
       (tester) async {
     await tester.pumpWidget(
       MaterialApp(
         home: ChildRemoteCarPage(
-          gatewayClient: _FakeGatewayClient(),
           tcpClient: _FakeTcpClient(),
+          mjpegBuilder: (_, __) => const SizedBox(key: Key('fakeMjpeg')),
         ),
       ),
     );
 
-    await tester.tap(find.text('TCP直连'));
-    await tester.pumpAndSettle();
-
-    final resetButton =
-        tester.widget<FilledButton>(find.widgetWithText(FilledButton, '解除急停'));
-    expect(resetButton.onPressed, isNull);
-  });
-
-  testWidgets('remote car page renders ROS2 state after refresh',
-      (tester) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        home: ChildRemoteCarPage(
-          gatewayClient: _FakeGatewayClient(),
-          tcpClient: _FakeTcpClient(),
-        ),
-      ),
-    );
-
-    await tester.enterText(
-      find.byKey(const Key('gatewayBaseUrlField')),
-      'http://gateway.local:9090',
-    );
-    await tester.tap(find.text('刷新状态'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('current_cmd'), findsOneWidget);
-    expect(find.text('forward'), findsWidgets);
-    expect(find.text('risk_level'), findsOneWidget);
-    expect(find.text('high'), findsOneWidget);
+    expect(find.text('ROS2网关'), findsNothing);
+    expect(find.text('TCP直连'), findsNothing);
+    expect(find.text('解除急停'), findsNothing);
+    expect(find.text('连接 TCP'), findsOneWidget);
+    await tester.drag(find.byType(ListView), const Offset(0, -500));
+    await tester.pump();
+    expect(find.text('紧急停止'), findsOneWidget);
   });
 
   testWidgets('tcp host field accepts dotted IP input', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
         home: ChildRemoteCarPage(
-          gatewayClient: _FakeGatewayClient(),
           tcpClient: _FakeTcpClient(),
+          mjpegBuilder: (_, __) => const SizedBox(key: Key('fakeMjpeg')),
         ),
       ),
     );
 
-    await tester.tap(find.text('TCP直连'));
-    await tester.pumpAndSettle();
-
     final textField = tester.widget<TextField>(
-      find.widgetWithText(TextField, '小车 IP'),
+      find.byKey(const Key('carIpField')),
     );
     expect(textField.keyboardType, TextInputType.url);
   });
-}
 
-class _FakeGatewayClient extends ChildRemoteCarGatewayClient {
-  @override
-  Future<void> sendCommand({
-    required String gatewayBaseUrl,
-    required RemoteCarCommand command,
-  }) async {}
+  testWidgets('remote car page keeps TCP control port fixed', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ChildRemoteCarPage(
+          tcpClient: _FakeTcpClient(),
+          mjpegBuilder: (_, __) => const SizedBox(key: Key('fakeMjpeg')),
+        ),
+      ),
+    );
 
-  @override
-  Future<RosCarState> fetchState({required String gatewayBaseUrl}) async {
-    return RosCarState.fromJson({
-      'current_cmd': 'forward',
-      'fall_alert': false,
-      'risk_level': 'high',
-      'obstacle_status': 'clear',
-      'navigation_status': 'manual',
-      'control_connected': true,
-      'emergency_stop': false,
-      'control_block_reason': '',
-    });
-  }
+    expect(find.byKey(const Key('carPortField')), findsNothing);
+    expect(find.text('控制端口'), findsNothing);
+  });
+
+  testWidgets('remote car page uses default car IP for mjpeg video stream',
+      (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ChildRemoteCarPage(
+          tcpClient: _FakeTcpClient(),
+          mjpegBuilder: (_, streamUrl) => Text(
+            streamUrl,
+            key: const Key('fakeMjpeg'),
+          ),
+        ),
+      ),
+    );
+
+    final textField = tester.widget<TextField>(
+      find.byKey(const Key('carIpField')),
+    );
+    expect(textField.controller?.text, '10.40.70.125');
+    expect(find.text('http://10.40.70.125:6500/video_feed'), findsWidgets);
+    expect(find.byKey(const Key('openVideoButton')), findsNothing);
+    expect(find.byKey(const Key('fakeMjpeg')), findsOneWidget);
+  });
+
+  testWidgets('remote car page connects default TCP endpoint', (tester) async {
+    final tcpClient = _FakeTcpClient();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ChildRemoteCarPage(
+          tcpClient: tcpClient,
+          mjpegBuilder: (_, __) => const SizedBox(key: Key('fakeMjpeg')),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('连接 TCP'));
+    await tester.pump();
+
+    expect(tcpClient.host, '10.40.70.125');
+    expect(tcpClient.port, 6000);
+  });
+
+  testWidgets('remote car page updates video stream when car IP changes',
+      (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ChildRemoteCarPage(
+          tcpClient: _FakeTcpClient(),
+          mjpegBuilder: (_, streamUrl) => Text(streamUrl),
+        ),
+      ),
+    );
+
+    await tester.enterText(find.byKey(const Key('carIpField')), '192.168.1.8');
+    await tester.pump();
+
+    expect(find.text('http://192.168.1.8:6500/video_feed'), findsWidgets);
+  });
+
+  testWidgets('remote car page shows TCP connection failure message',
+      (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ChildRemoteCarPage(
+          tcpClient: _FailingTcpClient(),
+          mjpegBuilder: (_, __) => const SizedBox(key: Key('fakeMjpeg')),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('连接 TCP'));
+    await tester.pump();
+
+    expect(
+      find.text('小车控制连接失败，请确认 app.py 已启动，6000 端口可访问'),
+      findsOneWidget,
+    );
+  });
 }
 
 class _FakeTcpClient extends CarTcpClient {
   bool connected = false;
+  String? host;
+  int? port;
   final sent = <String>[];
 
   @override
@@ -191,6 +160,8 @@ class _FakeTcpClient extends CarTcpClient {
 
   @override
   Future<void> connect(String host, int port) async {
+    this.host = host;
+    this.port = port;
     connected = true;
   }
 
@@ -202,5 +173,12 @@ class _FakeTcpClient extends CarTcpClient {
   @override
   Future<void> close() async {
     connected = false;
+  }
+}
+
+class _FailingTcpClient extends CarTcpClient {
+  @override
+  Future<void> connect(String host, int port) async {
+    throw Exception('offline');
   }
 }

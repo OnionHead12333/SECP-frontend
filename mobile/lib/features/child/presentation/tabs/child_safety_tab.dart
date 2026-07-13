@@ -78,7 +78,7 @@ class ChildSafetyTab extends StatelessWidget {
               ),
             ),
             title: const Text('远程控车'),
-            subtitle: const Text('ROS2网关 / TCP直连控制小车'),
+            subtitle: const Text('TCP直连控制小车'),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.of(context).pushNamed('/child/remote-car'),
           ),
