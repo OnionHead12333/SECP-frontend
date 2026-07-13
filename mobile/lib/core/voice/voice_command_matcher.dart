@@ -8,7 +8,17 @@ abstract final class VoiceCommandMatcher {
     ),
     _VoiceKeywordRule(
       VoiceCommandType.playMusic,
-      ['播放音乐', '放音乐', '来点音乐', '放首歌', '播个音乐', '我想听歌'],
+      [
+        '播放音乐',
+        '放音乐',
+        '来点音乐',
+        '放首歌',
+        '放一首',
+        '播个音乐',
+        '播放',
+        '我想听歌',
+        '我想听',
+      ],
     ),
     _VoiceKeywordRule(
       VoiceCommandType.dance,

@@ -23,6 +23,7 @@ class VoiceCommandRecognizerService {
   Completer<VoiceRecognitionResult>? _sessionCompleter;
   void Function(String)? _onTranscript;
   Timer? _mockTimer;
+  Timer? _finalResultTimer;
 
   String _transcript = '';
   bool _isListening = false;
@@ -114,22 +115,38 @@ class VoiceCommandRecognizerService {
   }
 
   Future<void> stop() async {
-    if (_sessionCompleter == null) return;
+    final completer = _sessionCompleter;
+    if (completer == null) return;
     _mockTimer?.cancel();
     _mockTimer = null;
+    await _stopAudioCapture();
     if (_channel != null && !_closed) {
       _channel!.sink.add(
         jsonEncode(XfyunIatStreamHelpers.closingAudioPayload()),
       );
       _closed = true;
+      _finalResultTimer?.cancel();
+      _finalResultTimer = Timer(const Duration(seconds: 2), () {
+        _completeSuccess(
+          VoiceRecognitionResult(
+            transcript: _transcript,
+            usedMock: AppConfig.useMockStt,
+          ),
+        );
+      });
+    } else {
+      _completeSuccess(
+        VoiceRecognitionResult(
+          transcript: _transcript,
+          usedMock: AppConfig.useMockStt,
+        ),
+      );
     }
-    await _cleanupTransport();
-    _completeSuccess(
-      VoiceRecognitionResult(
-        transcript: _transcript,
-        usedMock: AppConfig.useMockStt,
-      ),
-    );
+    try {
+      await completer.future;
+    } catch (_) {
+      // The caller that started listening receives the actual error.
+    }
   }
 
   Future<void> dispose() async {
@@ -210,17 +227,23 @@ class VoiceCommandRecognizerService {
   Future<void> _cleanupTransport() async {
     _mockTimer?.cancel();
     _mockTimer = null;
+    _finalResultTimer?.cancel();
+    _finalResultTimer = null;
+    await _stopAudioCapture();
+    await _resultSub?.cancel().catchError((_) {});
+    _resultSub = null;
+    await _channel?.sink.close(ws_status.normalClosure).catchError((_) {});
+    _channel = null;
+    _closed = true;
+  }
+
+  Future<void> _stopAudioCapture() async {
     await _recordSub?.cancel().catchError((_) {});
     _recordSub = null;
     final recording = await _recorder.isRecording().catchError((_) => false);
     if (recording) {
       await _recorder.stop().catchError((_) => null);
     }
-    await _resultSub?.cancel().catchError((_) {});
-    _resultSub = null;
-    await _channel?.sink.close(ws_status.normalClosure).catchError((_) {});
-    _channel = null;
-    _closed = true;
   }
 
   void _resetSessionState() {
