@@ -12,6 +12,7 @@ import '../data/child_geofence_api.dart';
 import '../data/child_location_summary_api.dart';
 import '../models/child_local_models.dart';
 import '../models/device_status_snapshot.dart';
+import 'pages/child_fall_alerts_page.dart';
 import 'tabs/child_medical_tab.dart';
 import 'tabs/child_overview_tab.dart';
 import 'tabs/child_reminder_tab.dart';
@@ -387,6 +388,13 @@ class _ChildMainPageState extends State<ChildMainPage> {
           activity: _activity,
           helpRecords: _helpRecords,
           deviceStatuses: _deviceStatuses,
+          onOpenFallAlerts: () {
+            Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const ChildFallAlertsPage(),
+              ),
+            );
+          },
         );
       case 1:
         return ChildMedicalTab(elders: _elders, currentElder: _currentElder);

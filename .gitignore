@@ -48,3 +48,6 @@ mobile/packages/amap_flutter_map/doc/
 # Local ASCII cache paths for Windows accounts with non-ASCII usernames
 .pub-cache/
 .gradle-user-home/
+
+# Local temporary probe output
+_tmp_flutter_probe/
