@@ -95,8 +95,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('晨间舒展'), findsWidgets);
-    expect(find.text('康养乐队'), findsOneWidget);
-    expect(find.text('03:30'), findsOneWidget);
+    expect(find.text('康养乐队 · 03:30'), findsOneWidget);
     expect(find.text('晨练'), findsOneWidget);
     expect(find.text('running'), findsWidgets);
     expect(find.text('播放音乐'), findsOneWidget);
@@ -106,13 +105,23 @@ void main() {
     await tester.pump();
     expect(find.text('命令已发送'), findsOneWidget);
 
+    ScaffoldMessenger.of(
+      tester.element(find.byType(EntertainmentPage)),
+    ).removeCurrentSnackBar();
+    await tester.pump();
+
     await tester.tap(find.text('播放并跳舞'));
     await tester.pump();
     expect(find.text('跳舞命令已发送'), findsOneWidget);
   });
 
-  testWidgets('employee and elder homes expose entertainment entry',
-      (tester) async {
+  testWidgets('employee home exposes entertainment entry', (tester) async {
+    EntertainmentApi.setMockDataForTest(
+      music: const <Map<String, dynamic>>[],
+      tasks: const <Map<String, dynamic>>[],
+      status: const {'taskId': 'test', 'status': 'idle'},
+    );
+
     await tester.pumpWidget(
       MaterialApp(
         routes: {
@@ -124,6 +133,23 @@ void main() {
 
     expect(find.text('巡检地图'), findsOneWidget);
     expect(find.text('娱乐'), findsOneWidget);
+
+    await tester.tap(find.text('娱乐'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(EntertainmentPage), findsOneWidget);
+  });
+
+  testWidgets('elder home exposes entertainment entry', (tester) async {
+    final interceptor = _rejectBackgroundRequests();
+    ApiClient.dio.interceptors.add(interceptor);
+    addTearDown(() => ApiClient.dio.interceptors.remove(interceptor));
+
+    EntertainmentApi.setMockDataForTest(
+      music: const <Map<String, dynamic>>[],
+      tasks: const <Map<String, dynamic>>[],
+      status: const {'taskId': 'test', 'status': 'idle'},
+    );
 
     SharedPreferences.setMockInitialValues(
       {'elder_login_permission_guide_shown_v1': true},
@@ -137,8 +163,33 @@ void main() {
         home: const ElderHomePage(),
       ),
     );
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     expect(find.text('娱乐'), findsOneWidget);
+
+    final homeList = find.ancestor(
+      of: find.text('娱乐'),
+      matching: find.byType(ListView),
+    );
+    expect(homeList, findsOneWidget);
+    await tester.drag(homeList, const Offset(0, -250));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('娱乐'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(EntertainmentPage), findsOneWidget);
   });
+}
+
+Interceptor _rejectBackgroundRequests() {
+  return InterceptorsWrapper(
+    onRequest: (options, handler) {
+      handler.resolve(
+        Response<Object?>(
+          requestOptions: options,
+          data: const {'code': 5000, 'message': 'test offline'},
+        ),
+      );
+    },
+  );
 }
