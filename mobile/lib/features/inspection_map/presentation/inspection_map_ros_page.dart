@@ -362,7 +362,7 @@ class _InspectionMapRosPageState extends State<InspectionMapRosPage> {
         case '/tf_static':
           _tfTree.updateFromMessage(event.message);
           setState(() => _tfReceived = true);
-        case '/goal_pose':
+        case '/inspection_map/goal_pose':
           final header = _asMap(event.message['header']);
           setState(() {
             _goalPose = RosPose2D.fromPose(

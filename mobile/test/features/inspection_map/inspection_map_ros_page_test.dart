@@ -178,7 +178,10 @@ void main() {
       channel.publish('/map', _mapMessage());
       channel.publish('/amcl_pose', _amclPoseMessage());
       channel.publish('/scan', _scanMessage());
-      channel.publish('/goal_pose', _goalPoseSelectionMessage());
+      channel.publish(
+        '/inspection_map/goal_pose',
+        _goalPoseSelectionMessage(),
+      );
       await Future<void>.delayed(const Duration(milliseconds: 20));
     });
 
@@ -199,7 +202,7 @@ void main() {
     navigateAction();
     await tester.pump();
 
-    expect(channel.published('/goal_pose'), hasLength(1));
+    expect(channel.published('/inspection_map/goal_pose'), hasLength(1));
     expect(
       channel.messages.where((message) => message['op'] == 'call_service'),
       isEmpty,

@@ -40,7 +40,7 @@ inspection_map_debug_app.dart
   -> RosbridgeNavigationClient
   -> ws://<robot-ip>:9090
   -> rosbridge_websocket
-  -> /goal_pose 或 /initialpose
+  -> /inspection_map/goal_pose 或 /initialpose
   -> goal_pose_action_bridge
   -> NavigateToPose
   -> planner/controller
@@ -80,7 +80,7 @@ flutter run -d windows `
   -> 权限、幂等、活动任务锁、审计、状态记录
   -> per-robot command dispatcher
   -> robot command adapter
-  -> /goal_pose 或 /inspection_map/stop_navigation
+  -> /inspection_map/goal_pose 或 /inspection_map/stop_navigation
   -> inspection_map_bridge 单任务状态机
   -> NavigateToPose
   -> Nav2
@@ -626,7 +626,7 @@ ROS 侧问题应保留更具体的 `reasonCode`，例如：
 2. 在事务内创建 task/command、占用机器人活动任务槽，并写入 outbox。
 3. 返回 `202 QUEUED`。
 4. dispatcher 按 robotId 串行消费 outbox。
-5. adapter 向机器人发布 goal，并携带 command/task correlation metadata；若 `/goal_pose` 消息无法携带业务字段，则 adapter 本地保存 commandId 与 ROS goal UUID 的映射。
+5. adapter 向机器人发布 goal，并携带 command/task correlation metadata；若 `/inspection_map/goal_pose` 消息无法携带业务字段，则 adapter 本地保存 commandId 与 ROS goal UUID 的映射。
 6. bridge 接受第一个 goal，进入 `NAVIGATING`；活动期的其他 goal 由 bridge 忽略并记录。
 7. bridge/Nav2 状态回报驱动后端状态更新。
 8. terminal 后 bridge 进入 `COOLDOWN`，清理 goal handle，随后回 `IDLE`。

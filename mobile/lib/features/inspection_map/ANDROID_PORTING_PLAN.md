@@ -99,7 +99,7 @@ Android App 侧需要发布：
 
 ```text
 /initialpose
-/goal_pose
+/inspection_map/goal_pose
 ```
 
 停止导航应执行：
@@ -254,7 +254,7 @@ ros2 launch inspection_map_bridge inspection_map.launch.py \
 
 ```text
 goal_action_bridge:=true
-  负责把 Flutter 发布的 /goal_pose 转成 Nav2 NavigateToPose action goal。
+  负责把 Flutter 发布的 /inspection_map/goal_pose 转成 Nav2 NavigateToPose action goal。
 
 start_map_server:=false
   真车上由 Yahboom/Nav2 bringup 自己启动 map_server，避免重复启动。
@@ -293,7 +293,7 @@ Android 真机上应验证：
 6. global/local costmap 能显示
 7. NavigateToPose status/feedback 能更新
 8. Start 发布 /initialpose 格式正确
-9. Navigate 发布 /goal_pose 格式正确
+9. Navigate 发布 /inspection_map/goal_pose 格式正确
 10. Stop navigation 只向 /inspection_map/stop_navigation 发布一次 Empty
 11. Flutter 不直接调用 CancelGoal，也不 advertise 或发布 /cmd_vel
 12. 不依赖 app_control_gateway.py
@@ -312,7 +312,7 @@ Android 真机上应验证：
 
 重复 goal
   同一时间只运行一个 goal_pose_action_bridge。
-  App 也只保留一个连接页面，避免重复发送 /goal_pose。
+  App 也只保留一个连接页面，避免重复发送 /inspection_map/goal_pose。
 
 Android IP
   Android 真机不能使用 127.0.0.1 连接小车。

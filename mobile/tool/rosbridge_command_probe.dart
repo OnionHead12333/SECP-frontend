@@ -72,12 +72,13 @@ Future<void> main(List<String> arguments) async {
 
     final goalPoseMessage = _goalPoseMessage(options.goal);
     _validateGoalPose(goalPoseMessage, options.goal);
-    session.publish('/goal_pose', goalPoseMessage);
+    session.publish('/inspection_map/goal_pose', goalPoseMessage);
 
     final goalEcho = await session.goalEcho.timeout(
       const Duration(seconds: 5),
       onTimeout: () => throw TimeoutException(
-        'No /goal_pose echo was observed after publishing the probe goal.',
+        'No /inspection_map/goal_pose echo was observed after publishing '
+        'the probe goal.',
       ),
     );
     _validateGoalPose(goalEcho, options.goal);
@@ -100,7 +101,9 @@ Future<void> main(List<String> arguments) async {
         '/initialpose PoseWithCovarianceStamped frame=map covariance=36',
       );
     }
-    stdout.writeln('/goal_pose PoseStamped frame=map echoed by ROS');
+    stdout.writeln(
+      '/inspection_map/goal_pose PoseStamped frame=map echoed by ROS',
+    );
     stdout.writeln(
       'NavigateToPose status=${actionState.label} '
       'feedback.distance_remaining=${distanceRemaining.toStringAsFixed(3)}',
@@ -188,7 +191,7 @@ class _ProbeSession {
 
   Future<void> registerInterfaces() async {
     const subscriptions = <String, String?>{
-      '/goal_pose': 'geometry_msgs/msg/PoseStamped',
+      '/inspection_map/goal_pose': 'geometry_msgs/msg/PoseStamped',
       '/navigate_to_pose/_action/status': 'action_msgs/msg/GoalStatusArray',
       // Foxy exposes a generated action topic type. Let rosbridge use the
       // exact type already registered in the live ROS graph.
@@ -206,7 +209,7 @@ class _ProbeSession {
 
     const advertisements = <String, String>{
       '/initialpose': 'geometry_msgs/msg/PoseWithCovarianceStamped',
-      '/goal_pose': 'geometry_msgs/msg/PoseStamped',
+      '/inspection_map/goal_pose': 'geometry_msgs/msg/PoseStamped',
       '/inspection_map/stop_navigation': 'std_msgs/msg/Empty',
     };
     for (final entry in advertisements.entries) {
@@ -252,7 +255,7 @@ class _ProbeSession {
   }
 
   void publish(String topic, Map<String, dynamic> message) {
-    if (topic != '/goal_pose') {
+    if (topic != '/inspection_map/goal_pose') {
       _send({'op': 'publish', 'topic': topic, 'msg': message});
       return;
     }
@@ -295,7 +298,7 @@ class _ProbeSession {
         final topic = '${envelope['topic'] ?? ''}';
         final message = _map(envelope['msg']);
         switch (topic) {
-          case '/goal_pose':
+          case '/inspection_map/goal_pose':
             if (_goalTrackingArmed &&
                 _probeGoalPublished &&
                 !_goalEcho.isCompleted) {

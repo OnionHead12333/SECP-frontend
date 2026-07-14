@@ -8,7 +8,7 @@
 
 ## 二、ROS2 接口确认
 
-- `/goal_pose`：`geometry_msgs/msg/PoseStamped`
+- `/inspection_map/goal_pose`：`geometry_msgs/msg/PoseStamped`
 - `/initialpose`：`geometry_msgs/msg/PoseWithCovarianceStamped`
 - `/amcl_pose`
 - `/navigate_to_pose`：`nav2_msgs/action/NavigateToPose`
@@ -54,12 +54,12 @@ pixelY = imageHeight - (mapY - originY) / resolution
 
 1. 小车启动 `n1`。
 2. 小车启动 `n3`。
-3. 确认 `/map`、`/amcl_pose`、`/goal_pose` 存在。
+3. 确认 `/map`、`/amcl_pose`、`/inspection_map/goal_pose` 存在。
 4. 设置 `initialpose`。
 5. 从 debug 页选择一个近距离 target。
 6. 生成 `nav_goal` JSON。
 7. 交给 A 网关或 ROS2 发布层。
-8. A 网关转换为 `/goal_pose`。
+8. A 网关转换为 `/inspection_map/goal_pose`。
 9. 小车运动。
 10. `navigationStatus` 更新为 `running`。
 11. 到达后更新为 `arrived`。
@@ -68,7 +68,7 @@ pixelY = imageHeight - (mapY - originY) / resolution
 
 - Nav2 是否启动。
 - AMCL 是否设置初始位姿。
-- `/goal_pose` 是否收到消息。
+- `/inspection_map/goal_pose` 是否收到消息。
 - 坐标点是否在可通行区域。
 - 是否急停。
 - 是否 `obstacleStatus=obstacle`。

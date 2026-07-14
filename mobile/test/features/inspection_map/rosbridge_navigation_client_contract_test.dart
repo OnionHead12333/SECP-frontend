@@ -29,7 +29,7 @@ void main() {
         '/cost_cloud': null,
         '/tf': 'tf2_msgs/msg/TFMessage',
         '/tf_static': 'tf2_msgs/msg/TFMessage',
-        '/goal_pose': 'geometry_msgs/msg/PoseStamped',
+        '/inspection_map/goal_pose': 'geometry_msgs/msg/PoseStamped',
         '/navigate_to_pose/_action/status': 'action_msgs/msg/GoalStatusArray',
         // Foxy generated action topic types are inferred from the ROS graph.
         '/navigate_to_pose/_action/feedback': null,
@@ -50,7 +50,7 @@ void main() {
       };
       const advertisementTypes = <String, String>{
         '/initialpose': 'geometry_msgs/msg/PoseWithCovarianceStamped',
-        '/goal_pose': 'geometry_msgs/msg/PoseStamped',
+        '/inspection_map/goal_pose': 'geometry_msgs/msg/PoseStamped',
         '/inspection_map/stop_navigation': 'std_msgs/msg/Empty',
       };
 
@@ -113,7 +113,7 @@ void main() {
         final goalPoseCount = _messagesFor(
           server.messages,
           op: 'publish',
-          topic: '/goal_pose',
+          topic: '/inspection_map/goal_pose',
         ).length;
         final stopCount = _messagesFor(
           server.messages,
@@ -155,7 +155,7 @@ void main() {
       final goalPoseEnvelope = _messagesFor(
         server.messages,
         op: 'publish',
-        topic: '/goal_pose',
+        topic: '/inspection_map/goal_pose',
       ).single;
       final goalPose = _asMap(goalPoseEnvelope['msg']);
       _expectMapHeader(goalPose);

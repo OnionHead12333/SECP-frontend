@@ -102,7 +102,7 @@ class _RosbridgeSimulator {
         _publishTo(client, topic, _pathMessage(globalPlan));
       case '/local_plan':
         _publishTo(client, topic, _pathMessage(_localPlan()));
-      case '/goal_pose':
+      case '/inspection_map/goal_pose':
         _publishTo(client, topic, _goalPoseMessage());
       case '/navigate_to_pose/_action/status':
         _publishTo(client, topic, _statusMessage());
@@ -118,7 +118,7 @@ class _RosbridgeSimulator {
       _broadcast('/navigate_to_pose/_action/status', _statusMessage());
       return;
     }
-    if (topic == '/goal_pose') {
+    if (topic == '/inspection_map/goal_pose') {
       final pose = _asMap(message['pose']);
       final position = _asMap(pose['position']);
       goalX = _number(position['x']);
@@ -127,7 +127,7 @@ class _RosbridgeSimulator {
       globalPlan = _makePlan(robotX, robotY, goalX, goalY, 48);
       navigating = true;
       goalStatus = 2;
-      _broadcast('/goal_pose', _goalPoseMessage());
+      _broadcast('/inspection_map/goal_pose', _goalPoseMessage());
       _broadcast('/plan', _pathMessage(globalPlan));
       _broadcast('/navigate_to_pose/_action/status', _statusMessage());
       return;

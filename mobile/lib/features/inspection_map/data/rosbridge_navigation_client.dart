@@ -192,7 +192,7 @@ class RosbridgeNavigationClient {
     required double y,
     required double yaw,
   }) {
-    _publish('/goal_pose', {
+    _publish('/inspection_map/goal_pose', {
       'header': {
         'stamp': _rosTimeNow(),
         'frame_id': 'map',
@@ -234,7 +234,10 @@ class RosbridgeNavigationClient {
       _RosSubscription('/cost_cloud', null, 250),
       _RosSubscription('/tf', 'tf2_msgs/msg/TFMessage', 50),
       _RosSubscription('/tf_static', 'tf2_msgs/msg/TFMessage'),
-      _RosSubscription('/goal_pose', 'geometry_msgs/msg/PoseStamped'),
+      _RosSubscription(
+        '/inspection_map/goal_pose',
+        'geometry_msgs/msg/PoseStamped',
+      ),
       _RosSubscription(
         '/navigate_to_pose/_action/status',
         'action_msgs/msg/GoalStatusArray',
@@ -263,7 +266,7 @@ class RosbridgeNavigationClient {
 
     const advertisements = <String, String>{
       '/initialpose': 'geometry_msgs/msg/PoseWithCovarianceStamped',
-      '/goal_pose': 'geometry_msgs/msg/PoseStamped',
+      '/inspection_map/goal_pose': 'geometry_msgs/msg/PoseStamped',
       '/inspection_map/stop_navigation': 'std_msgs/msg/Empty',
     };
     for (final entry in advertisements.entries) {

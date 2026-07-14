@@ -193,13 +193,13 @@ pixelY = 896 - (-0.4 + 22.8) / 0.05 = 448
 2. 根据当前缩放/平移，转换成地图图片像素坐标
 3. 用地图像素转 ROS 坐标公式，得到 mapX/mapY
 4. 根据用户选择的方向，计算 yaw
-5. 发布 /goal_pose
+5. 发布 /inspection_map/goal_pose
 ```
 
 发布的 ROS topic：
 
 ```text
-/goal_pose
+/inspection_map/goal_pose
 ```
 
 消息类型：
@@ -438,7 +438,7 @@ topLeftMapY = costmap.origin.y + costmap.height * costmap.resolution
 
 ## 导航前的定位检查
 
-不要只要能发 `/goal_pose` 就开始导航。
+不要只要能发 `/inspection_map/goal_pose` 就开始导航。
 
 建议 App 在允许 Navigate 前检查：
 
@@ -476,4 +476,3 @@ mapToPixel(mapX, mapY, mapInfo)
 ```
 
 后续 App 开发应复用这两个函数，不要在页面里重新写一套坐标转换公式。
-

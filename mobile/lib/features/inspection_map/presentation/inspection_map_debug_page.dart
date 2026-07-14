@@ -266,7 +266,7 @@ class _InspectionMapDebugPageState extends State<InspectionMapDebugPage> {
       builder: (context) => AlertDialog(
         title: const Text('Navigate real car?'),
         content: Text(
-          'This will publish /goal_pose to the real car at '
+          'This will publish /inspection_map/goal_pose to the real car at '
           'x=${pose['x']}, y=${pose['y']}, yaw=${pose['yaw']}.',
         ),
         actions: [

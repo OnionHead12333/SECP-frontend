@@ -120,7 +120,7 @@ Endpoints:
 
 Expected integration fields or topic sources:
 
-- `/goal_pose`
+- `/inspection_map/goal_pose`
 - `/initialpose`
 - `/amcl_pose`
 - `/navigation_status`
