@@ -417,7 +417,7 @@ class ChildSafetyTab extends StatelessWidget {
           )
         else
           ...helpRecords.map((r) {
-            final pending = r.status == HelpRequestStatus.pending;
+            final actionable = r.canHandle;
             return Card(
               margin: const EdgeInsets.only(bottom: 10),
               elevation: 0,
@@ -445,7 +445,7 @@ class ChildSafetyTab extends StatelessWidget {
                           padding: EdgeInsets.zero,
                           labelPadding:
                               const EdgeInsets.symmetric(horizontal: 8),
-                          backgroundColor: pending
+                          backgroundColor: actionable
                               ? scheme.errorContainer
                               : scheme.surfaceContainerHighest,
                         ),
@@ -468,7 +468,7 @@ class ChildSafetyTab extends StatelessWidget {
                       Text('消息：${r.displayHardwareMessage}',
                           style: Theme.of(context).textTheme.bodySmall),
                     ],
-                    if (pending) ...[
+                    if (actionable) ...[
                       const SizedBox(height: 12),
                       Align(
                         alignment: Alignment.centerRight,
@@ -476,7 +476,7 @@ class ChildSafetyTab extends StatelessWidget {
                           onPressed: () async {
                             await onResolveHelp(r.id);
                           },
-                          child: const Text('标记已处理'),
+                          child: const Text('已到达'),
                         ),
                       ),
                     ],

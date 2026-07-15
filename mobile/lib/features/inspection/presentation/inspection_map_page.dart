@@ -194,6 +194,7 @@ class _InspectionMapPageState extends State<InspectionMapPage> {
                 runSpacing: 8,
                 children: [
                   _LegendDot(color: Colors.red, label: '跌倒'),
+                  _LegendDot(color: Color(0xFF991B1B), label: 'SOS'),
                   _LegendDot(color: Colors.amber, label: '裂缝'),
                   _LegendDot(color: Colors.blue, label: '小车'),
                   _LegendDot(color: Colors.green, label: '目标'),
@@ -295,7 +296,7 @@ class _MapCanvas extends StatelessWidget {
                                     ],
                                   ),
                                   child: Icon(
-                                    _markerIcon(marker.type),
+                                    _markerIcon(marker),
                                     color: Colors.white,
                                     size: 16,
                                   ),
@@ -319,7 +320,8 @@ class _MapCanvas extends StatelessWidget {
     final status = navigationStatus;
     if (status == null) return markers;
 
-    final hasNavigationTarget = status.targetX != null && status.targetY != null;
+    final hasNavigationTarget =
+        status.targetX != null && status.targetY != null;
     final result = [
       for (final marker in markers)
         if (!(hasNavigationTarget && marker.type == 'target')) marker,
@@ -366,6 +368,7 @@ class _MapCanvas extends StatelessWidget {
 
   static Color _markerColor(InspectionMarker marker) {
     if (marker.status == InspectionMarkerStatus.handled) return Colors.grey;
+    if (marker.isSosAlarm) return const Color(0xFF991B1B);
     switch (marker.type) {
       case 'fall':
         return Colors.red;
@@ -382,8 +385,11 @@ class _MapCanvas extends StatelessWidget {
     }
   }
 
-  static IconData _markerIcon(String type) {
-    switch (type) {
+  static IconData _markerIcon(InspectionMarker marker) {
+    if (marker.isSosAlarm) return Icons.sos_outlined;
+    switch (marker.type) {
+      case 'sos':
+        return Icons.sos_outlined;
       case 'fall':
         return Icons.personal_injury_outlined;
       case 'crack':

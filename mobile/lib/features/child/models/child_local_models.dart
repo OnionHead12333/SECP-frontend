@@ -49,6 +49,7 @@ class HelpRequestRecord {
     this.alertType,
     this.triggerMode,
     this.familyId,
+    this.rawStatus,
   });
 
   final String id;
@@ -63,9 +64,12 @@ class HelpRequestRecord {
   final String? alertType;
   final String? triggerMode;
   final String? familyId;
+  final String? rawStatus;
 
   bool get isHardwareSos =>
       (source ?? '').trim().toUpperCase() == 'HARDWARE_DEVICE';
+
+  bool get canHandle => (rawStatus ?? '').trim().toLowerCase() == 'sent';
 
   String get displayTitle => isHardwareSos ? '家庭硬件 SOS' : elderName;
 

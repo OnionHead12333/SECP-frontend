@@ -25,10 +25,19 @@ class EmployeeHomePage extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           _EntryTile(
+            title: 'SOS 报警',
+            subtitle: '查看老人端已发出的报警并标记已到达',
+            icon: Icons.sos_outlined,
+            onTap: () =>
+                Navigator.of(context).pushNamed('/employee/emergency-alerts'),
+          ),
+          const SizedBox(height: 12),
+          _EntryTile(
             title: '娱乐',
             subtitle: '发送音乐播放与跳舞演示命令，查看最近任务状态',
             icon: Icons.music_note_outlined,
-            onTap: () => Navigator.of(context).pushNamed('/employee/entertainment'),
+            onTap: () =>
+                Navigator.of(context).pushNamed('/employee/entertainment'),
           ),
         ],
       ),
@@ -55,7 +64,8 @@ class _EntryTile extends StatelessWidget {
       margin: EdgeInsets.zero,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         leading: CircleAvatar(child: Icon(icon)),
         title: Text(title),
         subtitle: Text(subtitle),

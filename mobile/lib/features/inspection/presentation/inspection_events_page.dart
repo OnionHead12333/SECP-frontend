@@ -69,15 +69,17 @@ class _InspectionEventsPageState extends State<InspectionEventsPage> {
               final event = events[index];
               return Card(
                 margin: EdgeInsets.zero,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
                 child: ListTile(
                   leading: CircleAvatar(
-                    backgroundColor: _eventColor(event).withOpacity(0.14),
+                    backgroundColor: _eventColor(event).withValues(alpha: 0.14),
                     foregroundColor: _eventColor(event),
-                    child: Icon(_eventIcon(event.type)),
+                    child: Icon(_eventIcon(event)),
                   ),
                   title: Text(event.title),
-                  subtitle: Text('${event.locationName ?? '-'} · ${event.time ?? '-'}'),
+                  subtitle: Text(
+                      '${event.locationName ?? '-'} · ${event.time ?? '-'}'),
                   trailing: Text(InspectionMarker.statusToJson(event.status)),
                   onTap: () => _showDetail(event),
                 ),
@@ -91,6 +93,7 @@ class _InspectionEventsPageState extends State<InspectionEventsPage> {
 
   static Color _eventColor(InspectionMarker marker) {
     if (marker.status == InspectionMarkerStatus.handled) return Colors.grey;
+    if (marker.isSosAlarm) return Colors.red.shade800;
     switch (marker.type) {
       case 'fall':
         return Colors.red;
@@ -103,8 +106,11 @@ class _InspectionEventsPageState extends State<InspectionEventsPage> {
     }
   }
 
-  static IconData _eventIcon(String type) {
-    switch (type) {
+  static IconData _eventIcon(InspectionMarker marker) {
+    if (marker.isSosAlarm) return Icons.sos_outlined;
+    switch (marker.type) {
+      case 'sos':
+        return Icons.sos_outlined;
       case 'fall':
         return Icons.personal_injury_outlined;
       case 'crack':
