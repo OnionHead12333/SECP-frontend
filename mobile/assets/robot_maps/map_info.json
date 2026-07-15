@@ -2,10 +2,14 @@
   "mapName": "yahboomcar",
   "imageAsset": "assets/robot_maps/yahboomcar.png",
   "imageFile": "yahboomcar.png",
-  "width": 608,
-  "height": 384,
-  "imageHeight": 384,
+  "width": 864,
+  "height": 896,
+  "imageHeight": 896,
   "resolution": 0.05,
-  "origin": [-10.0, -10.0, 0.0],
+  "origin": [
+    -22.8,
+    -22.8,
+    0.0
+  ],
   "frameId": "map"
 }

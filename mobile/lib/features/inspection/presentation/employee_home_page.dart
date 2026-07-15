@@ -12,9 +12,18 @@ class EmployeeHomePage extends StatelessWidget {
         children: [
           _EntryTile(
             title: '巡检地图',
-            subtitle: '查看养老院一层巡检点位和小车状态',
+            subtitle: '查看实时地图、设置导航目标并检查启动状态',
             icon: Icons.map_outlined,
-            onTap: () => Navigator.of(context).pushNamed('/inspection/map'),
+            onTap: () =>
+                Navigator.of(context).pushNamed('/employee/robot-inspection'),
+          ),
+          const SizedBox(height: 12),
+          _EntryTile(
+            title: '往返巡检',
+            subtitle: '记录当前位置为起点，到达目标后自动返回',
+            icon: Icons.alt_route,
+            onTap: () => Navigator.of(context)
+                .pushNamed('/employee/robot-inspection-round-trip'),
           ),
           const SizedBox(height: 12),
           _EntryTile(

@@ -26,8 +26,8 @@ void main() {
       final mapInfo = await InspectionService.getMapInfo();
 
       expect(mapInfo.imageAsset, 'assets/robot_maps/yahboomcar.png');
-      expect(mapInfo.width, 608);
-      expect(mapInfo.height, 384);
+      expect(mapInfo.width, 864);
+      expect(mapInfo.height, 896);
     });
 
     test('maps backend mapImage to the bundled yahboomcar asset', () {
@@ -371,6 +371,18 @@ Future<void> _pump(WidgetTester tester, Widget child) async {
     MaterialApp(
       home: child,
       routes: {
+        '/employee/robot-inspection': (_) => const Scaffold(
+              body: Text(
+                '员工巡检机器人页面',
+                key: ValueKey('employee-robot-inspection-route-test'),
+              ),
+            ),
+        '/employee/robot-inspection-round-trip': (_) => const Scaffold(
+              body: Text(
+                '员工往返巡检页面',
+                key: ValueKey('employee-round-trip-route-test'),
+              ),
+            ),
         '/inspection/map': (_) => const InspectionMapPage(),
         '/inspection/events': (_) => const InspectionEventsPage(),
       },
