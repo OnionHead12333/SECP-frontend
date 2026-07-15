@@ -13,6 +13,7 @@ import '../features/inspection/presentation/employee_robot_inspection_page.dart'
 import '../features/inspection/presentation/inspection_events_page.dart';
 import '../features/inspection/presentation/inspection_map_page.dart';
 import '../features/inspection_map/presentation/inspection_map_ros_page.dart';
+import '../features/inspection_round_trip/presentation/employee_round_trip_inspection_page.dart';
 
 final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
 final GlobalKey<ScaffoldMessengerState> appScaffoldMessengerKey =
@@ -58,6 +59,8 @@ class SmartElderlyCareApp extends StatelessWidget {
         '/employee/entertainment': (_) => const EntertainmentPage(),
         '/employee/robot-inspection': (_) =>
             const EmployeeRobotInspectionPage(),
+        '/employee/robot-inspection-round-trip': (_) =>
+            const EmployeeRoundTripInspectionPage(),
         '/inspection/map': (_) => const InspectionMapPage(),
         '/inspection-map': (_) => const InspectionMapRosPage(),
         '/inspection/events': (_) => const InspectionEventsPage(),

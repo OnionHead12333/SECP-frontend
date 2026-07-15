@@ -178,8 +178,9 @@ void main() {
     testWidgets('employee home exposes map and event entries', (tester) async {
       await _pump(tester, const EmployeeHomePage());
 
-      expect(find.byType(ListTile), findsNWidgets(3));
+      expect(find.byType(ListTile), findsNWidgets(4));
       expect(find.text('巡检地图'), findsOneWidget);
+      expect(find.text('往返巡检'), findsOneWidget);
       expect(find.text('异常事件'), findsOneWidget);
       expect(find.text('娱乐'), findsOneWidget);
 
@@ -187,6 +188,17 @@ void main() {
       await tester.pumpAndSettle();
       expect(
         find.byKey(const ValueKey('employee-robot-inspection-route-test')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('employee home opens round-trip inspection', (tester) async {
+      await _pump(tester, const EmployeeHomePage());
+
+      await tester.tap(find.text('往返巡检'));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('employee-round-trip-route-test')),
         findsOneWidget,
       );
     });
@@ -308,6 +320,12 @@ Future<void> _pump(WidgetTester tester, Widget child) async {
               body: Text(
                 '员工巡检机器人页面',
                 key: ValueKey('employee-robot-inspection-route-test'),
+              ),
+            ),
+        '/employee/robot-inspection-round-trip': (_) => const Scaffold(
+              body: Text(
+                '员工往返巡检页面',
+                key: ValueKey('employee-round-trip-route-test'),
               ),
             ),
         '/inspection/map': (_) => const InspectionMapPage(),

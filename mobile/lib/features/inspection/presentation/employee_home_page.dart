@@ -19,6 +19,14 @@ class EmployeeHomePage extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           _EntryTile(
+            title: '往返巡检',
+            subtitle: '记录当前位置为起点，到达目标后自动返回',
+            icon: Icons.alt_route,
+            onTap: () => Navigator.of(context)
+                .pushNamed('/employee/robot-inspection-round-trip'),
+          ),
+          const SizedBox(height: 12),
+          _EntryTile(
             title: '异常事件',
             subtitle: '查看待处理的跌倒、裂缝和障碍物',
             icon: Icons.assignment_late_outlined,

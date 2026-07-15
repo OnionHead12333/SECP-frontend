@@ -7,6 +7,7 @@ import 'package:smart_elderly_care_mobile/app/smart_elderly_care_app.dart';
 import 'package:smart_elderly_care_mobile/features/inspection/presentation/employee_robot_inspection_page.dart';
 import 'package:smart_elderly_care_mobile/features/inspection_map/data/rosbridge_navigation_client.dart';
 import 'package:smart_elderly_care_mobile/features/inspection_map/presentation/inspection_map_ros_page.dart';
+import 'package:smart_elderly_care_mobile/features/inspection_round_trip/presentation/employee_round_trip_inspection_page.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 void main() {
@@ -22,6 +23,13 @@ void main() {
     expect(
       employeeMapBuilder!(tester.element(find.byType(MaterialApp))),
       isA<EmployeeRobotInspectionPage>(),
+    );
+    final roundTripBuilder =
+        materialApp.routes?['/employee/robot-inspection-round-trip'];
+    expect(roundTripBuilder, isNotNull);
+    expect(
+      roundTripBuilder!(tester.element(find.byType(MaterialApp))),
+      isA<EmployeeRoundTripInspectionPage>(),
     );
     final rosMapBuilder = materialApp.routes?['/inspection-map'];
     expect(rosMapBuilder, isNotNull);
