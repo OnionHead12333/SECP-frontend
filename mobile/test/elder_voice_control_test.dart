@@ -13,6 +13,8 @@ void main() {
   test('voice command matcher maps required entertainment and help phrases',
       () {
     expect(VoiceCommandMatcher.match('播放音乐').standardCommand, 'play_music');
+    expect(VoiceCommandMatcher.match('播放春日散步').standardCommand, 'play_music');
+    expect(VoiceCommandMatcher.match('放一首晨间舒展').standardCommand, 'play_music');
     expect(VoiceCommandMatcher.match('跳舞').standardCommand, 'dance');
     expect(VoiceCommandMatcher.match('开始表演').standardCommand, 'dance');
     expect(VoiceCommandMatcher.match('求助').standardCommand, 'help');
@@ -31,11 +33,22 @@ void main() {
             data: {
               'code': 0,
               'message': 'ok',
-              'data': {
-                'taskId': options.path.endsWith('/dance/start') ? 'd1' : 'p1',
-                'status': 'sent',
-                'feedback': '命令已发送',
-              },
+              'data': options.path.endsWith('/music')
+                  ? [
+                      {
+                        'id': 1,
+                        'musicName': '春日散步',
+                        'artist': '康养乐队',
+                        'durationSeconds': 180,
+                        'suitableScene': '午后放松',
+                      },
+                    ]
+                  : {
+                      'taskId':
+                          options.path.endsWith('/dance/start') ? 'd1' : 'p1',
+                      'status': 'sent',
+                      'feedback': '命令已发送',
+                    },
             },
           ),
         );
@@ -58,6 +71,60 @@ void main() {
     expect(play.feedback, contains('命令已发送'));
     expect(dance.taskId, 'd1');
     expect(dance.standardCommand, 'dance');
+  });
+
+  test('voice executor sends matched music id and name from transcript',
+      () async {
+    final payloads = <String, Object?>{};
+    final interceptor = InterceptorsWrapper(
+      onRequest: (options, handler) {
+        payloads[options.path] = options.data;
+        handler.resolve(
+          Response<Object?>(
+            requestOptions: options,
+            data: {
+              'code': 0,
+              'message': 'ok',
+              'data': options.path.endsWith('/music')
+                  ? [
+                      {
+                        'musicId': 8,
+                        'musicName': '晨间舒展',
+                        'artist': '康养乐队',
+                        'durationSeconds': 210,
+                        'suitableScene': '晨练',
+                      },
+                      {
+                        'musicId': 9,
+                        'musicName': '春日散步',
+                        'artist': '护理中心',
+                        'durationSeconds': 180,
+                        'suitableScene': '午后放松',
+                      },
+                    ]
+                  : {
+                      'taskId': 'p9',
+                      'status': 'sent',
+                      'feedback': '已播放春日散步',
+                    },
+            },
+          ),
+        );
+      },
+    );
+    ApiClient.dio.interceptors.add(interceptor);
+    addTearDown(() => ApiClient.dio.interceptors.remove(interceptor));
+
+    final result = await ElderVoiceCommandExecutor.execute(
+      VoiceCommandMatcher.match('播放春日散步'),
+    );
+
+    expect(
+        payloads['/api/entertainment/music/play'], containsPair('musicId', 9));
+    expect(payloads['/api/entertainment/music/play'],
+        containsPair('musicName', '春日散步'));
+    expect(result.taskId, 'p9');
+    expect(result.feedback, contains('春日散步'));
   });
 
   test(
@@ -91,6 +158,10 @@ void main() {
   });
 
   testWidgets('elder home exposes voice control entry', (tester) async {
+    final interceptor = _rejectBackgroundRequests();
+    ApiClient.dio.interceptors.add(interceptor);
+    addTearDown(() => ApiClient.dio.interceptors.remove(interceptor));
+
     SharedPreferences.setMockInitialValues(
       {'elder_login_permission_guide_shown_v1': true},
     );
@@ -104,8 +175,21 @@ void main() {
         home: const ElderHomePage(),
       ),
     );
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     expect(find.text('语音控制'), findsOneWidget);
   });
+}
+
+Interceptor _rejectBackgroundRequests() {
+  return InterceptorsWrapper(
+    onRequest: (options, handler) {
+      handler.resolve(
+        Response<Object?>(
+          requestOptions: options,
+          data: const {'code': 5000, 'message': 'test offline'},
+        ),
+      );
+    },
+  );
 }
