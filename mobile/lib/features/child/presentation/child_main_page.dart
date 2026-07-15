@@ -10,6 +10,7 @@ import '../data/child_elder_directory_service.dart';
 import '../data/child_emergency_alerts_api.dart';
 import '../data/child_geofence_api.dart';
 import '../data/child_location_summary_api.dart';
+import '../../emergency/data/emergency_alerts_api.dart';
 import '../models/child_local_models.dart';
 import '../models/device_status_snapshot.dart';
 import 'pages/child_fall_alerts_page.dart';
@@ -134,6 +135,7 @@ class _ChildMainPageState extends State<ChildMainPage> {
                 triggerMode:
                     _asNullableString(m['triggerMode'] ?? m['trigger_mode']),
                 familyId: _asNullableString(m['familyId'] ?? m['family_id']),
+                rawStatus: st,
               ),
             );
           }
@@ -347,8 +349,7 @@ class _ChildMainPageState extends State<ChildMainPage> {
     final id = int.tryParse(alertId);
     if (id == null) return;
     try {
-      await ChildEmergencyAlertsApi.handle(
-          alertId: id, action: 'handled', remark: '');
+      await EmergencyAlertsApi.markHandled(alertId: id, remark: '员工已到达');
       await _load();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

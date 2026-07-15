@@ -76,6 +76,27 @@ final class EntertainmentApi {
         : null;
   }
 
+  static Future<EntertainmentTaskStatus?> stopDance(String taskId) async {
+    if (_mockMusicForTest != null) {
+      _mockStatusForTest = {
+        'taskId': taskId,
+        'commandType': 'dance',
+        'status': 'cancelled',
+        'feedback': '已停止',
+      };
+      return EntertainmentTaskStatus.fromJson(_mockStatusForTest!);
+    }
+
+    final res = await ApiClient.dio.post<Object?>(
+      '$_base/dance/stop',
+      data: {'taskId': _taskIdPayloadValue(taskId)},
+    );
+    final payload = _payload(res.data);
+    return payload is Map
+        ? EntertainmentTaskStatus.fromJson(Map<String, dynamic>.from(payload))
+        : null;
+  }
+
   static Future<List<EntertainmentTaskStatus>> fetchTasks() async {
     final mock = _mockTasksForTest;
     if (mock != null) {
@@ -223,4 +244,8 @@ int _int(Object? value, {required int fallback}) {
   if (value is int) return value;
   if (value is num) return value.toInt();
   return int.tryParse('$value') ?? fallback;
+}
+
+Object _taskIdPayloadValue(String taskId) {
+  return int.tryParse(taskId) ?? taskId;
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../emergency/data/emergency_alerts_api.dart';
 import '../data/inspection_service.dart';
 import '../models/inspection_marker.dart';
 
@@ -21,22 +22,55 @@ class InspectionMarkerDetailSheet extends StatefulWidget {
 class _InspectionMarkerDetailSheetState
     extends State<InspectionMarkerDetailSheet> {
   late InspectionMarker _marker;
+  EmergencyAlertRecord? _sosAlert;
+  String? _sosStatusError;
   bool _handling = false;
+  bool _loadingSosStatus = false;
 
   @override
   void initState() {
     super.initState();
     _marker = widget.marker;
+    _loadSosStatus();
+  }
+
+  Future<void> _loadSosStatus() async {
+    final alertId = _marker.emergencyAlertId;
+    if (!_marker.isSosAlarm || alertId == null) return;
+    setState(() {
+      _loadingSosStatus = true;
+      _sosStatusError = null;
+    });
+    try {
+      final alert = await EmergencyAlertsApi.getById(alertId);
+      if (!mounted) return;
+      setState(() {
+        _sosAlert = alert;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _sosStatusError = 'SOS 报警状态加载失败';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loadingSosStatus = false;
+        });
+      }
+    }
   }
 
   Future<void> _handle() async {
     setState(() => _handling = true);
     try {
-      final updated = await InspectionService.handleMarker(
-        _marker.id,
-        '员工A',
-        '已前往现场确认',
-      );
+      final updated = _marker.isSosAlarm
+          ? await _handleSosAlert()
+          : await InspectionService.handleMarker(
+              _marker.id,
+              '员工A',
+              '已前往现场确认',
+            );
       if (!mounted) return;
       setState(() => _marker = updated);
       widget.onHandled(updated);
@@ -45,6 +79,21 @@ class _InspectionMarkerDetailSheetState
         setState(() => _handling = false);
       }
     }
+  }
+
+  Future<InspectionMarker> _handleSosAlert() async {
+    final alertId = _marker.emergencyAlertId;
+    if (alertId == null) {
+      throw StateError('SOS marker missing emergency alert id');
+    }
+    await EmergencyAlertsApi.markHandled(alertId: alertId, remark: '员工已到达');
+    final alert = await EmergencyAlertsApi.getById(alertId);
+    _sosAlert = alert;
+    return _marker.copyWith(
+      status: InspectionMarkerStatus.handled,
+      handler: '员工A',
+      remark: '员工已到达',
+    );
   }
 
   @override
@@ -81,6 +130,19 @@ class _InspectionMarkerDetailSheetState
                   const SizedBox(height: 6),
                   _InfoRow(label: '描述', value: _marker.displayMessage),
                 ],
+                if (_marker.isSosAlarm) ...[
+                  const SizedBox(height: 6),
+                  _InfoRow(
+                    label: '报警编号',
+                    value: _marker.emergencyAlertId?.toString() ?? '-',
+                  ),
+                  _InfoRow(
+                    label: '报警状态',
+                    value: _loadingSosStatus
+                        ? '加载中'
+                        : _sosStatusError ?? _sosStatusLabel(_sosAlert?.status),
+                  ),
+                ],
                 if (_marker.imageUrl != null) ...[
                   const SizedBox(height: 12),
                   _ImagePreview(imageUrl: _marker.imageUrl!),
@@ -93,7 +155,7 @@ class _InspectionMarkerDetailSheetState
                   _InfoRow(label: '处理备注', value: _marker.remark ?? '-'),
                   _InfoRow(label: '处理时间', value: _marker.handleTime ?? '-'),
                 ],
-                if (_marker.canHandle) ...[
+                if (_canHandleCurrentMarker) ...[
                   const SizedBox(height: 20),
                   FilledButton.icon(
                     onPressed: _handling ? null : _handle,
@@ -116,6 +178,14 @@ class _InspectionMarkerDetailSheetState
   }
 
   List<Widget> _detailRows() {
+    if (_marker.isSosAlarm) {
+      return [
+        const _InfoRow(label: '事件类型', value: 'SOS报警'),
+        _InfoRow(label: '位置', value: _marker.locationName ?? '-'),
+        _InfoRow(label: '风险等级', value: _marker.level ?? '-'),
+        _InfoRow(label: '时间', value: _marker.time ?? '-'),
+      ];
+    }
     switch (_marker.type) {
       case 'fall':
         return [
@@ -176,6 +246,28 @@ class _InspectionMarkerDetailSheetState
               label: '状态',
               value: InspectionMarker.statusToJson(_marker.status)),
         ];
+    }
+  }
+
+  bool get _canHandleCurrentMarker {
+    if (!_marker.canHandle) return false;
+    if (!_marker.isSosAlarm) return true;
+    return (_sosAlert?.status ?? 'sent') == 'sent';
+  }
+
+  static String _sosStatusLabel(String? status) {
+    switch ((status ?? '').trim().toLowerCase()) {
+      case 'sent':
+        return '报警中';
+      case 'handled':
+        return '已处理';
+      case 'cancelled':
+      case 'canceled':
+        return '已取消';
+      case 'false_alarm':
+        return '误报';
+      default:
+        return status == null || status.isEmpty ? '未知' : status;
     }
   }
 

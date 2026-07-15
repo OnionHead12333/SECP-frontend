@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 enum InspectionMarkerStatus {
   unhandled,
   handled,
@@ -27,6 +29,7 @@ class InspectionMarker {
     this.handler,
     this.remark,
     this.handleTime,
+    this.payloadJson,
   });
 
   final int id;
@@ -50,8 +53,22 @@ class InspectionMarker {
   final String? handler;
   final String? remark;
   final String? handleTime;
+  final Map<String, dynamic>? payloadJson;
 
-  bool get isEvent => type == 'fall' || type == 'crack' || type == 'obstacle';
+  bool get isSosAlarm {
+    final purpose = payloadJson?['purpose'];
+    return type == 'sos' || purpose == 'sos_alarm';
+  }
+
+  int? get emergencyAlertId {
+    final value = payloadJson?['alertId'] ?? payloadJson?['alert_id'];
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse('$value');
+  }
+
+  bool get isEvent =>
+      type == 'fall' || type == 'crack' || type == 'obstacle' || isSosAlarm;
 
   bool get canHandle => isEvent && status == InspectionMarkerStatus.unhandled;
 
@@ -88,6 +105,7 @@ class InspectionMarker {
       handler: handler ?? this.handler,
       remark: remark ?? this.remark,
       handleTime: handleTime ?? this.handleTime,
+      payloadJson: payloadJson,
     );
   }
 
@@ -117,6 +135,7 @@ class InspectionMarker {
       handler: _nullableString(json['handler']),
       remark: _nullableString(json['remark']),
       handleTime: _nullableString(json['handleTime']),
+      payloadJson: _payloadFromJson(json['payloadJson'] ?? json['payload']),
     );
   }
 
@@ -143,6 +162,7 @@ class InspectionMarker {
       'handler': handler,
       'remark': remark,
       'handleTime': handleTime,
+      'payloadJson': payloadJson,
     };
   }
 
@@ -173,6 +193,19 @@ class InspectionMarker {
     if (value == null) return null;
     final text = '$value'.trim();
     return text.isEmpty ? null : text;
+  }
+
+  static Map<String, dynamic>? _payloadFromJson(Object? value) {
+    if (value is Map) return Map<String, dynamic>.from(value);
+    final text = _nullableString(value);
+    if (text == null) return null;
+    try {
+      final decoded = jsonDecode(text);
+      if (decoded is Map) return Map<String, dynamic>.from(decoded);
+    } catch (_) {
+      return null;
+    }
+    return null;
   }
 }
 

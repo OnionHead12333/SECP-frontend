@@ -15,7 +15,10 @@ class _EntertainmentPageState extends State<EntertainmentPage> {
   String _danceMode = _danceModes.first;
   bool _loading = true;
   bool _sending = false;
+  bool _stoppingDance = false;
   String? _error;
+  String? _activeDanceTaskId;
+  String? _danceStopText;
   List<EntertainmentMusic> _music = const [];
   List<EntertainmentTaskStatus> _tasks = const [];
   EntertainmentTaskStatus? _status;
@@ -66,12 +69,53 @@ class _EntertainmentPageState extends State<EntertainmentPage> {
     await _sendCommand(
       successText: '跳舞命令已发送',
       send: () => EntertainmentApi.startDance(music, danceMode: _danceMode),
+      onSuccess: (status) {
+        if (status?.taskId != null && status!.taskId!.isNotEmpty) {
+          _activeDanceTaskId = status.taskId;
+          _danceStopText = null;
+        }
+      },
     );
+  }
+
+  Future<void> _stopDance() async {
+    final taskId = _activeDanceTaskId;
+    if (taskId == null || taskId.isEmpty || _stoppingDance) return;
+    setState(() {
+      _stoppingDance = true;
+      _danceStopText = '正在停止...';
+    });
+    try {
+      final status = await EntertainmentApi.stopDance(taskId);
+      if (!mounted) return;
+      setState(() {
+        if (status != null) _status = status;
+        if (status?.status.toLowerCase() == 'cancelled' ||
+            status?.status.toLowerCase() == 'canceled') {
+          _danceStopText = '已停止';
+          _activeDanceTaskId = null;
+        } else {
+          _danceStopText = status?.message ?? '停止命令已发送';
+        }
+      });
+      await _refreshTasksAndStatus();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _danceStopText = e.toString().replaceFirst('Exception: ', '');
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_danceStopText!)),
+      );
+    } finally {
+      if (mounted) setState(() => _stoppingDance = false);
+    }
   }
 
   Future<void> _sendCommand({
     required String successText,
     required Future<EntertainmentTaskStatus?> Function() send,
+    void Function(EntertainmentTaskStatus? status)? onSuccess,
   }) async {
     if (_sending) return;
     setState(() => _sending = true);
@@ -82,6 +126,7 @@ class _EntertainmentPageState extends State<EntertainmentPage> {
         SnackBar(content: Text(successText)),
       );
       setState(() {
+        onSuccess?.call(status);
         if (status != null) _status = status;
       });
       await _refreshTasksAndStatus();
@@ -171,7 +216,11 @@ class _EntertainmentPageState extends State<EntertainmentPage> {
           _ModeSelector(
             value: _danceMode,
             modes: _danceModes,
+            activeTaskId: _activeDanceTaskId,
+            stopping: _stoppingDance,
+            stopText: _danceStopText,
             onChanged: (value) => setState(() => _danceMode = value),
+            onStopDance: _stopDance,
           ),
           const SizedBox(height: 12),
           Text(
@@ -253,36 +302,81 @@ class _ModeSelector extends StatelessWidget {
   const _ModeSelector({
     required this.value,
     required this.modes,
+    required this.activeTaskId,
+    required this.stopping,
+    required this.stopText,
     required this.onChanged,
+    required this.onStopDance,
   });
 
   final String value;
   final List<String> modes;
+  final String? activeTaskId;
+  final bool stopping;
+  final String? stopText;
   final ValueChanged<String> onChanged;
+  final VoidCallback onStopDance;
 
   @override
   Widget build(BuildContext context) {
     return _Panel(
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.directions_run_outlined),
-          const SizedBox(width: 12),
-          const Expanded(
-            child: Text(
-              '跳舞模式',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-            ),
-          ),
-          DropdownButton<String>(
-            value: value,
-            items: [
-              for (final mode in modes)
-                DropdownMenuItem(value: mode, child: Text(mode)),
+          Row(
+            children: [
+              const Icon(Icons.directions_run_outlined),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Text(
+                  '跳舞模式',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                ),
+              ),
+              DropdownButton<String>(
+                value: value,
+                items: [
+                  for (final mode in modes)
+                    DropdownMenuItem(value: mode, child: Text(mode)),
+                ],
+                onChanged: (value) {
+                  if (value != null) onChanged(value);
+                },
+              ),
             ],
-            onChanged: (value) {
-              if (value != null) onChanged(value);
-            },
           ),
+          if (activeTaskId != null || stopText != null) ...[
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 10,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                OutlinedButton.icon(
+                  onPressed:
+                      activeTaskId == null || stopping ? null : onStopDance,
+                  icon: stopping
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.stop_circle_outlined),
+                  label: Text(stopping ? '正在停止...' : '停止'),
+                ),
+                if (stopText != null)
+                  Text(
+                    stopText!,
+                    style: TextStyle(
+                      color: stopText == '已停止'
+                          ? const Color(0xFF15803D)
+                          : const Color(0xFF475569),
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+              ],
+            ),
+          ],
         ],
       ),
     );

@@ -49,6 +49,7 @@ void main() {
     final music = await EntertainmentApi.fetchMusic();
     await EntertainmentApi.playMusic(music.first);
     await EntertainmentApi.startDance(music.first, danceMode: 'happy');
+    await EntertainmentApi.stopDance('t1');
     await EntertainmentApi.fetchTasks();
     await EntertainmentApi.fetchStatus();
 
@@ -58,6 +59,7 @@ void main() {
           '/api/entertainment/music',
           '/api/entertainment/music/play',
           '/api/entertainment/dance/start',
+          '/api/entertainment/dance/stop',
           '/api/entertainment/tasks',
           '/api/entertainment/status',
         ]));
@@ -65,6 +67,8 @@ void main() {
         containsPair('musicName', '春日散步'));
     expect(captured['/api/entertainment/dance/start'],
         containsPair('danceMode', 'happy'));
+    expect(captured['/api/entertainment/dance/stop'],
+        containsPair('taskId', 't1'));
   });
 
   testWidgets('entertainment page lists music and sends commands',
@@ -113,6 +117,11 @@ void main() {
     await tester.tap(find.text('播放并跳舞'));
     await tester.pump();
     expect(find.text('跳舞命令已发送'), findsOneWidget);
+    expect(find.text('停止'), findsOneWidget);
+
+    await tester.tap(find.text('停止'));
+    await tester.pump();
+    expect(find.text('已停止'), findsOneWidget);
   });
 
   testWidgets('employee home exposes entertainment entry', (tester) async {

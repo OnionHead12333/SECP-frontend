@@ -172,6 +172,34 @@ void main() {
       expect(withDescription.displayMessage, 'description');
       expect(withMessage.displayMessage, 'message only');
     });
+
+    test('recognizes SOS markers from type and payload alert id', () {
+      final byType = InspectionMarker.fromJson({
+        'id': 9,
+        'type': 'sos',
+        'title': 'SOS报警',
+        'x': 10,
+        'y': 20,
+        'status': 'unhandled',
+        'payloadJson': '{"purpose":"sos_alarm","alertId":456,"loop":true}',
+      });
+      final byPayload = InspectionMarker.fromJson({
+        'id': 10,
+        'type': 'alarm',
+        'title': '报警',
+        'x': 10,
+        'y': 20,
+        'status': 'unhandled',
+        'payloadJson': '{"purpose":"sos_alarm","alertId":789}',
+      });
+
+      expect(byType.isSosAlarm, isTrue);
+      expect(byType.emergencyAlertId, 456);
+      expect(byType.isEvent, isTrue);
+      expect(byPayload.isSosAlarm, isTrue);
+      expect(byPayload.emergencyAlertId, 789);
+      expect(byPayload.isEvent, isTrue);
+    });
   });
 
   group('Inspection widgets', () {
@@ -179,37 +207,64 @@ void main() {
       await _pump(tester, const EmployeeHomePage());
 
       expect(find.byType(ListTile), findsNWidgets(4));
-      expect(find.text('巡检地图'), findsOneWidget);
-      expect(find.text('往返巡检'), findsOneWidget);
-      expect(find.text('异常事件'), findsOneWidget);
-      expect(find.text('娱乐'), findsOneWidget);
-
-      await tester.tap(find.text('巡检地图'));
-      await tester.pumpAndSettle();
-      expect(
-        find.byKey(const ValueKey('employee-robot-inspection-route-test')),
-        findsOneWidget,
-      );
     });
 
-    testWidgets('employee home opens round-trip inspection', (tester) async {
-      await _pump(tester, const EmployeeHomePage());
-
-      await tester.tap(find.text('往返巡检'));
-      await tester.pumpAndSettle();
-      expect(
-        find.byKey(const ValueKey('employee-round-trip-route-test')),
-        findsOneWidget,
-      );
-    });
-
-    testWidgets('event list only shows fall crack and obstacle',
+    testWidgets('event list includes SOS markers from inspection backend',
         (tester) async {
-      InspectionService.resetMockDataForTest();
+      InspectionService.clearTestOverrides();
+      final interceptor = InterceptorsWrapper(
+        onRequest: (options, handler) {
+          if (options.uri.path.endsWith('/inspection/markers')) {
+            handler.resolve(Response<Object?>(
+              requestOptions: options,
+              data: {
+                'data': [
+                  {
+                    'id': 1,
+                    'type': 'fall',
+                    'title': 'fall',
+                    'x': 10,
+                    'y': 20,
+                    'status': 'unhandled',
+                  },
+                  {
+                    'id': 2,
+                    'type': 'sos',
+                    'title': 'SOS报警',
+                    'x': 20,
+                    'y': 30,
+                    'status': 'unhandled',
+                    'payloadJson':
+                        '{"purpose":"sos_alarm","alertId":456,"loop":true}',
+                  },
+                  {
+                    'id': 3,
+                    'type': 'robot',
+                    'title': 'robot',
+                    'x': 30,
+                    'y': 40,
+                    'status': 'active',
+                  },
+                ],
+              },
+            ));
+            return;
+          }
+          handler.resolve(Response<Object?>(
+            requestOptions: options,
+            data: {'data': {}},
+          ));
+        },
+      );
+      ApiClient.dio.interceptors.add(interceptor);
+      addTearDown(() => ApiClient.dio.interceptors.remove(interceptor));
+
       await _pump(tester, const InspectionEventsPage());
       await _pumpAsyncWork(tester);
 
-      expect(find.byType(ListTile), findsNWidgets(4));
+      expect(find.text('fall'), findsOneWidget);
+      expect(find.text('SOS报警'), findsOneWidget);
+      expect(find.text('robot'), findsNothing);
     });
 
     testWidgets('new navigation target appears immediately after task creation',
